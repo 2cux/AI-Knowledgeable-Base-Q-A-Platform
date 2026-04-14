@@ -9,7 +9,14 @@ spring:
       host: localhost
       port: 6379
       database: 0
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
 
 logging:
   level:
     com.example.aikb: DEBUG
+jwt:
+  secret: your-secret-key-change-me
+  expiration: 86400000
+  issuer: aikb-backend

@@ -8,6 +8,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  jackson:
+    time-zone: Asia/Shanghai
+  profiles:
+    active: dev
 
 server:
   port: 8080

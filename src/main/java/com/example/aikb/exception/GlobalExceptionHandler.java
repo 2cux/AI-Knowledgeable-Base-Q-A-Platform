@@ -43,9 +43,9 @@ public class GlobalExceptionHandler {
         return Result.fail(40001, ex.getMessage());
     }
 
-    @ExceptionHandler(Exception.class)
-    public Result<Void> handleException(Exception ex) {
-        log.error("Unexpected error", ex);
-        return Result.fail(50000, "系统异常");
+    @ExceptionHandler(BusinessException.class)
+    public Result<Void> handleBusinessException(BusinessException ex) {
+        log.warn("Business exception, code={}, message={}", ex.getCode(), ex.getMessage());
+        return Result.fail(ex.getCode(), ex.getMessage());
     }
 }
