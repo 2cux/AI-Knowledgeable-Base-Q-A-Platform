@@ -177,32 +177,6 @@
 - `config`、`common`、`exception` 为全局支撑模块
 - `infra` 为业务模块提供第三方能力接入点
 
-## 6. 包结构建议
-
-建议按以下包结构组织：
-
-```text
-com.example.aikb
-├─ auth
-├─ kb
-├─ document
-├─ qa
-├─ conversation
-├─ task
-├─ config
-├─ common
-├─ exception
-└─ infra
-```
-
-如果后续代码量上升，再在每个业务模块内部继续分为：
-
-- `controller`
-- `service`
-- `mapper`
-- `entity`
-- `dto`
-- `vo`
 
 ## 7. 第 1 周模块设计结论
 
