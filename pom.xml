@@ -14,7 +14,7 @@
     <groupId>com.example</groupId>
     <artifactId>aikb-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>企业级 AI 知识库问答后端平台</name>
+    <name>Enterprise AI Knowledge Base Q&amp;A Backend</name>
     <description>Enterprise AI knowledge base Q&amp;A backend platform</description>
 
     <properties>
