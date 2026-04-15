@@ -1,4 +1,4 @@
 #NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
-#Wed Apr 15 09:01:27 CST 2026
-@default-aliyunmaven-https\://maven.aliyun.com/repository/public/.lastUpdated=1776214887426
-https\://maven.aliyun.com/repository/public/.error=Could not transfer artifact org.springframework.boot\:spring-boot-starter-parent\:pom\:3.5.13 from/to aliyunmaven (https\://maven.aliyun.com/repository/public)\: D\:\\project\\AI knowledge base Q&A platform\\.m2\\repository\\org\\springframework\\boot\\spring-boot-starter-parent\\3.5.13\\spring-boot-starter-parent-3.5.13.pom.2372114435474239891.tmp.15509192945003673250.tmp
+#Wed Apr 15 09:08:26 CST 2026
+@default-aliyunmaven-https\://maven.aliyun.com/repository/public/.lastUpdated=1776215306250
+https\://maven.aliyun.com/repository/public/.error=Could not transfer artifact org.springframework.boot\:spring-boot-starter-parent\:pom\:3.5.13 from/to aliyunmaven (https\://maven.aliyun.com/repository/public)\: D\:\\project\\AI knowledge base Q&A platform\\.m2\\repository\\org\\springframework\\boot\\spring-boot-starter-parent\\3.5.13\\spring-boot-starter-parent-3.5.13.pom.663540256995437651.tmp.2424481355560533775.tmp
