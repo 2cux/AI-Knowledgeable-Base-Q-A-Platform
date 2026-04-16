@@ -1,4 +1,4 @@
-﻿package com.example.aikb.service.auth.impl;
+package com.example.aikb.service.auth.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.aikb.common.JwtUtil;
@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 认证业务实现类，负责用户注册、密码校验和登录令牌生成。
+ */
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -23,6 +26,12 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
+    /**
+     * 注册新用户，校验确认密码和用户名唯一性后写入用户信息。
+     *
+     * @param request 注册请求参数
+     * @return 注册成功后的用户 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long register(RegisterRequest request) {
@@ -50,6 +59,12 @@ public class AuthServiceImpl implements AuthService {
         return user.getId();
     }
 
+    /**
+     * 校验用户登录凭证，登录成功后生成 JWT 访问令牌。
+     *
+     * @param request 登录请求参数
+     * @return 登录响应，包含访问令牌和基础用户信息
+     */
     @Override
     public LoginResponse login(LoginRequest request) {
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
