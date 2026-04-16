@@ -9,6 +9,7 @@ import com.example.aikb.vo.kb.KnowledgeBaseVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -54,7 +55,7 @@ public class KnowledgeBaseController {
      */
     @Operation(summary = "查询知识库详情", description = "根据知识库 ID 查询当前登录用户可访问的知识库详情")
     @GetMapping("/{id}")
-    public Result<KnowledgeBaseVO> getById(@PathVariable Long id) {
+    public Result<KnowledgeBaseVO> getById(@PathVariable @Positive(message = "知识库ID必须大于0") Long id) {
         return Result.success(knowledgeBaseService.getById(id));
     }
 }

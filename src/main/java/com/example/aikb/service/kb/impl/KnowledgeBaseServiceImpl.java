@@ -38,8 +38,8 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         Long userId = CurrentUser.getUserId();
 
         KnowledgeBase knowledgeBase = new KnowledgeBase();
-        knowledgeBase.setName(request.getName());
-        knowledgeBase.setDescription(request.getDescription());
+        knowledgeBase.setName(request.getName().trim());
+        knowledgeBase.setDescription(request.getDescription() == null ? null : request.getDescription().trim());
         knowledgeBase.setOwnerId(userId);
         knowledgeBase.setStatus(1);
 
@@ -47,7 +47,9 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         if (rows != 1 || knowledgeBase.getId() == null) {
             throw new BusinessException("知识库创建失败");
         }
-        return toVO(knowledgeBase);
+
+        KnowledgeBase saved = knowledgeBaseMapper.selectById(knowledgeBase.getId());
+        return toVO(saved);
     }
 
     /**
@@ -63,6 +65,7 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
         IPage<KnowledgeBase> result = knowledgeBaseMapper.selectPage(page, new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getOwnerId, userId)
+                .eq(KnowledgeBase::getStatus, 1)
                 .orderByDesc(KnowledgeBase::getCreatedAt));
 
         List<KnowledgeBaseVO> list = result.getRecords()
@@ -90,6 +93,7 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, id)
                 .eq(KnowledgeBase::getOwnerId, userId)
+                .eq(KnowledgeBase::getStatus, 1)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
             throw new BusinessException(40400, "知识库不存在");
