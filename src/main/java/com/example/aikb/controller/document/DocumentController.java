@@ -3,14 +3,19 @@ package com.example.aikb.controller.document;
 import com.example.aikb.common.PageResult;
 import com.example.aikb.common.Result;
 import com.example.aikb.dto.document.DocumentListQuery;
+import com.example.aikb.dto.document.DocumentProcessRequest;
 import com.example.aikb.dto.document.DocumentUploadRequest;
+import com.example.aikb.service.document.DocumentProcessService;
 import com.example.aikb.service.document.DocumentService;
+import com.example.aikb.vo.document.DocumentChunkVO;
 import com.example.aikb.vo.document.DocumentDetailVO;
 import com.example.aikb.vo.document.DocumentListVO;
+import com.example.aikb.vo.document.DocumentProcessVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final DocumentProcessService documentProcessService;
 
     /**
      * 上传文档元数据，并绑定到当前登录用户拥有的指定知识库。
@@ -67,5 +73,25 @@ public class DocumentController {
     @PostMapping("/{id}/parse")
     public Result<Long> parse(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
         return Result.success(documentService.createParseTask(id), "解析任务已创建");
+    }
+
+    /**
+     * 对当前登录用户可访问的指定文档执行文本切片，并将切片写入数据库。
+     */
+    @Operation(summary = "处理文档切片", description = "读取文档纯文本内容，按固定长度和重叠长度切片，并重建文档切片数据")
+    @PostMapping("/{id}/process")
+    public Result<DocumentProcessVO> process(
+            @PathVariable @Positive(message = "文档ID必须大于0") Long id,
+            @Valid @RequestBody(required = false) DocumentProcessRequest request) {
+        return Result.success(documentProcessService.process(id, request), "处理成功");
+    }
+
+    /**
+     * 查询当前登录用户可访问的指定文档切片列表。
+     */
+    @Operation(summary = "查询文档切片列表", description = "根据文档 ID 查询当前登录用户可访问的文档切片列表")
+    @GetMapping("/{id}/chunks")
+    public Result<List<DocumentChunkVO>> listChunks(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
+        return Result.success(documentProcessService.listChunks(id));
     }
 }
