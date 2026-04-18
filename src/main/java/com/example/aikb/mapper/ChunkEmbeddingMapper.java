@@ -30,9 +30,13 @@ public interface ChunkEmbeddingMapper extends BaseMapper<ChunkEmbedding> {
             INNER JOIN document_chunk dc ON dc.id = ce.chunk_id
             INNER JOIN document d ON d.id = dc.document_id
             WHERE ce.knowledge_base_id = #{knowledgeBaseId}
+              AND dc.knowledge_base_id = #{knowledgeBaseId}
+              AND d.knowledge_base_id = #{knowledgeBaseId}
               AND ce.status = #{status}
+            LIMIT #{limit}
             """)
     List<RetrievalCandidate> selectRetrievalCandidates(
             @Param("knowledgeBaseId") Long knowledgeBaseId,
-            @Param("status") String status);
+            @Param("status") String status,
+            @Param("limit") Integer limit);
 }

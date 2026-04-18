@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 public class MockVectorSearchAdapter implements VectorSearchAdapter {
 
     private static final String STATUS_SUCCESS = "SUCCESS";
+    private static final int CANDIDATE_LIMIT = 2000;
 
     private final ChunkEmbeddingMapper chunkEmbeddingMapper;
 
@@ -32,7 +33,7 @@ public class MockVectorSearchAdapter implements VectorSearchAdapter {
         }
 
         List<RetrievalCandidate> candidates =
-                chunkEmbeddingMapper.selectRetrievalCandidates(knowledgeBaseId, STATUS_SUCCESS);
+                chunkEmbeddingMapper.selectRetrievalCandidates(knowledgeBaseId, STATUS_SUCCESS, CANDIDATE_LIMIT);
 
         return candidates.stream()
                 .peek(candidate -> candidate.setScore(cosine(

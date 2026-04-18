@@ -24,9 +24,12 @@ public class MockEmbeddingClient implements EmbeddingClient {
         if (!StringUtils.hasText(text)) {
             throw new BusinessException("chunk内容为空，无法向量化");
         }
+        String vectorId = chunkId == null
+                ? embeddingModel + "-query-" + Integer.toHexString(text.trim().hashCode())
+                : embeddingModel + "-" + chunkId;
         return EmbeddingResult.builder()
                 .embeddingModel(embeddingModel)
-                .vectorId(embeddingModel + "-" + chunkId)
+                .vectorId(vectorId)
                 .vector(MockEmbeddingVectorizer.vectorize(text))
                 .build();
     }
