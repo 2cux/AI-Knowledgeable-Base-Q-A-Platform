@@ -108,7 +108,7 @@ public class DocumentController {
     public Result<DocumentEmbeddingVO> embed(
             @PathVariable @Positive(message = "文档ID必须大于0") Long id,
             @Valid @RequestBody(required = false) DocumentEmbeddingRequest request) {
-        return Result.success(documentEmbeddingService.embedDocument(id, request), "向量化完成");
+        return Result.success(documentEmbeddingService.embedDocument(id, request), "向量化任务执行完成");
     }
 
     /**

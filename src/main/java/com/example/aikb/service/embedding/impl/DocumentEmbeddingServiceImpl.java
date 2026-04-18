@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -33,6 +34,7 @@ import org.springframework.util.StringUtils;
 /**
  * 文档向量化服务实现类，负责将 document_chunk 同步到向量化状态表。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
@@ -41,8 +43,11 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_PROCESSING = "PROCESSING";
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
     private static final String DOCUMENT_STATUS_NOT_CHUNKED = "NOT_CHUNKED";
     private static final String DOCUMENT_STATUS_PENDING = "PENDING";
+    private static final String DOCUMENT_STATUS_PROCESSING = "PROCESSING";
     private static final String DOCUMENT_STATUS_SUCCESS = "SUCCESS";
     private static final String DOCUMENT_STATUS_FAILED = "FAILED";
     private static final String DOCUMENT_STATUS_PARTIAL = "PARTIAL";
@@ -77,10 +82,13 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         for (DocumentChunk chunk : chunks) {
             ChunkEmbedding embedding = findOrCreateEmbedding(document, chunk, embeddingModel);
             try {
+                markProcessing(embedding, embeddingModel);
                 EmbeddingResult result = embeddingClient.embed(chunk.getId(), chunk.getContent(), embeddingModel);
                 markSuccess(embedding, result);
                 successCount++;
             } catch (RuntimeException ex) {
+                log.warn("Embedding failed, documentId={}, chunkId={}, model={}, error={}",
+                        document.getId(), chunk.getId(), embeddingModel, ex.getMessage());
                 markFailed(embedding, embeddingModel, ex.getMessage());
                 failedCount++;
             }
@@ -129,6 +137,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         int successCount = 0;
         int failedCount = 0;
         int pendingCount = 0;
+        int processingCount = 0;
         for (DocumentChunk chunk : chunks) {
             ChunkEmbedding embedding = embeddingMap.get(chunk.getId());
             String status = embedding == null ? STATUS_PENDING : embedding.getStatus();
@@ -136,6 +145,8 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 successCount++;
             } else if (STATUS_FAILED.equals(status)) {
                 failedCount++;
+            } else if (STATUS_PROCESSING.equals(status)) {
+                processingCount++;
             } else {
                 pendingCount++;
             }
@@ -150,7 +161,8 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .successCount(successCount)
                 .failedCount(failedCount)
                 .pendingCount(pendingCount)
-                .status(resolveDocumentEmbeddingStatus(chunks.size(), successCount, failedCount, pendingCount))
+                .status(resolveDocumentEmbeddingStatus(
+                        chunks.size(), successCount, failedCount, pendingCount, processingCount))
                 .chunks(chunkStatuses)
                 .build();
     }
@@ -261,6 +273,27 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     }
 
     /**
+     * 标记单个 chunk 正在向量化。
+     *
+     * @param embedding 切片向量化状态实体
+     * @param embeddingModel 向量化模型名称
+     */
+    private void markProcessing(ChunkEmbedding embedding, String embeddingModel) {
+        embedding.setEmbeddingModel(embeddingModel);
+        embedding.setStatus(STATUS_PROCESSING);
+        embedding.setVectorId(null);
+        embedding.setEmbeddingError(null);
+        embedding.setEmbeddedAt(null);
+        chunkEmbeddingMapper.update(null, new LambdaUpdateWrapper<ChunkEmbedding>()
+                .eq(ChunkEmbedding::getId, embedding.getId())
+                .set(ChunkEmbedding::getEmbeddingModel, embeddingModel)
+                .set(ChunkEmbedding::getVectorId, null)
+                .set(ChunkEmbedding::getStatus, STATUS_PROCESSING)
+                .set(ChunkEmbedding::getEmbeddingError, null)
+                .set(ChunkEmbedding::getEmbeddedAt, null));
+    }
+
+    /**
      * 标记单个 chunk 向量化失败。
      *
      * @param embedding 切片向量化状态实体
@@ -270,7 +303,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     private void markFailed(ChunkEmbedding embedding, String embeddingModel, String errorMessage) {
         embedding.setEmbeddingModel(embeddingModel);
         embedding.setStatus(STATUS_FAILED);
-        embedding.setEmbeddingError(errorMessage == null ? "向量化失败" : errorMessage);
+        embedding.setEmbeddingError(truncateError(errorMessage));
         chunkEmbeddingMapper.update(null, new LambdaUpdateWrapper<ChunkEmbedding>()
                 .eq(ChunkEmbedding::getId, embedding.getId())
                 .set(ChunkEmbedding::getEmbeddingModel, embeddingModel)
@@ -287,9 +320,11 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
      * @param successCount 成功数量
      * @param failedCount 失败数量
      * @param pendingCount 未处理数量
+     * @param processingCount 处理中数量
      * @return 文档整体向量化状态
      */
-    private String resolveDocumentEmbeddingStatus(int total, int successCount, int failedCount, int pendingCount) {
+    private String resolveDocumentEmbeddingStatus(
+            int total, int successCount, int failedCount, int pendingCount, int processingCount) {
         if (total == 0) {
             return DOCUMENT_STATUS_NOT_CHUNKED;
         }
@@ -299,10 +334,27 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         if (failedCount == total) {
             return DOCUMENT_STATUS_FAILED;
         }
+        if (processingCount > 0) {
+            return DOCUMENT_STATUS_PROCESSING;
+        }
         if (pendingCount == total) {
             return DOCUMENT_STATUS_PENDING;
         }
         return DOCUMENT_STATUS_PARTIAL;
+    }
+
+    /**
+     * 截断错误信息，避免超过数据库字段长度导致状态回写失败。
+     *
+     * @param errorMessage 原始错误信息
+     * @return 可安全入库的错误信息
+     */
+    private String truncateError(String errorMessage) {
+        String error = errorMessage == null ? "向量化失败" : errorMessage;
+        if (error.length() <= MAX_ERROR_MESSAGE_LENGTH) {
+            return error;
+        }
+        return error.substring(0, MAX_ERROR_MESSAGE_LENGTH);
     }
 
     /**

@@ -46,7 +46,7 @@ public class ChunkEmbedding {
     @TableField("vector_id")
     private String vectorId;
 
-    /** 向量化状态：PENDING、SUCCESS、FAILED。 */
+    /** 向量化状态：PENDING、PROCESSING、SUCCESS、FAILED。 */
     @Schema(description = "向量化状态", example = "SUCCESS")
     private String status;
 
