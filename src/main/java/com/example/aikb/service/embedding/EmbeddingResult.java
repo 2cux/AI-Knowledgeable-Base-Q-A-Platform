@@ -1,5 +1,6 @@
 package com.example.aikb.service.embedding;
 
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,4 +16,7 @@ public class EmbeddingResult {
 
     /** 向量库中的向量 ID。 */
     private String vectorId;
+
+    /** Query/document vector. MVP mock retrieval uses it; real providers can fill it when available. */
+    private List<Double> vector;
 }

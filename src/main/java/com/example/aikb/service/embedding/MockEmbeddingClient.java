@@ -1,6 +1,7 @@
 package com.example.aikb.service.embedding;
 
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.service.embedding.mock.MockEmbeddingVectorizer;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -26,6 +27,7 @@ public class MockEmbeddingClient implements EmbeddingClient {
         return EmbeddingResult.builder()
                 .embeddingModel(embeddingModel)
                 .vectorId(embeddingModel + "-" + chunkId)
+                .vector(MockEmbeddingVectorizer.vectorize(text))
                 .build();
     }
 }
