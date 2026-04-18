@@ -18,6 +18,8 @@ import com.example.aikb.service.document.DocumentService;
 import com.example.aikb.vo.document.DocumentDetailVO;
 import com.example.aikb.vo.document.DocumentListVO;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,9 +33,12 @@ import org.springframework.util.StringUtils;
 public class DocumentServiceImpl implements DocumentService {
 
     private static final String PARSE_STATUS_UPLOADED = "UPLOADED";
+    private static final String PARSE_STATUS_PENDING = "PENDING";
     private static final String TASK_TYPE_DOCUMENT_PARSE = "DOCUMENT_PARSE";
     private static final String BIZ_TYPE_DOCUMENT = "DOCUMENT";
     private static final String TASK_STATUS_PENDING = "PENDING";
+    private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
+    private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("pdf", "doc", "docx", "txt", "md");
 
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
@@ -52,7 +57,7 @@ public class DocumentServiceImpl implements DocumentService {
         ensureOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
 
         String fileName = request.getFileName().trim();
-        String fileType = request.getFileType().trim().toLowerCase();
+        String fileType = normalizeAndValidateFile(request.getFileType(), request.getFileSize());
 
         Document document = new Document();
         document.setKnowledgeBaseId(request.getKnowledgeBaseId());
@@ -129,6 +134,16 @@ public class DocumentServiceImpl implements DocumentService {
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(id, userId);
 
+        TaskRecord pendingTask = taskRecordMapper.selectOne(new LambdaQueryWrapper<TaskRecord>()
+                .eq(TaskRecord::getTaskType, TASK_TYPE_DOCUMENT_PARSE)
+                .eq(TaskRecord::getBizType, BIZ_TYPE_DOCUMENT)
+                .eq(TaskRecord::getBizId, document.getId())
+                .eq(TaskRecord::getStatus, TASK_STATUS_PENDING)
+                .last("LIMIT 1"));
+        if (pendingTask != null) {
+            return pendingTask.getId();
+        }
+
         TaskRecord taskRecord = new TaskRecord();
         taskRecord.setTaskType(TASK_TYPE_DOCUMENT_PARSE);
         taskRecord.setBizType(BIZ_TYPE_DOCUMENT);
@@ -140,7 +155,27 @@ public class DocumentServiceImpl implements DocumentService {
         if (rows != 1 || taskRecord.getId() == null) {
             throw new BusinessException("解析任务创建失败");
         }
+        document.setParseStatus(PARSE_STATUS_PENDING);
+        documentMapper.updateById(document);
         return taskRecord.getId();
+    }
+
+    /**
+     * 归一化并校验文件类型和大小，避免 MVP 阶段写入明显不可解析或过大的文档。
+     *
+     * @param fileType 文件类型
+     * @param fileSize 文件大小，单位字节
+     * @return 归一化后的文件类型
+     */
+    private String normalizeAndValidateFile(String fileType, Long fileSize) {
+        String normalizedFileType = fileType.trim().toLowerCase(Locale.ROOT);
+        if (!SUPPORTED_FILE_TYPES.contains(normalizedFileType)) {
+            throw new BusinessException("暂不支持该文件类型，仅支持 pdf、doc、docx、txt、md");
+        }
+        if (fileSize > MAX_FILE_SIZE) {
+            throw new BusinessException("文件大小不能超过20MB");
+        }
+        return normalizedFileType;
     }
 
     /**

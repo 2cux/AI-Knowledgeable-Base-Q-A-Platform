@@ -3,6 +3,7 @@ package com.example.aikb.dto.document;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
 /**
@@ -25,5 +26,6 @@ public class DocumentListQuery {
 
     /** 知识库 ID，为空时查询当前用户全部文档。 */
     @Schema(description = "知识库 ID，为空时查询当前用户全部文档", example = "1")
+    @Positive(message = "知识库ID必须大于0")
     private Long knowledgeBaseId;
 }
