@@ -2,13 +2,17 @@ package com.example.aikb.controller.document;
 
 import com.example.aikb.common.PageResult;
 import com.example.aikb.common.Result;
+import com.example.aikb.dto.document.DocumentEmbeddingRequest;
 import com.example.aikb.dto.document.DocumentListQuery;
 import com.example.aikb.dto.document.DocumentProcessRequest;
 import com.example.aikb.dto.document.DocumentUploadRequest;
+import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.example.aikb.service.document.DocumentProcessService;
 import com.example.aikb.service.document.DocumentService;
 import com.example.aikb.vo.document.DocumentChunkVO;
 import com.example.aikb.vo.document.DocumentDetailVO;
+import com.example.aikb.vo.document.DocumentEmbeddingStatusVO;
+import com.example.aikb.vo.document.DocumentEmbeddingVO;
 import com.example.aikb.vo.document.DocumentListVO;
 import com.example.aikb.vo.document.DocumentProcessVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,6 +42,7 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final DocumentProcessService documentProcessService;
+    private final DocumentEmbeddingService documentEmbeddingService;
 
     /**
      * 上传文档元数据，并绑定到当前登录用户拥有的指定知识库。
@@ -93,5 +98,26 @@ public class DocumentController {
     @GetMapping("/{id}/chunks")
     public Result<List<DocumentChunkVO>> listChunks(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
         return Result.success(documentProcessService.listChunks(id));
+    }
+
+    /**
+     * 对当前登录用户可访问的指定文档执行 chunk 向量化同步。
+     */
+    @Operation(summary = "执行文档向量化", description = "读取文档下所有 chunk，调用 embedding 服务并保存每个 chunk 的向量化状态")
+    @PostMapping("/{id}/embed")
+    public Result<DocumentEmbeddingVO> embed(
+            @PathVariable @Positive(message = "文档ID必须大于0") Long id,
+            @Valid @RequestBody(required = false) DocumentEmbeddingRequest request) {
+        return Result.success(documentEmbeddingService.embedDocument(id, request), "向量化完成");
+    }
+
+    /**
+     * 查询当前登录用户可访问的指定文档向量化状态。
+     */
+    @Operation(summary = "查询文档向量化状态", description = "汇总查询指定文档下所有 chunk 的向量化同步状态")
+    @GetMapping("/{id}/embedding-status")
+    public Result<DocumentEmbeddingStatusVO> getEmbeddingStatus(
+            @PathVariable @Positive(message = "文档ID必须大于0") Long id) {
+        return Result.success(documentEmbeddingService.getEmbeddingStatus(id));
     }
 }
