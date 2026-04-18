@@ -1,5 +1,6 @@
 package com.example.aikb.service.document;
 
+import com.example.aikb.exception.BusinessException;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -24,7 +25,7 @@ public class TextSplitter {
             return List.of();
         }
         if (overlap >= chunkSize) {
-            throw new IllegalArgumentException("overlap必须小于chunkSize");
+            throw new BusinessException("overlap必须小于chunkSize");
         }
 
         String normalizedText = text.replace("\r\n", "\n").trim();

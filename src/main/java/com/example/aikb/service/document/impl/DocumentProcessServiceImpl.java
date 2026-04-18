@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DocumentProcessServiceImpl implements DocumentProcessService {
 
-    private static final String PARSE_STATUS_PROCESSING = "PROCESSING";
+    private static final String PARSE_STATUS_CHUNKING = "CHUNKING";
     private static final String PARSE_STATUS_CHUNKED = "CHUNKED";
 
     private final DocumentMapper documentMapper;
@@ -53,8 +53,11 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
 
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
+        if (PARSE_STATUS_CHUNKING.equals(document.getParseStatus())) {
+            throw new BusinessException("文档正在切片处理中，请稍后再试");
+        }
 
-        updateDocumentStatus(document.getId(), PARSE_STATUS_PROCESSING);
+        updateDocumentStatus(document.getId(), PARSE_STATUS_CHUNKING);
         String text = simpleDocumentParser.parse(document, safeRequest.getTextContent());
         List<String> chunks = textSplitter.split(text, safeRequest.getChunkSize(), safeRequest.getOverlap());
         if (chunks.isEmpty()) {
