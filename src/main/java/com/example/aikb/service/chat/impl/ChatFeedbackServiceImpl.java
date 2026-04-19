@@ -31,6 +31,9 @@ public class ChatFeedbackServiceImpl implements ChatFeedbackService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void submit(Long chatRecordId, ChatFeedbackRequest request) {
+        if (request == null) {
+            throw new BusinessException(40001, "反馈请求不能为空");
+        }
         Long userId = CurrentUser.getUserId();
         ChatRecord chatRecord = getOwnChatRecord(chatRecordId, userId);
         String feedbackType = normalizeFeedbackType(request.getFeedbackType());
