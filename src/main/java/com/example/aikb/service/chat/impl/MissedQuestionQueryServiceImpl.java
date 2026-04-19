@@ -5,11 +5,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
 import com.example.aikb.entity.ChatRecord;
-import com.example.aikb.entity.User;
-import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatRecordMapper;
-import com.example.aikb.mapper.UserMapper;
-import com.example.aikb.security.CurrentUser;
+import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.MissedQuestionQueryService;
 import com.example.aikb.vo.chat.MissedQuestionItemVO;
 import java.util.List;
@@ -23,14 +20,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class MissedQuestionQueryServiceImpl implements MissedQuestionQueryService {
 
-    private static final String ADMIN_ROLE = "ADMIN";
-
     private final ChatRecordMapper chatRecordMapper;
-    private final UserMapper userMapper;
+    private final AdminPermissionService adminPermissionService;
 
     @Override
     public PageResult<MissedQuestionItemVO> page(Long knowledgeBaseId, long pageNum, long pageSize) {
-        ensureAdmin();
+        adminPermissionService.ensureAdmin();
 
         Page<ChatRecord> page = Page.of(pageNum, pageSize);
         IPage<ChatRecord> result = chatRecordMapper.selectPage(page, new LambdaQueryWrapper<ChatRecord>()
@@ -50,15 +45,6 @@ public class MissedQuestionQueryServiceImpl implements MissedQuestionQueryServic
                 .pageNum(pageNum)
                 .pageSize(pageSize)
                 .build();
-    }
-
-    private void ensureAdmin() {
-        Long userId = CurrentUser.getUserId();
-        User user = userMapper.selectById(userId);
-        if (user == null || user.getStatus() == null || user.getStatus() != 1
-                || !ADMIN_ROLE.equalsIgnoreCase(user.getRole())) {
-            throw new BusinessException(40300, "无权访问管理端未命中问题");
-        }
     }
 
     private MissedQuestionItemVO toVO(ChatRecord record) {
