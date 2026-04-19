@@ -29,14 +29,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 问答服务实现，串联知识库权限校验、检索、答案生成和问答记录保存。
+ * 问答服务实现，串联知识库权限校验、会话上下文、检索、答案生成和问答记录保存。
  */
 @Service
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
 
     private static final int DEFAULT_TOP_K = 5;
-    private static final String NO_MATCH_ANSWER = "未在知识库中检索到相关内容，请补充或向量化相关文档后再试。";
+    private static final int HISTORY_LIMIT = 5;
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final ChatRecordMapper chatRecordMapper;
@@ -52,7 +52,7 @@ public class ChatServiceImpl implements ChatService {
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
         String question = request.getQuestion().trim();
         int topK = request.getTopK() == null ? DEFAULT_TOP_K : request.getTopK();
-        boolean hasConversationId = request.getConversationId() != null && !request.getConversationId().trim().isEmpty();
+        boolean hasConversationId = request.getConversationId() != null;
         String conversationId = resolveConversationId(request.getConversationId());
         List<ChatRecord> historyRecords = loadHistoryRecords(userId, knowledgeBase.getId(), conversationId,
                 hasConversationId);
@@ -71,7 +71,8 @@ public class ChatServiceImpl implements ChatService {
         List<CitationVO> citations = matched ? chunks.stream().map(this::toCitation).toList() : Collections.emptyList();
         String answer = answerGeneratorService.generate(question, chunks, historyRecords);
 
-        saveRecord(userId, knowledgeBase.getId(), conversationId, question, answer, matched, chunks.size(), topK, citations);
+        saveRecord(userId, knowledgeBase.getId(), conversationId, question, answer, matched, chunks.size(), topK,
+                citations);
 
         return ChatAskResponse.builder()
                 .conversationId(conversationId)
@@ -83,10 +84,14 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private String resolveConversationId(String conversationId) {
-        if (conversationId == null || conversationId.trim().isEmpty()) {
+        if (conversationId == null) {
             return UUID.randomUUID().toString();
         }
-        return conversationId.trim();
+        String trimmed = conversationId.trim();
+        if (trimmed.isEmpty()) {
+            throw new BusinessException(40001, "conversationId不能为空白");
+        }
+        return trimmed;
     }
 
     private List<ChatRecord> loadHistoryRecords(Long userId, Long knowledgeBaseId, String conversationId,
@@ -97,7 +102,7 @@ public class ChatServiceImpl implements ChatService {
                 .eq(ChatRecord::getConversationId, conversationId)
                 .orderByDesc(ChatRecord::getCreatedAt)
                 .orderByDesc(ChatRecord::getId)
-                .last("LIMIT 5"));
+                .last("LIMIT " + HISTORY_LIMIT));
         if (requireExistingConversation && records.isEmpty()) {
             throw new BusinessException(40400, "会话不存在");
         }
@@ -106,9 +111,6 @@ public class ChatServiceImpl implements ChatService {
         return orderedRecords;
     }
 
-    /**
-     * 校验指定知识库是否属于当前登录用户。
-     */
     private KnowledgeBase getOwnKnowledgeBase(Long knowledgeBaseId, Long userId) {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, knowledgeBaseId)
@@ -121,9 +123,6 @@ public class ChatServiceImpl implements ChatService {
         return knowledgeBase;
     }
 
-    /**
-     * 将检索命中的切片转换为返回给前端的引用来源。
-     */
     private CitationVO toCitation(RetrievalChunkVO chunk) {
         return CitationVO.builder()
                 .chunkId(chunk.getChunkId())
@@ -136,9 +135,6 @@ public class ChatServiceImpl implements ChatService {
                 .build();
     }
 
-    /**
-     * 保存问答日志，包含命中状态和引用来源，便于后续审计和问题追踪。
-     */
     private void saveRecord(Long userId, Long knowledgeBaseId, String conversationId, String question, String answer,
             boolean matched, int retrievedChunkCount, int topK, List<CitationVO> citations) {
         ChatRecord record = new ChatRecord();

@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * 检索响应结果。返回结构以 chunk 为核心，便于后续 QA 模块组装提示词上下文。
+ * 检索响应结果。返回结构以 chunk 为核心，便于问答模块组装上下文。
  */
 @Data
 @Builder

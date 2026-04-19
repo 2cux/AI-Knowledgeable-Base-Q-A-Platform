@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * 单条检索命中结果，后续 QA 模块可直接作为上下文来源元数据使用。
+ * 单条检索命中结果，供问答模块作为上下文来源使用。
  */
 @Data
 @Builder
