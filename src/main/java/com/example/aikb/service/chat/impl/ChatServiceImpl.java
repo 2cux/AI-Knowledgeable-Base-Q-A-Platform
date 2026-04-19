@@ -55,7 +55,7 @@ public class ChatServiceImpl implements ChatService {
         retrievalRequest.setTopK(topK);
 
         RetrievalSearchVO retrievalResult = retrievalService.search(retrievalRequest);
-        List<RetrievalChunkVO> chunks = retrievalResult.getChunks() == null
+        List<RetrievalChunkVO> chunks = retrievalResult == null || retrievalResult.getChunks() == null
                 ? Collections.emptyList()
                 : retrievalResult.getChunks();
 
