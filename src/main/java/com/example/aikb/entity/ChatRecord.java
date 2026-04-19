@@ -26,6 +26,10 @@ public class ChatRecord {
     @TableField("knowledge_base_id")
     private Long knowledgeBaseId;
 
+    /** 会话ID，用于轻量多轮追问。 */
+    @TableField("conversation_id")
+    private String conversationId;
+
     /** 用户原始问题。 */
     private String question;
 

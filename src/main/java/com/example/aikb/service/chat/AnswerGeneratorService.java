@@ -1,5 +1,6 @@
 package com.example.aikb.service.chat;
 
+import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.vo.retrieval.RetrievalChunkVO;
 import java.util.List;
 
@@ -15,5 +16,5 @@ public interface AnswerGeneratorService {
      * @param chunks 检索命中的上下文切片
      * @return 生成的答案
      */
-    String generate(String question, List<RetrievalChunkVO> chunks);
+    String generate(String question, List<RetrievalChunkVO> chunks, List<ChatRecord> historyRecords);
 }

@@ -30,4 +30,9 @@ public class ChatAskRequest {
     @Max(value = 20, message = "topK不能超过20")
     @Schema(description = "检索返回的切片数量", example = "5")
     private Integer topK;
+
+    /** 会话ID。不传则服务端创建新会话，传入时会加载当前用户该会话最近几轮问答作为上下文。 */
+    @Size(max = 64, message = "conversationId不能超过64个字符")
+    @Schema(description = "会话ID，不传则新建会话", example = "550e8400-e29b-41d4-a716-446655440000")
+    private String conversationId;
 }

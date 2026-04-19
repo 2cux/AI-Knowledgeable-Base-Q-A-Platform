@@ -10,6 +10,9 @@ import lombok.Data;
 @Schema(description = "问答响应结果")
 public class ChatAskResponse {
 
+    @Schema(description = "会话ID", example = "550e8400-e29b-41d4-a716-446655440000")
+    private String conversationId;
+
     @Schema(description = "生成的答案")
     private String answer;
 

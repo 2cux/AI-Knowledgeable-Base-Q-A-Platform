@@ -6,6 +6,7 @@ import com.example.aikb.dto.retrieval.RetrievalSearchRequest;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.chat.AnswerGeneratorService;
@@ -19,8 +20,10 @@ import com.example.aikb.vo.retrieval.RetrievalSearchVO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,7 @@ public class ChatServiceImpl implements ChatService {
     private static final String NO_MATCH_ANSWER = "未在知识库中检索到相关内容，请补充或向量化相关文档后再试。";
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
+    private final ChatRecordMapper chatRecordMapper;
     private final RetrievalService retrievalService;
     private final AnswerGeneratorService answerGeneratorService;
     private final ChatRecordService chatRecordService;
@@ -48,6 +52,10 @@ public class ChatServiceImpl implements ChatService {
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
         String question = request.getQuestion().trim();
         int topK = request.getTopK() == null ? DEFAULT_TOP_K : request.getTopK();
+        boolean hasConversationId = request.getConversationId() != null && !request.getConversationId().trim().isEmpty();
+        String conversationId = resolveConversationId(request.getConversationId());
+        List<ChatRecord> historyRecords = loadHistoryRecords(userId, knowledgeBase.getId(), conversationId,
+                hasConversationId);
 
         RetrievalSearchRequest retrievalRequest = new RetrievalSearchRequest();
         retrievalRequest.setKnowledgeBaseId(knowledgeBase.getId());
@@ -61,16 +69,41 @@ public class ChatServiceImpl implements ChatService {
 
         boolean matched = !chunks.isEmpty();
         List<CitationVO> citations = matched ? chunks.stream().map(this::toCitation).toList() : Collections.emptyList();
-        String answer = matched ? answerGeneratorService.generate(question, chunks) : NO_MATCH_ANSWER;
+        String answer = answerGeneratorService.generate(question, chunks, historyRecords);
 
-        saveRecord(userId, knowledgeBase.getId(), question, answer, matched, chunks.size(), topK, citations);
+        saveRecord(userId, knowledgeBase.getId(), conversationId, question, answer, matched, chunks.size(), topK, citations);
 
         return ChatAskResponse.builder()
+                .conversationId(conversationId)
                 .answer(answer)
                 .matched(matched)
                 .retrievedChunkCount(chunks.size())
                 .citations(citations)
                 .build();
+    }
+
+    private String resolveConversationId(String conversationId) {
+        if (conversationId == null || conversationId.trim().isEmpty()) {
+            return UUID.randomUUID().toString();
+        }
+        return conversationId.trim();
+    }
+
+    private List<ChatRecord> loadHistoryRecords(Long userId, Long knowledgeBaseId, String conversationId,
+            boolean requireExistingConversation) {
+        List<ChatRecord> records = chatRecordMapper.selectList(new LambdaQueryWrapper<ChatRecord>()
+                .eq(ChatRecord::getUserId, userId)
+                .eq(ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(ChatRecord::getConversationId, conversationId)
+                .orderByDesc(ChatRecord::getCreatedAt)
+                .orderByDesc(ChatRecord::getId)
+                .last("LIMIT 5"));
+        if (requireExistingConversation && records.isEmpty()) {
+            throw new BusinessException(40400, "会话不存在");
+        }
+        List<ChatRecord> orderedRecords = new ArrayList<>(records);
+        Collections.reverse(orderedRecords);
+        return orderedRecords;
     }
 
     /**
@@ -106,11 +139,12 @@ public class ChatServiceImpl implements ChatService {
     /**
      * 保存问答日志，包含命中状态和引用来源，便于后续审计和问题追踪。
      */
-    private void saveRecord(Long userId, Long knowledgeBaseId, String question, String answer,
+    private void saveRecord(Long userId, Long knowledgeBaseId, String conversationId, String question, String answer,
             boolean matched, int retrievedChunkCount, int topK, List<CitationVO> citations) {
         ChatRecord record = new ChatRecord();
         record.setUserId(userId);
         record.setKnowledgeBaseId(knowledgeBaseId);
+        record.setConversationId(conversationId);
         record.setQuestion(question);
         record.setAnswer(answer);
         record.setMatched(matched);
