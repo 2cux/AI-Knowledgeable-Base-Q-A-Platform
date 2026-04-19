@@ -3,6 +3,7 @@ package com.example.aikb.service.chat.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.aikb.common.PageResult;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatRecordMapper;
@@ -10,7 +11,6 @@ import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.chat.ChatRecordQueryService;
 import com.example.aikb.vo.chat.ChatRecordDetailVO;
 import com.example.aikb.vo.chat.ChatRecordListItemVO;
-import com.example.aikb.vo.chat.ChatRecordPageResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,7 +27,7 @@ public class ChatRecordQueryServiceImpl implements ChatRecordQueryService {
     private final ChatRecordMapper chatRecordMapper;
 
     @Override
-    public ChatRecordPageResponse page(Long knowledgeBaseId, long pageNum, long pageSize) {
+    public PageResult<ChatRecordListItemVO> page(Long knowledgeBaseId, long pageNum, long pageSize) {
         Long userId = CurrentUser.getUserId();
         Page<ChatRecord> page = Page.of(pageNum, pageSize);
 
@@ -42,7 +42,7 @@ public class ChatRecordQueryServiceImpl implements ChatRecordQueryService {
                 .map(this::toListItemVO)
                 .toList();
 
-        return ChatRecordPageResponse.builder()
+        return PageResult.<ChatRecordListItemVO>builder()
                 .list(list)
                 .total(result.getTotal())
                 .pageNum(pageNum)

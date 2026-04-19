@@ -1,9 +1,10 @@
 package com.example.aikb.controller.chat;
 
 import com.example.aikb.common.Result;
+import com.example.aikb.common.PageResult;
 import com.example.aikb.service.chat.ChatRecordQueryService;
 import com.example.aikb.vo.chat.ChatRecordDetailVO;
-import com.example.aikb.vo.chat.ChatRecordPageResponse;
+import com.example.aikb.vo.chat.ChatRecordListItemVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -31,7 +32,7 @@ public class ChatRecordController {
 
     @Operation(summary = "分页查询问答记录", description = "分页查询当前登录用户自己的历史问答记录")
     @GetMapping
-    public Result<ChatRecordPageResponse> page(
+    public Result<PageResult<ChatRecordListItemVO>> page(
             @RequestParam(required = false) @Positive(message = "knowledgeBaseId必须大于0") Long knowledgeBaseId,
             @RequestParam(defaultValue = "1") @Min(value = 1, message = "pageNum不能小于1") long pageNum,
             @RequestParam(defaultValue = "10")

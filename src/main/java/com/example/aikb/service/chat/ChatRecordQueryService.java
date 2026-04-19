@@ -1,7 +1,8 @@
 package com.example.aikb.service.chat;
 
+import com.example.aikb.common.PageResult;
 import com.example.aikb.vo.chat.ChatRecordDetailVO;
-import com.example.aikb.vo.chat.ChatRecordPageResponse;
+import com.example.aikb.vo.chat.ChatRecordListItemVO;
 
 /**
  * 历史问答记录查询服务，只允许查询当前登录用户自己的记录。
@@ -16,7 +17,7 @@ public interface ChatRecordQueryService {
      * @param pageSize 每页条数
      * @return 问答记录分页结果
      */
-    ChatRecordPageResponse page(Long knowledgeBaseId, long pageNum, long pageSize);
+    PageResult<ChatRecordListItemVO> page(Long knowledgeBaseId, long pageNum, long pageSize);
 
     /**
      * 查询当前用户指定问答记录详情。
