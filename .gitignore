@@ -1,2 +1,40 @@
-target/
+# Build output
+/target/
+**/target/
+*.class
+
+# Maven local cache
 .m2/repository/
+
+# Logs
+*.log
+logs/
+
+# Runtime and local environment files
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+application-*.local.yml
+application-*.local.yaml
+
+# IDE and editor files
+.idea/
+*.iml
+*.iws
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
