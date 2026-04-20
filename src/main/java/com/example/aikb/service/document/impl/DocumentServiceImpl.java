@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
+import com.example.aikb.dto.document.DocumentFileUploadRequest;
 import com.example.aikb.dto.document.DocumentListQuery;
 import com.example.aikb.dto.document.DocumentUploadRequest;
 import com.example.aikb.entity.Document;
@@ -15,7 +16,10 @@ import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.document.DocumentService;
+import com.example.aikb.service.document.LocalDocumentStorage;
+import com.example.aikb.service.document.LocalDocumentStorage.StoredDocumentFile;
 import com.example.aikb.vo.document.DocumentDetailVO;
+import com.example.aikb.vo.document.DocumentFileUploadVO;
 import com.example.aikb.vo.document.DocumentListVO;
 import java.util.List;
 import java.util.Locale;
@@ -43,6 +47,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final TaskRecordMapper taskRecordMapper;
+    private final LocalDocumentStorage localDocumentStorage;
 
     /**
      * 上传文档元数据，并绑定到当前用户拥有的知识库。
@@ -74,6 +79,44 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         return toDetailVO(documentMapper.selectById(document.getId()));
+    }
+
+    /**
+     * 上传真实文件，上传成功仅表示文件已保存并生成 UPLOADED 文档记录，不代表已经解析。
+     *
+     * @param request 真实文件上传请求参数
+     * @return 上传结果
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DocumentFileUploadVO uploadFile(DocumentFileUploadRequest request) {
+        Long userId = CurrentUser.getUserId();
+        ensureOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
+
+        StoredDocumentFile storedFile = localDocumentStorage.save(
+                userId,
+                request.getKnowledgeBaseId(),
+                request.getFile(),
+                request.getFileName());
+        try {
+            Document document = new Document();
+            document.setKnowledgeBaseId(request.getKnowledgeBaseId());
+            document.setFileName(storedFile.getFileName());
+            document.setFileType(storedFile.getFileType());
+            document.setFileSize(storedFile.getFileSize());
+            document.setStoragePath(storedFile.getStoragePath());
+            document.setParseStatus(PARSE_STATUS_UPLOADED);
+            document.setCreatedBy(userId);
+
+            int rows = documentMapper.insert(document);
+            if (rows != 1 || document.getId() == null) {
+                throw new BusinessException("真实文件上传记录保存失败");
+            }
+            return toFileUploadVO(documentMapper.selectById(document.getId()));
+        } catch (RuntimeException ex) {
+            localDocumentStorage.deleteQuietly(storedFile);
+            throw ex;
+        }
     }
 
     /**
@@ -263,6 +306,26 @@ public class DocumentServiceImpl implements DocumentService {
                 .createdBy(document.getCreatedBy())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
+                .build();
+    }
+
+    /**
+     * 将文档实体转换为真实文件上传响应对象。
+     *
+     * @param document 文档实体
+     * @return 真实文件上传响应对象
+     */
+    private DocumentFileUploadVO toFileUploadVO(Document document) {
+        return DocumentFileUploadVO.builder()
+                .id(document.getId())
+                .knowledgeBaseId(document.getKnowledgeBaseId())
+                .fileName(document.getFileName())
+                .fileType(document.getFileType())
+                .fileSize(document.getFileSize())
+                .storagePath(document.getStoragePath())
+                .parseStatus(document.getParseStatus())
+                .createdBy(document.getCreatedBy())
+                .createdAt(document.getCreatedAt())
                 .build();
     }
 }

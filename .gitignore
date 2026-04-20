@@ -10,6 +10,9 @@
 *.log
 logs/
 
+# Uploaded documents
+uploads/
+
 # Runtime and local environment files
 .env
 .env.*

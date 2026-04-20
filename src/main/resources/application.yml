@@ -33,6 +33,11 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+app:
+  file:
+    upload-dir: ${APP_FILE_UPLOAD_DIR:uploads}
+    max-size: 20MB
+
 logging:
   level:
     root: INFO

@@ -3,6 +3,7 @@ package com.example.aikb.controller.document;
 import com.example.aikb.common.PageResult;
 import com.example.aikb.common.Result;
 import com.example.aikb.dto.document.DocumentEmbeddingRequest;
+import com.example.aikb.dto.document.DocumentFileUploadRequest;
 import com.example.aikb.dto.document.DocumentListQuery;
 import com.example.aikb.dto.document.DocumentProcessRequest;
 import com.example.aikb.dto.document.DocumentUploadRequest;
@@ -13,6 +14,7 @@ import com.example.aikb.vo.document.DocumentChunkVO;
 import com.example.aikb.vo.document.DocumentDetailVO;
 import com.example.aikb.vo.document.DocumentEmbeddingStatusVO;
 import com.example.aikb.vo.document.DocumentEmbeddingVO;
+import com.example.aikb.vo.document.DocumentFileUploadVO;
 import com.example.aikb.vo.document.DocumentListVO;
 import com.example.aikb.vo.document.DocumentProcessVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,10 +49,19 @@ public class DocumentController {
     /**
      * 上传文档元数据，并绑定到当前登录用户拥有的指定知识库。
      */
-    @Operation(summary = "上传文档", description = "保存文档元数据，并将文档绑定到当前登录用户拥有的知识库")
+    @Operation(summary = "上传文档元数据", description = "兼容旧接口：仅保存文档元数据，不接收真实文件；真实文件请使用 /api/documents/upload-file")
     @PostMapping("/upload")
     public Result<DocumentDetailVO> upload(@Valid @RequestBody DocumentUploadRequest request) {
-        return Result.success(documentService.upload(request), "上传成功");
+        return Result.success(documentService.upload(request), "元数据上传成功");
+    }
+
+    /**
+     * 上传真实文件并生成文档记录。上传成功只代表文件保存成功，后续解析由解析接口触发。
+     */
+    @Operation(summary = "上传真实文件", description = "使用 multipart/form-data 上传 txt/md 文件，保存真实文件并生成 UPLOADED 文档记录")
+    @PostMapping(value = "/upload-file", consumes = "multipart/form-data")
+    public Result<DocumentFileUploadVO> uploadFile(@Valid @ModelAttribute DocumentFileUploadRequest request) {
+        return Result.success(documentService.uploadFile(request), "文件上传成功，等待解析");
     }
 
     /**

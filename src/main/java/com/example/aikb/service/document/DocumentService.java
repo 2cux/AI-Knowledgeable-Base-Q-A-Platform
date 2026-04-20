@@ -1,9 +1,11 @@
 package com.example.aikb.service.document;
 
 import com.example.aikb.common.PageResult;
+import com.example.aikb.dto.document.DocumentFileUploadRequest;
 import com.example.aikb.dto.document.DocumentListQuery;
 import com.example.aikb.dto.document.DocumentUploadRequest;
 import com.example.aikb.vo.document.DocumentDetailVO;
+import com.example.aikb.vo.document.DocumentFileUploadVO;
 import com.example.aikb.vo.document.DocumentListVO;
 
 /**
@@ -18,6 +20,14 @@ public interface DocumentService {
      * @return 文档详情
      */
     DocumentDetailVO upload(DocumentUploadRequest request);
+
+    /**
+     * 上传真实文件，保存到后端受控目录后再写入文档记录。
+     *
+     * @param request 真实文件上传请求参数
+     * @return 文件上传结果
+     */
+    DocumentFileUploadVO uploadFile(DocumentFileUploadRequest request);
 
     /**
      * 分页查询当前用户可访问的文档列表，可按知识库筛选。
