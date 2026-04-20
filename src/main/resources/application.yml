@@ -41,4 +41,4 @@ app:
 logging:
   level:
     root: INFO
-    com.example.aikb: DEBUG
+    '[com.example.aikb]': DEBUG

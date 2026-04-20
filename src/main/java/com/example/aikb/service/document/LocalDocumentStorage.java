@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.Builder;
@@ -44,7 +45,8 @@ public class LocalDocumentStorage {
      * @param customFileName 可选自定义文件名
      * @return 已保存文件的元信息
      */
-    public StoredDocumentFile save(Long userId, Long knowledgeBaseId, MultipartFile multipartFile, String customFileName) {
+    public StoredDocumentFile save(Long userId, Long knowledgeBaseId, MultipartFile multipartFile,
+            String customFileName) {
         validateNotEmpty(multipartFile);
         validateFileSize(multipartFile);
 
@@ -61,7 +63,7 @@ public class LocalDocumentStorage {
                 date,
                 storedFileName);
         Path targetPath = uploadRoot.resolve(relativePath).normalize();
-        Path targetDirectory = targetPath.getParent();
+        Path targetDirectory = Objects.requireNonNull(targetPath.getParent(), "文件存储目录不能为空");
 
         if (!targetPath.startsWith(uploadRoot)) {
             throw new BusinessException("文件存储路径非法");
@@ -146,14 +148,17 @@ public class LocalDocumentStorage {
      * 获取并校验对外展示的原始文件名，禁止路径穿越和客户端路径片段。
      */
     private String resolveOriginalFileName(MultipartFile multipartFile, String customFileName) {
-        String sourceFileName = StringUtils.hasText(customFileName)
-                ? customFileName.trim()
-                : multipartFile.getOriginalFilename();
-        if (!StringUtils.hasText(sourceFileName)) {
+        String sourceFileName;
+        if (customFileName != null && !customFileName.isBlank()) {
+            sourceFileName = customFileName.trim();
+        } else {
+            sourceFileName = Objects.toString(multipartFile.getOriginalFilename(), "").trim();
+        }
+        if (sourceFileName.isBlank()) {
             throw new BusinessException("文件名不能为空");
         }
 
-        String cleanedFileName = StringUtils.cleanPath(sourceFileName.trim());
+        String cleanedFileName = StringUtils.cleanPath(sourceFileName);
         if (cleanedFileName.contains("..")
                 || cleanedFileName.contains("/")
                 || cleanedFileName.contains("\\")

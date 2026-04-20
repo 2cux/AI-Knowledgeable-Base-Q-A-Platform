@@ -15,7 +15,7 @@ spring:
 
 logging:
   level:
-    com.example.aikb: DEBUG
+    '[com.example.aikb]': DEBUG
 jwt:
   secret: ${JWT_SECRET:your-secret-key-change-me}
   expiration: ${JWT_EXPIRATION:86400000}
