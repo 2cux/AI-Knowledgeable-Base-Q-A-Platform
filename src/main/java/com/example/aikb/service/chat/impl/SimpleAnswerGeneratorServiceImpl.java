@@ -4,7 +4,6 @@ import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.service.chat.AnswerGeneratorService;
 import com.example.aikb.vo.retrieval.RetrievalChunkVO;
 import java.util.List;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Service;
 
 /**
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Service;
  * 将历史问答、当前问题和检索上下文组装为 prompt 后调用模型即可。
  */
 @Service
-@ConditionalOnMissingBean(AnswerGeneratorService.class)
 public class SimpleAnswerGeneratorServiceImpl implements AnswerGeneratorService {
 
     @Override
