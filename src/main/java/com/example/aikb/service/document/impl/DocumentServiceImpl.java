@@ -26,6 +26,8 @@ import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -98,6 +100,7 @@ public class DocumentServiceImpl implements DocumentService {
                 request.getKnowledgeBaseId(),
                 request.getFile(),
                 request.getFileName());
+        registerRollbackCleanup(storedFile);
         try {
             Document document = new Document();
             document.setKnowledgeBaseId(request.getKnowledgeBaseId());
@@ -117,6 +120,25 @@ public class DocumentServiceImpl implements DocumentService {
             localDocumentStorage.deleteQuietly(storedFile);
             throw ex;
         }
+    }
+
+    /**
+     * 注册事务回滚后的文件清理，覆盖 SQL 已执行但事务提交失败的场景。
+     *
+     * @param storedFile 已保存文件信息
+     */
+    private void registerRollbackCleanup(StoredDocumentFile storedFile) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    localDocumentStorage.deleteQuietly(storedFile);
+                }
+            }
+        });
     }
 
     /**

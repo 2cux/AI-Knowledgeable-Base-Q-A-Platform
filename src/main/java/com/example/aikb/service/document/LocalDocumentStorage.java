@@ -3,6 +3,7 @@ package com.example.aikb.service.document;
 import com.example.aikb.config.AppFileProperties;
 import com.example.aikb.exception.BusinessException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,10 +26,12 @@ import org.springframework.web.multipart.MultipartFile;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class LocalDocumentStorage {
 
     private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("txt", "md");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
+    private static final int BINARY_CHECK_BYTES = 4096;
 
     private final AppFileProperties appFileProperties;
 
@@ -46,16 +50,18 @@ public class LocalDocumentStorage {
 
         String originalFileName = resolveOriginalFileName(multipartFile, customFileName);
         String fileType = resolveAndValidateFileType(originalFileName);
+        validateTextFileContent(multipartFile);
 
         Path uploadRoot = getUploadRoot();
         String date = LocalDate.now().format(DATE_FORMATTER);
         String storedFileName = UUID.randomUUID() + "." + fileType;
-        Path targetDirectory = uploadRoot
-                .resolve(String.valueOf(userId))
-                .resolve(String.valueOf(knowledgeBaseId))
-                .resolve(date)
-                .normalize();
-        Path targetPath = targetDirectory.resolve(storedFileName).normalize();
+        Path relativePath = Paths.get(
+                String.valueOf(userId),
+                String.valueOf(knowledgeBaseId),
+                date,
+                storedFileName);
+        Path targetPath = uploadRoot.resolve(relativePath).normalize();
+        Path targetDirectory = targetPath.getParent();
 
         if (!targetPath.startsWith(uploadRoot)) {
             throw new BusinessException("文件存储路径非法");
@@ -66,6 +72,7 @@ public class LocalDocumentStorage {
             multipartFile.transferTo(targetPath);
         } catch (IOException | IllegalStateException ex) {
             deletePathQuietly(targetPath);
+            log.warn("Save uploaded document failed, targetPath={}", targetPath, ex);
             throw new BusinessException(50000, "文件保存失败");
         }
 
@@ -73,7 +80,7 @@ public class LocalDocumentStorage {
                 .fileName(originalFileName)
                 .fileType(fileType)
                 .fileSize(multipartFile.getSize())
-                .storagePath(toStoragePath(targetPath))
+                .storagePath(toStoragePath(relativePath))
                 .absolutePath(targetPath)
                 .build();
     }
@@ -89,8 +96,8 @@ public class LocalDocumentStorage {
         }
         try {
             Files.deleteIfExists(storedDocumentFile.getAbsolutePath());
-        } catch (IOException ignored) {
-            // 清理失败不覆盖原始业务异常，后续可接入日志或告警。
+        } catch (IOException ex) {
+            log.warn("Delete uploaded document failed, path={}", storedDocumentFile.getAbsolutePath(), ex);
         }
     }
 
@@ -100,8 +107,8 @@ public class LocalDocumentStorage {
     private void deletePathQuietly(Path path) {
         try {
             Files.deleteIfExists(path);
-        } catch (IOException ignored) {
-            // 保存失败后的兜底清理，不能覆盖原始保存异常。
+        } catch (IOException ex) {
+            log.warn("Delete uploaded document failed, path={}", path, ex);
         }
     }
 
@@ -172,13 +179,28 @@ public class LocalDocumentStorage {
     }
 
     /**
-     * 将本地路径转换为稳定的相对展示路径，避免向外暴露机器绝对路径。
+     * 轻量校验文本文件内容，拒绝明显的二进制文件混入 txt/md 上传链路。
      */
-    private String toStoragePath(Path targetPath) {
-        Path root = getUploadRoot();
-        Path relativePath = root.relativize(targetPath.toAbsolutePath().normalize());
-        String normalizedUploadDir = appFileProperties.getUploadDir().replace("\\", "/");
-        return normalizedUploadDir + "/" + relativePath.toString().replace("\\", "/");
+    private void validateTextFileContent(MultipartFile multipartFile) {
+        byte[] buffer = new byte[BINARY_CHECK_BYTES];
+        try (InputStream inputStream = multipartFile.getInputStream()) {
+            int length = inputStream.read(buffer);
+            for (int i = 0; i < length; i++) {
+                if (buffer[i] == 0) {
+                    throw new BusinessException("文件内容不是有效的文本文件");
+                }
+            }
+        } catch (IOException ex) {
+            log.warn("Read uploaded document failed, originalFilename={}", multipartFile.getOriginalFilename(), ex);
+            throw new BusinessException(50000, "文件读取失败");
+        }
+    }
+
+    /**
+     * 将存储路径转换为相对 key，避免向外暴露机器绝对路径和上传根目录。
+     */
+    private String toStoragePath(Path relativePath) {
+        return relativePath.toString().replace("\\", "/");
     }
 
     /**

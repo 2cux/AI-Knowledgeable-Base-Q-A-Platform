@@ -34,7 +34,7 @@ public class DocumentFileUploadVO {
     private Long fileSize;
 
     /** 后端生成的真实存储路径。 */
-    @Schema(description = "后端生成的真实存储路径", example = "uploads/1/1/20260420/uuid.md")
+    @Schema(description = "后端生成的真实存储相对路径", example = "1/1/20260420/uuid.md")
     private String storagePath;
 
     /** 解析状态，上传成功后固定为 UPLOADED。 */
