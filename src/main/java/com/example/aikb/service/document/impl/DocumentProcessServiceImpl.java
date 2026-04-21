@@ -1,6 +1,7 @@
 package com.example.aikb.service.document.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.aikb.dto.document.DocumentProcessRequest;
 import com.example.aikb.entity.Document;
 import com.example.aikb.entity.DocumentChunk;
@@ -63,6 +64,9 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         try {
             DocumentProcessVO result = transactionTemplate.execute(status ->
                     processInTransaction(document, safeRequest, taskRecord.getId()));
+            if (result == null) {
+                throw new BusinessException("文档处理结果为空");
+            }
             taskRecordService.markSuccess(taskRecord.getId());
             result.setTaskStatus(TASK_STATUS_SUCCESS);
             return result;
@@ -84,7 +88,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
             throw new BusinessException("文档正在切片处理中，请稍后再试");
         }
 
-        updateDocumentStatus(latestDocument.getId(), PARSE_STATUS_CHUNKING);
+        markDocumentChunking(latestDocument.getId());
         String text = simpleDocumentParser.parse(latestDocument, safeRequest.getTextContent());
         List<String> chunks = textSplitter.split(text, safeRequest.getChunkSize(), safeRequest.getOverlap());
         if (chunks.isEmpty()) {
@@ -182,6 +186,19 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
             throw new BusinessException(40400, "文档不存在");
         }
         return document;
+    }
+
+    /**
+     * 原子地将文档状态切换为 CHUNKING，降低并发 process 同时执行的风险。
+     */
+    private void markDocumentChunking(Long documentId) {
+        int rows = documentMapper.update(null, new LambdaUpdateWrapper<Document>()
+                .eq(Document::getId, documentId)
+                .ne(Document::getParseStatus, PARSE_STATUS_CHUNKING)
+                .set(Document::getParseStatus, PARSE_STATUS_CHUNKING));
+        if (rows != 1) {
+            throw new BusinessException("文档正在切片处理中，请稍后再试");
+        }
     }
 
     /**
