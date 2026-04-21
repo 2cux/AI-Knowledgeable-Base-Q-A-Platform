@@ -104,6 +104,35 @@ public class LocalDocumentStorage {
     }
 
     /**
+     * 将 document.storagePath 解析为受控上传目录下的本地路径，供后续真实解析读取文件时复用。
+     *
+     * @param storagePath 数据库存储的相对文件路径
+     * @return 归一化后的本地文件路径
+     */
+    public Path resolveStoredPath(String storagePath) {
+        if (!StringUtils.hasText(storagePath)) {
+            throw new BusinessException("文件存储路径不能为空");
+        }
+
+        Path relativePath;
+        try {
+            relativePath = Paths.get(storagePath).normalize();
+        } catch (InvalidPathException ex) {
+            throw new BusinessException("文件存储路径非法");
+        }
+        if (relativePath.isAbsolute() || containsParentReference(relativePath)) {
+            throw new BusinessException("文件存储路径非法");
+        }
+
+        Path uploadRoot = getUploadRoot();
+        Path targetPath = uploadRoot.resolve(relativePath).normalize();
+        if (!targetPath.startsWith(uploadRoot)) {
+            throw new BusinessException("文件存储路径非法");
+        }
+        return targetPath;
+    }
+
+    /**
      * 静默删除指定路径，用于保存失败或业务回滚时清理文件。
      */
     private void deletePathQuietly(Path path) {
@@ -112,6 +141,18 @@ public class LocalDocumentStorage {
         } catch (IOException ex) {
             log.warn("Delete uploaded document failed, path={}", path, ex);
         }
+    }
+
+    /**
+     * 检查相对路径中是否包含父目录跳转片段。
+     */
+    private boolean containsParentReference(Path path) {
+        for (Path part : path) {
+            if ("..".equals(part.toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

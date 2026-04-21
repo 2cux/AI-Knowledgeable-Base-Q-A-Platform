@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 @Slf4j
 @RestControllerAdvice
@@ -48,6 +49,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public Result<Void> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
         return Result.fail(40001, "文件大小超过上传限制");
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public Result<Void> handleMultipartException(MultipartException ex) {
+        return Result.fail(40001, "文件上传请求格式不正确");
     }
 
     @ExceptionHandler(BusinessException.class)

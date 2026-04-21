@@ -29,7 +29,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 /**
  * 文档业务服务实现类，按当前登录用户隔离知识库和文档数据。
@@ -71,7 +70,7 @@ public class DocumentServiceImpl implements DocumentService {
         document.setFileName(fileName);
         document.setFileType(fileType);
         document.setFileSize(request.getFileSize());
-        document.setStoragePath(resolveStoragePath(request.getStoragePath(), request.getKnowledgeBaseId(), fileName));
+        document.setStoragePath(resolveMetadataStoragePath(request.getKnowledgeBaseId(), fileName));
         document.setParseStatus(PARSE_STATUS_UPLOADED);
         document.setCreatedBy(userId);
 
@@ -277,18 +276,14 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     /**
-     * 解析文件存储路径，MVP 阶段没有真实文件存储时生成占位路径。
+     * 为兼容元数据上传接口生成占位路径；真实文件路径只能由 /upload-file 的存储组件生成。
      *
-     * @param storagePath 请求中的存储路径
      * @param knowledgeBaseId 知识库 ID
      * @param fileName 文件名
-     * @return 最终存储路径
+     * @return 元数据占位路径
      */
-    private String resolveStoragePath(String storagePath, Long knowledgeBaseId, String fileName) {
-        if (StringUtils.hasText(storagePath)) {
-            return storagePath.trim();
-        }
-        return "kb/" + knowledgeBaseId + "/" + fileName;
+    private String resolveMetadataStoragePath(Long knowledgeBaseId, String fileName) {
+        return "metadata/" + knowledgeBaseId + "/" + fileName;
     }
 
     /**
