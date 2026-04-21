@@ -79,9 +79,20 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         TaskRecord taskRecord = taskRecordService.createDocumentEmbeddingTask(document, userId);
         taskRecordService.markProcessing(taskRecord.getId());
 
+        try {
+            return doEmbedDocument(document, request, taskRecord.getId());
+        } catch (RuntimeException ex) {
+            taskRecordService.markFailed(taskRecord.getId(), ex.getMessage());
+            throw ex;
+        }
+    }
+
+    /**
+     * 执行文档向量化主体流程。
+     */
+    private DocumentEmbeddingVO doEmbedDocument(Document document, DocumentEmbeddingRequest request, Long taskId) {
         List<DocumentChunk> chunks = listEmbeddableDocumentChunks(document.getId());
         if (chunks.isEmpty()) {
-            taskRecordService.markFailed(taskRecord.getId(), "文档没有可向量化的有效切片");
             throw new BusinessException("文档尚未切片，请先执行文档处理");
         }
 
@@ -90,8 +101,9 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         int failedCount = 0;
 
         for (DocumentChunk chunk : chunks) {
-            ChunkEmbedding embedding = findOrCreateEmbedding(document, chunk, embeddingModel);
+            ChunkEmbedding embedding = null;
             try {
+                embedding = findOrCreateEmbedding(document, chunk, embeddingModel);
                 markProcessing(embedding, embeddingModel);
                 EmbeddingResult result = embeddingClient.embed(chunk.getId(), chunk.getContent(), embeddingModel);
                 markSuccess(embedding, result);
@@ -99,7 +111,9 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
             } catch (RuntimeException ex) {
                 log.warn("Embedding failed, documentId={}, chunkId={}, model={}, error={}",
                         document.getId(), chunk.getId(), embeddingModel, ex.getMessage());
-                markFailed(embedding, embeddingModel, ex.getMessage());
+                if (embedding != null) {
+                    markFailed(embedding, embeddingModel, ex.getMessage());
+                }
                 failedCount++;
             }
         }
@@ -107,10 +121,10 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         String taskStatus = STATUS_SUCCESS;
         if (failedCount > 0) {
             taskStatus = STATUS_FAILED;
-            taskRecordService.markFailed(taskRecord.getId(),
+            taskRecordService.markFailed(taskId,
                     "文档向量化失败chunk数量：" + failedCount + "/" + chunks.size());
         } else {
-            taskRecordService.markSuccess(taskRecord.getId());
+            taskRecordService.markSuccess(taskId);
         }
 
         return DocumentEmbeddingVO.builder()
@@ -120,7 +134,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .successCount(successCount)
                 .failedCount(failedCount)
                 .embeddingModel(embeddingModel)
-                .taskId(taskRecord.getId())
+                .taskId(taskId)
                 .taskStatus(taskStatus)
                 .build();
     }
