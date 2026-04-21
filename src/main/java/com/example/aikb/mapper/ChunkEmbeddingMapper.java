@@ -13,8 +13,8 @@ import org.apache.ibatis.annotations.Select;
 public interface ChunkEmbeddingMapper extends BaseMapper<ChunkEmbedding> {
 
     /**
-     * Load chunks that have been embedded successfully in one knowledge base.
-     * The MVP adapter scores these candidates in Java; a real vector store adapter should replace this query path.
+     * 查询指定知识库内已向量化成功的 chunk，供 MVP 检索适配器在应用层计算相似度。
+     * 后续接入真实向量库时，可替换该查询路径。
      */
     @Select("""
             SELECT
@@ -25,7 +25,8 @@ public interface ChunkEmbeddingMapper extends BaseMapper<ChunkEmbedding> {
                 dc.content AS content,
                 d.file_name AS documentName,
                 ce.vector_id AS vectorId,
-                ce.embedding_model AS embeddingModel
+                ce.embedding_model AS embeddingModel,
+                ce.vector_json AS vectorJson
             FROM chunk_embedding ce
             INNER JOIN document_chunk dc ON dc.id = ce.chunk_id
             INNER JOIN document d ON d.id = dc.document_id
@@ -33,10 +34,14 @@ public interface ChunkEmbeddingMapper extends BaseMapper<ChunkEmbedding> {
               AND dc.knowledge_base_id = #{knowledgeBaseId}
               AND d.knowledge_base_id = #{knowledgeBaseId}
               AND ce.status = #{status}
+              AND ce.embedding_model = #{embeddingModel}
+              AND ce.vector_json IS NOT NULL
+            ORDER BY ce.id ASC
             LIMIT #{limit}
             """)
     List<RetrievalCandidate> selectRetrievalCandidates(
             @Param("knowledgeBaseId") Long knowledgeBaseId,
             @Param("status") String status,
+            @Param("embeddingModel") String embeddingModel,
             @Param("limit") Integer limit);
 }

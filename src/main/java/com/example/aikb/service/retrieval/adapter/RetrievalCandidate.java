@@ -16,5 +16,6 @@ public class RetrievalCandidate {
     private String documentName;
     private String vectorId;
     private String embeddingModel;
+    private String vectorJson;
     private Double score;
 }

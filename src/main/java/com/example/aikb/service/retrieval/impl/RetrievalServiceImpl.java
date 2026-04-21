@@ -17,6 +17,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 检索服务实现。负责权限校验、生成查询向量，并将相关性排序委托给向量检索适配层。
@@ -39,9 +40,9 @@ public class RetrievalServiceImpl implements RetrievalService {
         Long userId = CurrentUser.getUserId();
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
         int topK = resolveTopK(request.getTopK());
-        String question = request.getQuestion().trim();
+        String query = resolveQuery(request);
 
-        RetrievalQueryEmbedding queryEmbedding = queryEmbeddingService.embed(question);
+        RetrievalQueryEmbedding queryEmbedding = queryEmbeddingService.embed(query);
 
         List<RetrievalChunkVO> chunks = vectorSearchAdapter.search(knowledgeBase.getId(), queryEmbedding, topK)
                 .stream()
@@ -53,7 +54,7 @@ public class RetrievalServiceImpl implements RetrievalService {
 
         return RetrievalSearchVO.builder()
                 .knowledgeBaseId(knowledgeBase.getId())
-                .question(question)
+                .question(query)
                 .topK(topK)
                 .total(chunks.size())
                 .chunks(chunks)
@@ -81,6 +82,16 @@ public class RetrievalServiceImpl implements RetrievalService {
             throw new BusinessException("topK必须在1到20之间");
         }
         return resolvedTopK;
+    }
+
+    private String resolveQuery(RetrievalSearchRequest request) {
+        if (StringUtils.hasText(request.getQuery())) {
+            return request.getQuery().trim();
+        }
+        if (StringUtils.hasText(request.getQuestion())) {
+            return request.getQuestion().trim();
+        }
+        throw new BusinessException("query不能为空");
     }
 
     private RetrievalChunkVO toVO(RetrievalCandidate candidate) {
