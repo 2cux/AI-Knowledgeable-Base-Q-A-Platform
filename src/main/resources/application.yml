@@ -37,6 +37,14 @@ app:
   file:
     upload-dir: ${APP_FILE_UPLOAD_DIR:uploads}
     max-size: 20MB
+  llm:
+    base-url: ${APP_LLM_BASE_URL:}
+    api-key: ${APP_LLM_API_KEY:}
+    model: ${APP_LLM_MODEL:gpt-4o-mini}
+    temperature: ${APP_LLM_TEMPERATURE:0.2}
+    max-tokens: ${APP_LLM_MAX_TOKENS:800}
+    connect-timeout: ${APP_LLM_CONNECT_TIMEOUT:5s}
+    read-timeout: ${APP_LLM_READ_TIMEOUT:60s}
 
 logging:
   level:

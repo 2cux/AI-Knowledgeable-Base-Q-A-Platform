@@ -37,6 +37,7 @@ public class ChatServiceImpl implements ChatService {
 
     private static final int DEFAULT_TOP_K = 5;
     private static final int HISTORY_LIMIT = 5;
+    private static final double MIN_RELEVANCE_SCORE = 0.05D;
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final ChatRecordMapper chatRecordMapper;
@@ -59,7 +60,7 @@ public class ChatServiceImpl implements ChatService {
 
         RetrievalSearchRequest retrievalRequest = new RetrievalSearchRequest();
         retrievalRequest.setKnowledgeBaseId(knowledgeBase.getId());
-        retrievalRequest.setQuestion(question);
+        retrievalRequest.setQuery(question);
         retrievalRequest.setTopK(topK);
 
         RetrievalSearchVO retrievalResult = retrievalService.search(retrievalRequest);
@@ -67,18 +68,21 @@ public class ChatServiceImpl implements ChatService {
                 ? Collections.emptyList()
                 : retrievalResult.getChunks();
 
-        boolean matched = !chunks.isEmpty();
-        List<CitationVO> citations = matched ? chunks.stream().map(this::toCitation).toList() : Collections.emptyList();
-        String answer = answerGeneratorService.generate(question, chunks, historyRecords);
+        List<RetrievalChunkVO> effectiveChunks = filterRelevantChunks(chunks);
+        boolean matched = !effectiveChunks.isEmpty();
+        List<CitationVO> citations = matched
+                ? effectiveChunks.stream().map(this::toCitation).toList()
+                : Collections.emptyList();
+        String answer = answerGeneratorService.generate(question, effectiveChunks, historyRecords);
 
-        saveRecord(userId, knowledgeBase.getId(), conversationId, question, answer, matched, chunks.size(), topK,
+        saveRecord(userId, knowledgeBase.getId(), conversationId, question, answer, matched, effectiveChunks.size(), topK,
                 citations);
 
         return ChatAskResponse.builder()
                 .conversationId(conversationId)
                 .answer(answer)
                 .matched(matched)
-                .retrievedChunkCount(chunks.size())
+                .retrievedChunkCount(effectiveChunks.size())
                 .citations(citations)
                 .build();
     }
@@ -133,6 +137,15 @@ public class ChatServiceImpl implements ChatService {
                 .score(chunk.getScore())
                 .contentSnippet(shorten(chunk.getContent(), 300))
                 .build();
+    }
+
+    private List<RetrievalChunkVO> filterRelevantChunks(List<RetrievalChunkVO> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return chunks.stream()
+                .filter(chunk -> chunk.getScore() != null && chunk.getScore() >= MIN_RELEVANCE_SCORE)
+                .toList();
     }
 
     private void saveRecord(Long userId, Long knowledgeBaseId, String conversationId, String question, String answer,
