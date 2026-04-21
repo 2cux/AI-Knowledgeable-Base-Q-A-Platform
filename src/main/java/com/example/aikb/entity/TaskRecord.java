@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
- * 任务记录实体，用于记录文档解析等后台任务的基础状态。
+ * 任务记录实体，用于记录文档处理等任务的基础状态和执行时间。
  */
 @Data
 @TableName("task_record")
@@ -21,8 +21,8 @@ public class TaskRecord {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 任务类型，例如 DOCUMENT_PARSE。 */
-    @Schema(description = "任务类型", example = "DOCUMENT_PARSE")
+    /** 任务类型，例如 DOCUMENT_PROCESS。 */
+    @Schema(description = "任务类型", example = "DOCUMENT_PROCESS")
     @TableField("task_type")
     private String taskType;
 
@@ -36,7 +36,7 @@ public class TaskRecord {
     @TableField("biz_id")
     private Long bizId;
 
-    /** 任务状态，例如 PENDING、RUNNING、SUCCESS、FAILED。 */
+    /** 任务状态，例如 PENDING、PROCESSING、SUCCESS、FAILED。 */
     @Schema(description = "任务状态", example = "PENDING")
     private String status;
 
@@ -49,6 +49,21 @@ public class TaskRecord {
     @Schema(description = "重试次数", example = "0")
     @TableField("retry_count")
     private Integer retryCount;
+
+    /** 任务创建人 ID。 */
+    @Schema(description = "任务创建人 ID", example = "1")
+    @TableField("created_by")
+    private Long createdBy;
+
+    /** 任务开始执行时间。 */
+    @Schema(description = "任务开始执行时间")
+    @TableField("started_at")
+    private LocalDateTime startedAt;
+
+    /** 任务结束执行时间。 */
+    @Schema(description = "任务结束执行时间")
+    @TableField("finished_at")
+    private LocalDateTime finishedAt;
 
     /** 创建时间。 */
     @Schema(description = "创建时间")

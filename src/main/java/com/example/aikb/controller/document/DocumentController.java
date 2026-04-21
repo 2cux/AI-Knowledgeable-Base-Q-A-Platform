@@ -10,6 +10,7 @@ import com.example.aikb.dto.document.DocumentUploadRequest;
 import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.example.aikb.service.document.DocumentProcessService;
 import com.example.aikb.service.document.DocumentService;
+import com.example.aikb.service.task.TaskRecordService;
 import com.example.aikb.vo.document.DocumentChunkVO;
 import com.example.aikb.vo.document.DocumentDetailVO;
 import com.example.aikb.vo.document.DocumentEmbeddingStatusVO;
@@ -17,6 +18,7 @@ import com.example.aikb.vo.document.DocumentEmbeddingVO;
 import com.example.aikb.vo.document.DocumentFileUploadVO;
 import com.example.aikb.vo.document.DocumentListVO;
 import com.example.aikb.vo.document.DocumentProcessVO;
+import com.example.aikb.vo.task.TaskRecordVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -45,6 +47,7 @@ public class DocumentController {
     private final DocumentService documentService;
     private final DocumentProcessService documentProcessService;
     private final DocumentEmbeddingService documentEmbeddingService;
+    private final TaskRecordService taskRecordService;
 
     /**
      * 上传文档元数据，并绑定到当前登录用户拥有的指定知识库。
@@ -109,6 +112,15 @@ public class DocumentController {
     @GetMapping("/{id}/chunks")
     public Result<List<DocumentChunkVO>> listChunks(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
         return Result.success(documentProcessService.listChunks(id));
+    }
+
+    /**
+     * 查询当前登录用户可访问的指定文档最近处理任务列表。
+     */
+    @Operation(summary = "查询文档任务列表", description = "根据文档ID查询当前用户可访问的最近任务记录")
+    @GetMapping("/{id}/tasks")
+    public Result<List<TaskRecordVO>> listTasks(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
+        return Result.success(taskRecordService.listByDocument(id));
     }
 
     /**

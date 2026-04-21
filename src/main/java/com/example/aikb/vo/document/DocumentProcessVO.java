@@ -27,4 +27,12 @@ public class DocumentProcessVO {
     /** 文档处理后的解析状态。 */
     @Schema(description = "文档处理后的解析状态", example = "CHUNKED")
     private String parseStatus;
+
+    /** 本次处理任务 ID。 */
+    @Schema(description = "本次处理任务 ID", example = "1")
+    private Long taskId;
+
+    /** 本次处理任务状态。 */
+    @Schema(description = "本次处理任务状态", example = "SUCCESS")
+    private String taskStatus;
 }

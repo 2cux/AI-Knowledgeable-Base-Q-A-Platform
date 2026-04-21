@@ -5,6 +5,7 @@ import com.example.aikb.dto.document.DocumentProcessRequest;
 import com.example.aikb.entity.Document;
 import com.example.aikb.entity.DocumentChunk;
 import com.example.aikb.entity.KnowledgeBase;
+import com.example.aikb.entity.TaskRecord;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.DocumentChunkMapper;
 import com.example.aikb.mapper.DocumentMapper;
@@ -13,12 +14,13 @@ import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.document.DocumentProcessService;
 import com.example.aikb.service.document.SimpleDocumentParser;
 import com.example.aikb.service.document.TextSplitter;
+import com.example.aikb.service.task.TaskRecordService;
 import com.example.aikb.vo.document.DocumentChunkVO;
 import com.example.aikb.vo.document.DocumentProcessVO;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 文档处理服务实现类，负责将文档纯文本切片并写入 document_chunk 表。
@@ -29,12 +31,15 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
 
     private static final String PARSE_STATUS_CHUNKING = "CHUNKING";
     private static final String PARSE_STATUS_CHUNKED = "CHUNKED";
+    private static final String TASK_STATUS_SUCCESS = "SUCCESS";
 
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final DocumentChunkMapper documentChunkMapper;
     private final SimpleDocumentParser simpleDocumentParser;
     private final TextSplitter textSplitter;
+    private final TaskRecordService taskRecordService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 对当前用户可访问的指定文档执行文本切片入库。
@@ -44,7 +49,6 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
      * @return 文档处理结果
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public DocumentProcessVO process(Long documentId, DocumentProcessRequest request) {
         DocumentProcessRequest safeRequest = normalizeRequest(request);
         if (safeRequest.getOverlap() >= safeRequest.getChunkSize()) {
@@ -53,25 +57,49 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
 
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
-        if (PARSE_STATUS_CHUNKING.equals(document.getParseStatus())) {
+        TaskRecord taskRecord = taskRecordService.createDocumentProcessTask(document, userId);
+        taskRecordService.markProcessing(taskRecord.getId());
+
+        try {
+            DocumentProcessVO result = transactionTemplate.execute(status ->
+                    processInTransaction(document, safeRequest, taskRecord.getId()));
+            taskRecordService.markSuccess(taskRecord.getId());
+            result.setTaskStatus(TASK_STATUS_SUCCESS);
+            return result;
+        } catch (RuntimeException ex) {
+            taskRecordService.markFailed(taskRecord.getId(), ex.getMessage());
+            throw ex;
+        }
+    }
+
+    /**
+     * 在事务内执行文档状态更新、真实解析和切片重建，失败时整体回滚。
+     */
+    private DocumentProcessVO processInTransaction(Document document, DocumentProcessRequest safeRequest, Long taskId) {
+        Document latestDocument = documentMapper.selectById(document.getId());
+        if (latestDocument == null) {
+            throw new BusinessException(40400, "文档不存在");
+        }
+        if (PARSE_STATUS_CHUNKING.equals(latestDocument.getParseStatus())) {
             throw new BusinessException("文档正在切片处理中，请稍后再试");
         }
 
-        updateDocumentStatus(document.getId(), PARSE_STATUS_CHUNKING);
-        String text = simpleDocumentParser.parse(document, safeRequest.getTextContent());
+        updateDocumentStatus(latestDocument.getId(), PARSE_STATUS_CHUNKING);
+        String text = simpleDocumentParser.parse(latestDocument, safeRequest.getTextContent());
         List<String> chunks = textSplitter.split(text, safeRequest.getChunkSize(), safeRequest.getOverlap());
         if (chunks.isEmpty()) {
             throw new BusinessException("文档内容为空，无法生成切片");
         }
 
-        rebuildChunks(document, chunks);
-        updateDocumentStatus(document.getId(), PARSE_STATUS_CHUNKED);
+        rebuildChunks(latestDocument, chunks);
+        updateDocumentStatus(latestDocument.getId(), PARSE_STATUS_CHUNKED);
 
         return DocumentProcessVO.builder()
-                .documentId(document.getId())
-                .knowledgeBaseId(document.getKnowledgeBaseId())
+                .documentId(latestDocument.getId())
+                .knowledgeBaseId(latestDocument.getKnowledgeBaseId())
                 .chunkCount(chunks.size())
                 .parseStatus(PARSE_STATUS_CHUNKED)
+                .taskId(taskId)
                 .build();
     }
 
