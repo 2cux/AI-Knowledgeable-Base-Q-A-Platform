@@ -20,6 +20,15 @@ public interface TaskRecordService {
     TaskRecord createDocumentProcessTask(Document document, Long userId);
 
     /**
+     * 创建文档向量化任务，初始状态为 PENDING。
+     *
+     * @param document 文档实体
+     * @param userId 当前用户 ID
+     * @return 已创建的任务记录
+     */
+    TaskRecord createDocumentEmbeddingTask(Document document, Long userId);
+
+    /**
      * 将任务标记为处理中。
      *
      * @param taskId 任务 ID

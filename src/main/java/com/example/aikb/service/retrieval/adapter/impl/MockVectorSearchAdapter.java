@@ -2,7 +2,8 @@ package com.example.aikb.service.retrieval.adapter.impl;
 
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChunkEmbeddingMapper;
-import com.example.aikb.service.embedding.mock.MockEmbeddingVectorizer;
+import com.example.aikb.service.embedding.EmbeddingClient;
+import com.example.aikb.service.embedding.EmbeddingResult;
 import com.example.aikb.service.retrieval.adapter.RetrievalCandidate;
 import com.example.aikb.service.retrieval.adapter.RetrievalQueryEmbedding;
 import com.example.aikb.service.retrieval.adapter.VectorSearchAdapter;
@@ -14,7 +15,7 @@ import org.springframework.stereotype.Component;
 /**
  * MVP 阶段的向量检索适配器。
  *
- * <p>该实现从 MySQL 读取已向量化成功的 chunk，根据 chunk 内容重新生成确定性的 mock 向量，
+ * <p>该实现从 MySQL 读取已向量化成功的 chunk，根据 chunk 内容重新生成确定性的本地向量，
  * 再用余弦相似度对候选结果排序。生产环境应将检索下推到真实向量库中执行。</p>
  */
 @Component
@@ -25,6 +26,7 @@ public class MockVectorSearchAdapter implements VectorSearchAdapter {
     private static final int CANDIDATE_LIMIT = 2000;
 
     private final ChunkEmbeddingMapper chunkEmbeddingMapper;
+    private final EmbeddingClient embeddingClient;
 
     @Override
     public List<RetrievalCandidate> search(Long knowledgeBaseId, RetrievalQueryEmbedding queryEmbedding, int topK) {
@@ -38,12 +40,20 @@ public class MockVectorSearchAdapter implements VectorSearchAdapter {
         return candidates.stream()
                 .peek(candidate -> candidate.setScore(cosine(
                         queryEmbedding.getVector(),
-                        MockEmbeddingVectorizer.vectorize(candidate.getContent()))))
+                        vectorizeCandidate(candidate))))
                 .filter(candidate -> candidate.getScore() > 0D)
                 .sorted(Comparator.comparing(RetrievalCandidate::getScore).reversed()
                         .thenComparing(RetrievalCandidate::getChunkId))
                 .limit(topK)
                 .toList();
+    }
+
+    private List<Double> vectorizeCandidate(RetrievalCandidate candidate) {
+        EmbeddingResult result = embeddingClient.embed(
+                candidate.getChunkId(),
+                candidate.getContent(),
+                candidate.getEmbeddingModel());
+        return result.getVector();
     }
 
     private double cosine(List<Double> left, List<Double> right) {

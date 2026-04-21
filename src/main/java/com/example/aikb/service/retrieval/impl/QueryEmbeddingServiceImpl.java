@@ -8,13 +8,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * MVP 查询向量生成实现。当前复用 mock embedding 客户端，后续可替换为真实 query embedding 调用。
+ * MVP 查询向量生成实现。当前复用 EmbeddingClient，后续可替换为真实 query embedding 调用。
  */
 @Service
 @RequiredArgsConstructor
 public class QueryEmbeddingServiceImpl implements QueryEmbeddingService {
 
-    private static final String DEFAULT_EMBEDDING_MODEL = "mock-embedding-v1";
+    private static final String DEFAULT_EMBEDDING_MODEL = "local-hash-embedding-v1";
 
     private final EmbeddingClient embeddingClient;
 

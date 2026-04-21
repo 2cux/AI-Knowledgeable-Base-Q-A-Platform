@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * 单个 chunk 的向量化结果，MVP 阶段只返回向量 ID，不保存真实向量值。
+ * 单个 chunk 的向量化结果，包含向量 ID 和可落库的向量内容。
  */
 @Data
 @Builder
@@ -17,6 +17,6 @@ public class EmbeddingResult {
     /** 向量库中的向量 ID。 */
     private String vectorId;
 
-    /** Query/document vector. MVP mock retrieval uses it; real providers can fill it when available. */
+    /** 查询或文档向量。 */
     private List<Double> vector;
 }

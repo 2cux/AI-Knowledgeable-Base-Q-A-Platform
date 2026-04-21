@@ -41,10 +41,15 @@ public class ChunkEmbedding {
     @TableField("embedding_model")
     private String embeddingModel;
 
-    /** 向量库中的向量 ID，MVP 阶段由占位实现生成。 */
-    @Schema(description = "向量库中的向量 ID", example = "mock-embedding-v1-1")
+    /** 向量库中的向量 ID，MVP 阶段由本地向量实现生成。 */
+    @Schema(description = "向量库中的向量 ID", example = "local-hash-embedding-v1-1")
     @TableField("vector_id")
     private String vectorId;
+
+    /** 向量内容 JSON，供真实检索模块接入前后复用。 */
+    @Schema(description = "向量内容 JSON")
+    @TableField("vector_json")
+    private String vectorJson;
 
     /** 向量化状态：PENDING、PROCESSING、SUCCESS、FAILED。 */
     @Schema(description = "向量化状态", example = "SUCCESS")

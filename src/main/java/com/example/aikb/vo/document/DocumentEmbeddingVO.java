@@ -33,6 +33,14 @@ public class DocumentEmbeddingVO {
     private Integer failedCount;
 
     /** 本次使用的向量化模型。 */
-    @Schema(description = "本次使用的向量化模型", example = "mock-embedding-v1")
+    @Schema(description = "本次使用的向量化模型", example = "local-hash-embedding-v1")
     private String embeddingModel;
+
+    /** 本次向量化任务 ID。 */
+    @Schema(description = "本次向量化任务 ID", example = "1")
+    private Long taskId;
+
+    /** 本次向量化任务状态。 */
+    @Schema(description = "本次向量化任务状态", example = "SUCCESS")
+    private String taskStatus;
 }

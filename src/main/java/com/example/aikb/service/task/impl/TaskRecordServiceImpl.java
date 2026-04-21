@@ -27,6 +27,7 @@ import org.springframework.util.StringUtils;
 public class TaskRecordServiceImpl implements TaskRecordService {
 
     private static final String TASK_TYPE_DOCUMENT_PROCESS = "DOCUMENT_PROCESS";
+    private static final String TASK_TYPE_DOCUMENT_EMBEDDING = "DOCUMENT_EMBEDDING";
     private static final String BIZ_TYPE_DOCUMENT = "DOCUMENT";
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_PROCESSING = "PROCESSING";
@@ -45,8 +46,21 @@ public class TaskRecordServiceImpl implements TaskRecordService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public TaskRecord createDocumentProcessTask(Document document, Long userId) {
+        return createDocumentTask(document, userId, TASK_TYPE_DOCUMENT_PROCESS);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public TaskRecord createDocumentEmbeddingTask(Document document, Long userId) {
+        return createDocumentTask(document, userId, TASK_TYPE_DOCUMENT_EMBEDDING);
+    }
+
+    /**
+     * 创建指定类型的文档任务。
+     */
+    private TaskRecord createDocumentTask(Document document, Long userId, String taskType) {
         TaskRecord taskRecord = new TaskRecord();
-        taskRecord.setTaskType(TASK_TYPE_DOCUMENT_PROCESS);
+        taskRecord.setTaskType(taskType);
         taskRecord.setBizType(BIZ_TYPE_DOCUMENT);
         taskRecord.setBizId(document.getId());
         taskRecord.setStatus(STATUS_PENDING);
