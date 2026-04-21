@@ -80,8 +80,18 @@ public class DatabaseVectorSearchAdapter implements VectorSearchAdapter {
         double leftNorm = 0D;
         double rightNorm = 0D;
         for (int i = 0; i < size; i++) {
-            double leftValue = left.get(i);
-            double rightValue = right.get(i);
+            Double leftBoxed = left.get(i);
+            Double rightBoxed = right.get(i);
+            if (leftBoxed == null || rightBoxed == null) {
+                return 0D;
+            }
+
+            double leftValue = leftBoxed;
+            double rightValue = rightBoxed;
+            if (!Double.isFinite(leftValue) || !Double.isFinite(rightValue)) {
+                return 0D;
+            }
+
             dot += leftValue * rightValue;
             leftNorm += leftValue * leftValue;
             rightNorm += rightValue * rightValue;
