@@ -25,8 +25,8 @@ public class DocumentProcessRequest {
     @Max(value = 1000, message = "overlap不能大于1000")
     private Integer overlap = 50;
 
-    /** MVP 阶段可直接传入解析后的纯文本；不传时服务端尝试从 storagePath 读取本地 txt/md 文件。 */
-    @Schema(description = "解析后的纯文本；不传时服务端尝试从 storagePath 读取本地 txt/md 文件")
+    /** 调试兼容入口；有真实 storagePath 时服务端优先读取本地 txt/md 文件。 */
+    @Schema(description = "调试兼容文本；有真实storagePath时服务端优先读取本地txt/md文件")
     @Size(max = 200000, message = "文本内容不能超过200000个字符")
     private String textContent;
 }

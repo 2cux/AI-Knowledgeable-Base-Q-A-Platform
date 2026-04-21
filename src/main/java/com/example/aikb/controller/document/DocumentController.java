@@ -94,7 +94,7 @@ public class DocumentController {
     /**
      * 对当前登录用户可访问的指定文档执行文本切片，并将切片写入数据库。
      */
-    @Operation(summary = "处理文档切片", description = "读取文档纯文本内容，按固定长度和重叠长度切片，并重建文档切片数据")
+    @Operation(summary = "处理文档切片", description = "优先从真实上传的txt/md文件读取内容，按固定长度和重叠长度切片，并重建文档切片数据")
     @PostMapping("/{id}/process")
     public Result<DocumentProcessVO> process(
             @PathVariable @Positive(message = "文档ID必须大于0") Long id,
