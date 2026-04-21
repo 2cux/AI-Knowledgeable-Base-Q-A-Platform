@@ -40,7 +40,8 @@ public class RagAnswerGeneratorServiceImpl implements AnswerGeneratorService {
             }
             return answer.trim();
         } catch (BusinessException ex) {
-            log.warn("LLM answer generation failed, error={}", ex.getMessage());
+            log.warn("LLM answer generation failed, questionLength={}, chunkCount={}, error={}",
+                    question == null ? 0 : question.length(), chunks.size(), ex.getMessage());
             return LLM_FAILED_ANSWER;
         }
     }

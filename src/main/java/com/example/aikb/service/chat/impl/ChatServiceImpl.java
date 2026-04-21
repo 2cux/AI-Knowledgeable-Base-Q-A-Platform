@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 问答服务实现，串联知识库权限校验、会话上下文、检索、答案生成和问答记录保存。
@@ -47,7 +46,6 @@ public class ChatServiceImpl implements ChatService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public ChatAskResponse ask(ChatAskRequest request) {
         Long userId = CurrentUser.getUserId();
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
