@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * LLM 对话消息，保持 OpenAI 兼容接口常用的 role/content 结构。
+ * 项目内部 LLM 对话消息，由适配器转换为第三方接口要求的 messages/content[] 结构。
  */
 @Data
 @Builder
