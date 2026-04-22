@@ -1,5 +1,6 @@
 package com.example.aikb.service.llm.impl;
 
+
 import com.example.aikb.config.AppLlmProperties;
 import com.example.aikb.dto.llm.request.LlmRequest;
 import com.example.aikb.exception.BusinessException;
