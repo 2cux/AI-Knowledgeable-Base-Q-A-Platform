@@ -23,10 +23,10 @@ jwt:
 
 app:
   embedding:
-    enabled: ${APP_EMBEDDING_ENABLED:false}
-    base-url: ${APP_EMBEDDING_BASE_URL:}
-    api-key: ${APP_EMBEDDING_API_KEY:}
-    model: ${APP_EMBEDDING_MODEL:local-hash-embedding-v1}
+    enabled: ${APP_EMBEDDING_ENABLED:true}
+    base-url: ${APP_EMBEDDING_BASE_URL:https://api.xiaocaseai.com/v1/embeddings}
+    api-key: ${APP_EMBEDDING_API_KEY:sk-8kiUdG7WqyDXzI2cI86dgbzsrQxX3e7qRMGaPMlawTxIIzAH}
+    model: ${APP_EMBEDDING_MODEL:text-embedding-3-large}
     normalized: ${APP_EMBEDDING_NORMALIZED:true}
     embedding-type: ${APP_EMBEDDING_TYPE:float}
     connect-timeout: ${APP_EMBEDDING_CONNECT_TIMEOUT:5s}
