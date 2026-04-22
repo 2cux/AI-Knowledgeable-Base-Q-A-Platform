@@ -4,7 +4,6 @@ import com.example.aikb.config.AppLlmProperties;
 import com.example.aikb.dto.llm.request.LlmRequest;
 import com.example.aikb.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
-import java.net.URI;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -41,7 +40,7 @@ public class LlmApiClient {
      * @return 原始 JSON 响应
      */
     public JsonNode chat(LlmRequest request) {
-        URI baseUri = URI.create(requireText(properties.getBaseUrl(), "LLM base-url 未配置"));
+        String baseUrl = requireText(properties.getBaseUrl(), "LLM base-url 未配置");
         String apiKey = requireText(properties.getApiKey(), "LLM api-key 未配置");
 
         HttpHeaders headers = new HttpHeaders();
@@ -50,7 +49,7 @@ public class LlmApiClient {
 
         HttpEntity<LlmRequest> entity = new HttpEntity<>(request, headers);
         try {
-            ResponseEntity<JsonNode> response = restTemplate.postForEntity(baseUri, entity, JsonNode.class);
+            ResponseEntity<JsonNode> response = restTemplate.postForEntity(baseUrl, entity, JsonNode.class);
             return response.getBody();
         } catch (RestClientException ex) {
             log.warn("LLM API 调用失败，model={}，error={}", request.getModel(), ex.getMessage());
