@@ -16,22 +16,22 @@ public class AppEmbeddingProperties {
     /**
      * 是否启用外部 embedding API。为 false 时使用本地 hash 向量客户端。
      */
-    private boolean enabled = false;
+    private boolean enabled = true;
 
     /**
      * 完整的 embedding API 地址，例如：https://example.com/v1/embeddings。
      */
-    private String baseUrl;
+    private String baseUrl = "https://your-vendor-base-url";
 
     /**
      * embedding 服务提供商使用的认证令牌。
      */
-    private String apiKey;
+    private String apiKey = "YOUR_API_KEY_HERE";
 
     /**
      * embedding 模型名称。放在配置中便于不同环境切换模型，无需修改代码。
      */
-    private String model = "local-hash-embedding-v1";
+    private String model = "your-embedding-model";
 
     /**
      * 是否要求服务提供商返回归一化后的向量。

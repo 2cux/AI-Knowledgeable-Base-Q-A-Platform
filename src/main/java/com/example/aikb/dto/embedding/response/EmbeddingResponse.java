@@ -1,42 +1,31 @@
 package com.example.aikb.dto.embedding.response;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import lombok.Data;
 
 /**
- * 通用可扩展的 embedding 响应。
- *
- * <p>data、usage、error 的结构需要在确认服务提供商真实响应后再调整。</p>
+ * embedding 接口 200 响应体。
  */
 @Data
 public class EmbeddingResponse {
 
-    private String id;
-
+    /**
+     * 响应对象类型，必需字段。
+     */
     private String object;
 
-    private String model;
-
     /**
-     * 常见的 embedding 响应字段，部分服务提供商可能命名为 embeddings 或 results。
+     * embedding 结果数组，必需字段。
      */
-    @JsonAlias({"embeddings", "results"})
     private List<EmbeddingData> data;
 
     /**
-     * 兼容部分服务提供商在响应根节点直接返回单个向量的情况。
+     * 本次调用使用的模型，必需字段。
      */
-    private List<Float> embedding;
-
-    private EmbeddingUsage usage;
-
-    private EmbeddingError error;
+    private String model;
 
     /**
-     * 可选的请求 ID。如果真实字段名不同，需要按实际响应调整。
+     * Token 用量，必需字段。
      */
-    @JsonProperty("request_id")
-    private String requestId;
+    private EmbeddingUsage usage;
 }
