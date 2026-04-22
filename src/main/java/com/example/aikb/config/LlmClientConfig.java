@@ -11,7 +11,7 @@ import org.springframework.web.client.RestTemplate;
 @Configuration(proxyBeanMethods = false)
 public class LlmClientConfig {
 
-    @Bean
+    @Bean("llmRestTemplate")
     public RestTemplate llmRestTemplate(RestTemplateBuilder builder, AppLlmProperties properties) {
         return builder
                 .connectTimeout(properties.getConnectTimeout())

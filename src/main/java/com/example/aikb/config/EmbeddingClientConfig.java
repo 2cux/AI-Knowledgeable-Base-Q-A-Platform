@@ -11,7 +11,7 @@ import org.springframework.web.client.RestTemplate;
 @Configuration(proxyBeanMethods = false)
 public class EmbeddingClientConfig {
 
-    @Bean
+    @Bean("embeddingRestTemplate")
     public RestTemplate embeddingRestTemplate(
             RestTemplateBuilder builder,
             AppEmbeddingProperties properties) {

@@ -4,7 +4,6 @@ import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.dto.embedding.request.EmbeddingRequest;
 import com.example.aikb.dto.embedding.response.EmbeddingResponse;
 import com.example.aikb.exception.BusinessException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,14 +22,18 @@ import org.springframework.web.client.RestTemplate;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "app.embedding", name = "enabled", havingValue = "true")
 public class EmbeddingApiClient {
 
     private final AppEmbeddingProperties properties;
-
-    @Qualifier("embeddingRestTemplate")
     private final RestTemplate restTemplate;
+
+    public EmbeddingApiClient(
+            AppEmbeddingProperties properties,
+            @Qualifier("embeddingRestTemplate") RestTemplate restTemplate) {
+        this.properties = properties;
+        this.restTemplate = restTemplate;
+    }
 
     /**
      * 按指定协议调用 embedding 接口。

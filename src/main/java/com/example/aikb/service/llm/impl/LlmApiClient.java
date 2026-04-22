@@ -5,7 +5,6 @@ import com.example.aikb.config.AppLlmProperties;
 import com.example.aikb.dto.llm.request.LlmRequest;
 import com.example.aikb.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
@@ -23,13 +22,17 @@ import org.springframework.web.client.RestTemplate;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class LlmApiClient {
 
     private final AppLlmProperties properties;
-
-    @Qualifier("llmRestTemplate")
     private final RestTemplate restTemplate;
+
+    public LlmApiClient(
+            AppLlmProperties properties,
+            @Qualifier("llmRestTemplate") RestTemplate restTemplate) {
+        this.properties = properties;
+        this.restTemplate = restTemplate;
+    }
 
     /**
      * 按指定协议调用 LLM 接口。
