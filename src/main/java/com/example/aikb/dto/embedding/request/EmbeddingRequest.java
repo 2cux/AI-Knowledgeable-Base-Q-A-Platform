@@ -1,7 +1,6 @@
 package com.example.aikb.dto.embedding.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,9 +21,9 @@ public class EmbeddingRequest {
     private String model;
 
     /**
-     * 批量输入列表。接口协议要求该字段为数组。
+     * 上游 input 字段。文本 embedding 模型使用字符串数组；调试多模态协议时可透传对象数组。
      */
-    private List<EmbeddingInputItem> input;
+    private Object input;
 
     /**
      * 是否要求服务提供商返回归一化后的向量。

@@ -3,13 +3,11 @@ package com.example.aikb.config;
 import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
  * 外部 embedding API 配置。
  */
 @Data
-@Component
 @ConfigurationProperties(prefix = "app.embedding")
 public class AppEmbeddingProperties {
 

@@ -2,14 +2,12 @@ package com.example.aikb.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 import org.springframework.util.unit.DataSize;
 
 /**
  * 文件上传配置，集中管理本地存储根目录和业务层文件大小限制。
  */
 @Data
-@Component
 @ConfigurationProperties(prefix = "app.file")
 public class AppFileProperties {
 

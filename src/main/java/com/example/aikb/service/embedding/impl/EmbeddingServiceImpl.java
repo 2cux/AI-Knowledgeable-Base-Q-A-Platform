@@ -31,15 +31,43 @@ public class EmbeddingServiceImpl implements EmbeddingService {
 
     @Override
     public List<Float> embedText(String text, String model) {
-        validateText(text);
-        validateConfig();
+        return embedText(text, null, model);
+    }
 
-        EmbeddingRequest request = EmbeddingRequest.builder()
+    @Override
+    public List<Float> embedText(String text, String image, String model) {
+        validateText(text);
+        return embedRequest(EmbeddingRequest.builder()
                 .model(resolveModel(model))
-                .input(List.of(EmbeddingInputItem.textOnly(text.trim())))
+                .input(List.of(text.trim()))
                 .normalized(properties.getNormalized())
                 .embeddingType(properties.getEmbeddingType())
-                .build();
+                .build());
+    }
+
+    @Override
+    public List<Float> embedInput(List<EmbeddingInputItem> input, String model) {
+        return embedRequest(EmbeddingRequest.builder()
+                .model(resolveModel(model))
+                .input(input)
+                .normalized(properties.getNormalized())
+                .embeddingType(properties.getEmbeddingType())
+                .build());
+    }
+
+    @Override
+    public List<Float> embedRequest(EmbeddingRequest request) {
+        if (request == null) {
+            throw new BusinessException("embedding request不能为空");
+        }
+        validateInput(request.getInput());
+        validateConfig();
+
+        request.setModel(resolveModel(request.getModel()));
+        request.setNormalized(request.getNormalized() == null ? properties.getNormalized() : request.getNormalized());
+        request.setEmbeddingType(StringUtils.hasText(request.getEmbeddingType())
+                ? request.getEmbeddingType().trim()
+                : properties.getEmbeddingType());
 
         EmbeddingResponse response = embeddingApiClient.embed(request);
         return extractFirstVector(response);
@@ -75,6 +103,32 @@ public class EmbeddingServiceImpl implements EmbeddingService {
     private void validateText(String text) {
         if (!StringUtils.hasText(text)) {
             throw new BusinessException("向量化文本不能为空");
+        }
+    }
+
+    private void validateInput(Object input) {
+        if (!(input instanceof List<?> inputList) || inputList.isEmpty()) {
+            throw new BusinessException("embedding input不能为空");
+        }
+        for (int i = 0; i < inputList.size(); i++) {
+            Object item = inputList.get(i);
+            if (item == null) {
+                throw new BusinessException("embedding input[" + i + "]不能为空");
+            }
+            if (item instanceof String text) {
+                if (!StringUtils.hasText(text)) {
+                    throw new BusinessException("embedding input[" + i + "]文本不能为空");
+                }
+            } else if (item instanceof EmbeddingInputItem embeddingInputItem) {
+                if (!StringUtils.hasText(embeddingInputItem.getText())) {
+                    throw new BusinessException("embedding input[" + i + "].text不能为空");
+                }
+                if (embeddingInputItem.getImage() == null) {
+                    embeddingInputItem.setImage("");
+                } else {
+                    embeddingInputItem.setImage(embeddingInputItem.getImage().trim());
+                }
+            }
         }
     }
 

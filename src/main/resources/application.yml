@@ -37,29 +37,26 @@ app:
   file:
     upload-dir: ${APP_FILE_UPLOAD_DIR:uploads}
     max-size: 20MB
+  debug:
+    ai-test:
+      enabled: true
   llm:
-    enabled: ${APP_LLM_ENABLED:true}
-    base-url: ${APP_LLM_BASE_URL:https://api.xiaocaseai.com/v1/messages}
-    api-key: ${APP_LLM_API_KEY:sk-3923hDFgZucHTAttjwhq9O4uAf1vGn2ClakWT4V334P47KYI}
-    model: ${APP_LLM_MODEL:claude-opus-4-6}
-    max-tokens: ${APP_LLM_MAX_TOKENS:1024}
-    connect-timeout: ${APP_LLM_CONNECT_TIMEOUT:5s}
-    read-timeout: ${APP_LLM_READ_TIMEOUT:60s}
+    enabled: true
+    base-url: https://api.xiaocaseai.com/v1/messages
+    api-key: sk-3923hDFgZucHTAttjwhq9O4uAf1vGn2ClakWT4V334P47KYI
+    model: claude-opus-4-6
+    max-tokens: 1024
+    connect-timeout: 5s
+    read-timeout: 60s
   embedding:
-    # 是否启用真实 embedding API 调用。
-    enabled: ${APP_EMBEDDING_ENABLED:true}
-    # 完整的 embedding 接口地址，例如：https://your-vendor-base-url
-    base-url: ${APP_EMBEDDING_BASE_URL:https://api.xiaocaseai.com/v1/embeddings}
-    # 不要提交真实 API Key，本地和部署环境优先使用环境变量注入。
-    api-key: ${APP_EMBEDDING_API_KEY:YOUR_API_KEY_HERE}
-    # 文档向量化和检索 Query 向量化共用的 embedding 模型。
-    model: ${APP_EMBEDDING_MODEL:text-embedding-3-large}
-    # 是否要求服务提供商返回归一化后的向量。
-    normalized: ${APP_EMBEDDING_NORMALIZED:true}
-    # 服务提供商定义的 embedding 类型，具体取值需按实际接口确认。
-    embedding-type: ${APP_EMBEDDING_TYPE:float}
-    connect-timeout: ${APP_EMBEDDING_CONNECT_TIMEOUT:5s}
-    read-timeout: ${APP_EMBEDDING_READ_TIMEOUT:60s}
+    enabled: true
+    base-url: https://api.xiaocaseai.com/v1/embeddings
+    api-key: sk-8kiUdG7WqyDXzI2cI86dgbzsrQxX3e7qRMGaPMlawTxIIzAH
+    model: text-embedding-3-large
+    normalized: true
+    embedding-type: float
+    connect-timeout: 5s
+    read-timeout: 60s
 
 logging:
   level:

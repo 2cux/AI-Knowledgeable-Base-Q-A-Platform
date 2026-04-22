@@ -3,8 +3,10 @@ package com.example.aikb;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 @SpringBootApplication
+@ConfigurationPropertiesScan("com.example.aikb.config")
 @MapperScan("com.example.aikb.mapper")
 public class Application {
 

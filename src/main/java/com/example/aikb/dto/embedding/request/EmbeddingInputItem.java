@@ -20,14 +20,18 @@ public class EmbeddingInputItem {
     private String text;
 
     /**
-     * 图片内容或图片地址。纯文本调用时保持为空字符串。
+     * 图片内容或图片地址。纯文本调用时按上游协议发送为空字符串。
      */
     private String image;
 
     public static EmbeddingInputItem textOnly(String text) {
+        return textAndImage(text, null);
+    }
+
+    public static EmbeddingInputItem textAndImage(String text, String image) {
         return EmbeddingInputItem.builder()
                 .text(text)
-                .image("")
+                .image(image == null ? "" : image.trim())
                 .build();
     }
 }

@@ -3,13 +3,11 @@ package com.example.aikb.config;
 import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
  * 第三方 LLM API 调用配置。
  */
 @Data
-@Component
 @ConfigurationProperties(prefix = "app.llm")
 public class AppLlmProperties {
 
