@@ -7,6 +7,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -19,6 +20,7 @@ import org.springframework.util.StringUtils;
  */
 @Primary
 @Component
+@ConditionalOnProperty(prefix = "app.embedding", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class LocalHashEmbeddingClient implements EmbeddingClient {
 
     private static final int DIMENSION = 128;

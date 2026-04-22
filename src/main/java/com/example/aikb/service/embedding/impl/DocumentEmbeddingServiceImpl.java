@@ -2,6 +2,7 @@ package com.example.aikb.service.embedding.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.dto.document.DocumentEmbeddingRequest;
 import com.example.aikb.entity.ChunkEmbedding;
 import com.example.aikb.entity.Document;
@@ -43,7 +44,6 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
 
-    private static final String DEFAULT_EMBEDDING_MODEL = "local-hash-embedding-v1";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_PENDING = "PENDING";
@@ -63,6 +63,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     private final EmbeddingClient embeddingClient;
     private final TaskRecordService taskRecordService;
     private final ObjectMapper objectMapper;
+    private final AppEmbeddingProperties embeddingProperties;
 
     /**
      * 对当前用户可访问的指定文档执行向量化。
@@ -261,7 +262,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         if (request != null && StringUtils.hasText(request.getEmbeddingModel())) {
             return request.getEmbeddingModel().trim();
         }
-        return DEFAULT_EMBEDDING_MODEL;
+        return embeddingProperties.getModel();
     }
 
     /**

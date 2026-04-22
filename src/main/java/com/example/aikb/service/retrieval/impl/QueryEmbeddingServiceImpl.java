@@ -1,5 +1,6 @@
 package com.example.aikb.service.retrieval.impl;
 
+import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.service.embedding.EmbeddingClient;
 import com.example.aikb.service.embedding.EmbeddingResult;
 import com.example.aikb.service.retrieval.QueryEmbeddingService;
@@ -14,13 +15,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class QueryEmbeddingServiceImpl implements QueryEmbeddingService {
 
-    private static final String DEFAULT_EMBEDDING_MODEL = "local-hash-embedding-v1";
-
     private final EmbeddingClient embeddingClient;
+    private final AppEmbeddingProperties embeddingProperties;
 
     @Override
     public RetrievalQueryEmbedding embed(String question) {
-        EmbeddingResult result = embeddingClient.embed(null, question, DEFAULT_EMBEDDING_MODEL);
+        EmbeddingResult result = embeddingClient.embed(null, question, embeddingProperties.getModel());
         return RetrievalQueryEmbedding.builder()
                 .embeddingModel(result.getEmbeddingModel())
                 .vectorId(result.getVectorId())

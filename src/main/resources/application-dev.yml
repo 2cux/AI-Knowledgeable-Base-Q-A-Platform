@@ -20,3 +20,14 @@ jwt:
   secret: ${JWT_SECRET:your-secret-key-change-me}
   expiration: ${JWT_EXPIRATION:86400000}
   issuer: ${JWT_ISSUER:aikb-backend}
+
+app:
+  embedding:
+    enabled: ${APP_EMBEDDING_ENABLED:false}
+    base-url: ${APP_EMBEDDING_BASE_URL:}
+    api-key: ${APP_EMBEDDING_API_KEY:}
+    model: ${APP_EMBEDDING_MODEL:local-hash-embedding-v1}
+    normalized: ${APP_EMBEDDING_NORMALIZED:true}
+    embedding-type: ${APP_EMBEDDING_TYPE:float}
+    connect-timeout: ${APP_EMBEDDING_CONNECT_TIMEOUT:5s}
+    read-timeout: ${APP_EMBEDDING_READ_TIMEOUT:60s}
