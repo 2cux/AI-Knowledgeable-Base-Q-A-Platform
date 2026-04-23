@@ -80,7 +80,7 @@ public class DocumentController {
      * 查询当前登录用户可访问的指定文档详情。
      */
     @Operation(summary = "查询文档详情", description = "根据文档 ID 查询当前登录用户可访问的文档详情")
-    @GetMapping("/{id}")
+    @GetMapping("/{documentId}")
     public Result<DocumentDetailVO> getById(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
         return Result.success(documentService.getById(id));
     }
@@ -89,7 +89,7 @@ public class DocumentController {
      * 为当前登录用户可访问的指定文档创建一条解析任务记录。
      */
     @Operation(summary = "创建文档解析任务", description = "为指定文档创建解析任务记录，MVP 阶段不执行真实解析")
-    @PostMapping("/{id}/parse")
+    @PostMapping("/{documentId}/parse")
     public Result<Long> parse(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
         return Result.success(documentService.createParseTask(id), "解析任务已创建");
     }
@@ -98,7 +98,7 @@ public class DocumentController {
      * 对当前登录用户可访问的指定文档执行文本切片，并将切片写入数据库。
      */
     @Operation(summary = "处理文档切片", description = "优先从真实上传的txt/md文件读取内容，按固定长度和重叠长度切片，并重建文档切片数据")
-    @PostMapping("/{id}/process")
+    @PostMapping("/{documentId}/process")
     public Result<DocumentProcessVO> process(
             @PathVariable @Positive(message = "文档ID必须大于0") Long id,
             @Valid @RequestBody(required = false) DocumentProcessRequest request) {
@@ -109,7 +109,7 @@ public class DocumentController {
      * 查询当前登录用户可访问的指定文档切片列表。
      */
     @Operation(summary = "查询文档切片列表", description = "根据文档 ID 查询当前登录用户可访问的文档切片列表")
-    @GetMapping("/{id}/chunks")
+    @GetMapping("/{documentId}/chunks")
     public Result<List<DocumentChunkVO>> listChunks(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
         return Result.success(documentProcessService.listChunks(id));
     }
@@ -118,7 +118,7 @@ public class DocumentController {
      * 查询当前登录用户可访问的指定文档最近处理任务列表。
      */
     @Operation(summary = "查询文档任务列表", description = "根据文档ID查询当前用户可访问的最近任务记录")
-    @GetMapping("/{id}/tasks")
+    @GetMapping("/{documentId}/tasks")
     public Result<List<TaskRecordVO>> listTasks(@PathVariable @Positive(message = "文档ID必须大于0") Long id) {
         return Result.success(taskRecordService.listByDocument(id));
     }
@@ -127,7 +127,7 @@ public class DocumentController {
      * 对当前登录用户可访问的指定文档执行 chunk 向量化同步。
      */
     @Operation(summary = "执行文档向量化", description = "读取文档下所有 chunk，调用 embedding 服务并保存每个 chunk 的向量化状态")
-    @PostMapping("/{id}/embed")
+    @PostMapping("/{documentId}/embed")
     public Result<DocumentEmbeddingVO> embed(
             @PathVariable @Positive(message = "文档ID必须大于0") Long id,
             @Valid @RequestBody(required = false) DocumentEmbeddingRequest request) {
@@ -138,7 +138,7 @@ public class DocumentController {
      * 查询当前登录用户可访问的指定文档向量化状态。
      */
     @Operation(summary = "查询文档向量化状态", description = "汇总查询指定文档下所有 chunk 的向量化同步状态")
-    @GetMapping("/{id}/embedding-status")
+    @GetMapping("/{documentId}/embedding-status")
     public Result<DocumentEmbeddingStatusVO> getEmbeddingStatus(
             @PathVariable @Positive(message = "文档ID必须大于0") Long id) {
         return Result.success(documentEmbeddingService.getEmbeddingStatus(id));
