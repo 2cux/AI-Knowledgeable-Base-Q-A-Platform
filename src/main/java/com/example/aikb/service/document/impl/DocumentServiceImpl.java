@@ -7,20 +7,22 @@ import com.example.aikb.common.PageResult;
 import com.example.aikb.dto.document.DocumentFileUploadRequest;
 import com.example.aikb.dto.document.DocumentListQuery;
 import com.example.aikb.dto.document.DocumentUploadRequest;
+import com.example.aikb.entity.ChunkEmbedding;
 import com.example.aikb.entity.Document;
+import com.example.aikb.entity.DocumentChunk;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.entity.TaskRecord;
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.mapper.ChunkEmbeddingMapper;
+import com.example.aikb.mapper.DocumentChunkMapper;
 import com.example.aikb.mapper.DocumentMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.security.CurrentUser;
-import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.example.aikb.service.document.DocumentService;
 import com.example.aikb.service.document.LocalDocumentStorage;
 import com.example.aikb.service.document.LocalDocumentStorage.StoredDocumentFile;
 import com.example.aikb.vo.document.DocumentDetailVO;
-import com.example.aikb.vo.document.DocumentEmbeddingStatusVO;
 import com.example.aikb.vo.document.DocumentFileUploadVO;
 import com.example.aikb.vo.document.DocumentListVO;
 import com.example.aikb.vo.document.DocumentStatusVO;
@@ -29,12 +31,12 @@ import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 文档业务服务实现类，按当前登录用户隔离知识库和文档数据。
+ * 文档服务实现，按当前登录用户隔离知识库和文档数据。
  */
 @Service
 @RequiredArgsConstructor
@@ -43,22 +45,24 @@ public class DocumentServiceImpl implements DocumentService {
     private static final String PARSE_STATUS_UPLOADED = "UPLOADED";
     private static final String PARSE_STATUS_PENDING = "PENDING";
     private static final String TASK_TYPE_DOCUMENT_PARSE = "DOCUMENT_PARSE";
+    private static final String TASK_TYPE_DOCUMENT_PROCESS = "DOCUMENT_PROCESS";
+    private static final String TASK_TYPE_DOCUMENT_EMBEDDING = "DOCUMENT_EMBEDDING";
     private static final String BIZ_TYPE_DOCUMENT = "DOCUMENT";
     private static final String TASK_STATUS_PENDING = "PENDING";
+    private static final String EMBEDDING_STATUS_SUCCESS = "SUCCESS";
+    private static final String EMBEDDING_STATUS_FAILED = "FAILED";
     private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
     private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("pdf", "doc", "docx", "txt", "md");
 
     private final DocumentMapper documentMapper;
+    private final DocumentChunkMapper documentChunkMapper;
+    private final ChunkEmbeddingMapper chunkEmbeddingMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final TaskRecordMapper taskRecordMapper;
     private final LocalDocumentStorage localDocumentStorage;
-    private final DocumentEmbeddingService documentEmbeddingService;
 
     /**
      * 上传文档元数据，并绑定到当前用户拥有的知识库。
-     *
-     * @param request 文档上传请求参数
-     * @return 文档详情
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -87,10 +91,7 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     /**
-     * 上传真实文件，上传成功仅表示文件已保存并生成 UPLOADED 文档记录，不代表已经解析。
-     *
-     * @param request 真实文件上传请求参数
-     * @return 上传结果
+     * 上传真实文件，并写入文档记录。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -126,9 +127,7 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     /**
-     * 注册事务回滚后的文件清理，覆盖 SQL 已执行但事务提交失败的场景。
-     *
-     * @param storedFile 已保存文件信息
+     * 注册事务回滚后的文件清理，避免数据库回滚后残留孤儿文件。
      */
     private void registerRollbackCleanup(StoredDocumentFile storedFile) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -146,9 +145,6 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * 分页查询当前用户可访问的文档列表，可按知识库筛选。
-     *
-     * @param query 文档分页查询参数
-     * @return 文档分页结果
      */
     @Override
     public PageResult<DocumentListVO> page(DocumentListQuery query) {
@@ -192,9 +188,6 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * 查询当前用户可访问的文档详情。
-     *
-     * @param id 文档 ID
-     * @return 文档详情
      */
     @Override
     public DocumentDetailVO getById(Long id) {
@@ -203,27 +196,33 @@ public class DocumentServiceImpl implements DocumentService {
         return toDetailVO(document);
     }
 
+    /**
+     * 查询文档状态概览。
+     * 当前实现只做轻量统计，不再复用 embedding 明细接口，避免状态查询接口被大文档拖慢。
+     */
     @Override
     public DocumentStatusVO getStatus(Long id) {
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(id, userId);
-
-        DocumentEmbeddingStatusVO embeddingStatus = documentEmbeddingService.getEmbeddingStatus(document.getId());
-        TaskRecord latestTask = taskRecordMapper.selectOne(new LambdaQueryWrapper<TaskRecord>()
-                .eq(TaskRecord::getBizType, BIZ_TYPE_DOCUMENT)
-                .eq(TaskRecord::getBizId, document.getId())
-                .orderByDesc(TaskRecord::getCreatedAt)
-                .last("LIMIT 1"));
+        int chunkCount = Math.toIntExact(documentChunkMapper.selectCount(new LambdaQueryWrapper<DocumentChunk>()
+                .eq(DocumentChunk::getDocumentId, document.getId())));
+        int embeddingSuccessCount = Math.toIntExact(chunkEmbeddingMapper.selectCount(new LambdaQueryWrapper<ChunkEmbedding>()
+                .eq(ChunkEmbedding::getDocumentId, document.getId())
+                .eq(ChunkEmbedding::getStatus, EMBEDDING_STATUS_SUCCESS)));
+        int embeddingFailedCount = Math.toIntExact(chunkEmbeddingMapper.selectCount(new LambdaQueryWrapper<ChunkEmbedding>()
+                .eq(ChunkEmbedding::getDocumentId, document.getId())
+                .eq(ChunkEmbedding::getStatus, EMBEDDING_STATUS_FAILED)));
+        TaskRecord latestTask = findLatestStatusTask(document.getId());
 
         return DocumentStatusVO.builder()
                 .documentId(document.getId())
                 .knowledgeBaseId(document.getKnowledgeBaseId())
                 .parseStatus(document.getParseStatus())
-                .chunkCount(embeddingStatus.getTotalChunks())
+                .chunkCount(chunkCount)
                 // 当前阶段直接使用实时切片总数作为 embeddingTotal 的占位统计。
-                .embeddingTotal(embeddingStatus.getTotalChunks())
-                .embeddingSuccessCount(embeddingStatus.getSuccessCount())
-                .embeddingFailedCount(embeddingStatus.getFailedCount())
+                .embeddingTotal(chunkCount)
+                .embeddingSuccessCount(embeddingSuccessCount)
+                .embeddingFailedCount(embeddingFailedCount)
                 .latestTaskStatus(latestTask == null ? null : latestTask.getStatus())
                 .latestErrorMessage(latestTask == null ? null : latestTask.getErrorMessage())
                 .build();
@@ -231,9 +230,6 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * 为当前用户可访问的文档创建解析任务记录。
-     *
-     * @param id 文档 ID
-     * @return 解析任务 ID
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -269,11 +265,7 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     /**
-     * 归一化并校验文件类型和大小，避免 MVP 阶段写入明显不可解析或过大的文档。
-     *
-     * @param fileType 文件类型
-     * @param fileSize 文件大小，单位字节
-     * @return 归一化后的文件类型
+     * 归一化并校验文件类型和大小。
      */
     private String normalizeAndValidateFile(String fileType, Long fileSize) {
         String normalizedFileType = fileType.trim().toLowerCase(Locale.ROOT);
@@ -288,9 +280,6 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * 校验知识库是否属于当前用户。
-     *
-     * @param knowledgeBaseId 知识库 ID
-     * @param userId 当前用户 ID
      */
     private void ensureOwnKnowledgeBase(Long knowledgeBaseId, Long userId) {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
@@ -305,10 +294,6 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * 查询并校验文档是否属于当前用户自己的知识库。
-     *
-     * @param id 文档 ID
-     * @param userId 当前用户 ID
-     * @return 文档实体
      */
     private Document getOwnDocument(Long id, Long userId) {
         Document document = documentMapper.selectById(id);
@@ -320,11 +305,28 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     /**
-     * 为兼容元数据上传接口生成占位路径；真实文件路径只能由 /upload-file 的存储组件生成。
-     *
-     * @param knowledgeBaseId 知识库 ID
-     * @param fileName 文件名
-     * @return 元数据占位路径
+     * 状态概览优先展示最近真正执行过的任务；若暂无执行任务，再回退到最近创建的占位任务。
+     */
+    private TaskRecord findLatestStatusTask(Long documentId) {
+        TaskRecord latestExecutionTask = taskRecordMapper.selectOne(new LambdaQueryWrapper<TaskRecord>()
+                .eq(TaskRecord::getBizType, BIZ_TYPE_DOCUMENT)
+                .eq(TaskRecord::getBizId, documentId)
+                .in(TaskRecord::getTaskType, TASK_TYPE_DOCUMENT_PROCESS, TASK_TYPE_DOCUMENT_EMBEDDING)
+                .orderByDesc(TaskRecord::getStartedAt)
+                .orderByDesc(TaskRecord::getCreatedAt)
+                .last("LIMIT 1"));
+        if (latestExecutionTask != null) {
+            return latestExecutionTask;
+        }
+        return taskRecordMapper.selectOne(new LambdaQueryWrapper<TaskRecord>()
+                .eq(TaskRecord::getBizType, BIZ_TYPE_DOCUMENT)
+                .eq(TaskRecord::getBizId, documentId)
+                .orderByDesc(TaskRecord::getCreatedAt)
+                .last("LIMIT 1"));
+    }
+
+    /**
+     * 为兼容元数据上传接口生成占位路径。
      */
     private String resolveMetadataStoragePath(Long knowledgeBaseId, String fileName) {
         return "metadata/" + knowledgeBaseId + "/" + fileName;
@@ -332,9 +334,6 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * 将文档实体转换为列表展示对象。
-     *
-     * @param document 文档实体
-     * @return 文档列表展示对象
      */
     private DocumentListVO toListVO(Document document) {
         return DocumentListVO.builder()
@@ -352,9 +351,6 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * 将文档实体转换为详情展示对象。
-     *
-     * @param document 文档实体
-     * @return 文档详情展示对象
      */
     private DocumentDetailVO toDetailVO(Document document) {
         return DocumentDetailVO.builder()
@@ -374,9 +370,6 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * 将文档实体转换为真实文件上传响应对象。
-     *
-     * @param document 文档实体
-     * @return 真实文件上传响应对象
      */
     private DocumentFileUploadVO toFileUploadVO(Document document) {
         return DocumentFileUploadVO.builder()
