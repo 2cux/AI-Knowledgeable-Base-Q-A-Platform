@@ -187,6 +187,7 @@ public class TaskRecordServiceImpl implements TaskRecordService {
     private TaskRecordVO toVO(TaskRecord taskRecord) {
         return TaskRecordVO.builder()
                 .id(taskRecord.getId())
+                .taskId(taskRecord.getId())
                 .documentId(taskRecord.getBizId())
                 .taskType(taskRecord.getTaskType())
                 .status(taskRecord.getStatus())

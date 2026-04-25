@@ -15,12 +15,15 @@ import com.example.aikb.mapper.DocumentMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.security.CurrentUser;
+import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.example.aikb.service.document.DocumentService;
 import com.example.aikb.service.document.LocalDocumentStorage;
 import com.example.aikb.service.document.LocalDocumentStorage.StoredDocumentFile;
 import com.example.aikb.vo.document.DocumentDetailVO;
+import com.example.aikb.vo.document.DocumentEmbeddingStatusVO;
 import com.example.aikb.vo.document.DocumentFileUploadVO;
 import com.example.aikb.vo.document.DocumentListVO;
+import com.example.aikb.vo.document.DocumentStatusVO;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -49,6 +52,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final TaskRecordMapper taskRecordMapper;
     private final LocalDocumentStorage localDocumentStorage;
+    private final DocumentEmbeddingService documentEmbeddingService;
 
     /**
      * 上传文档元数据，并绑定到当前用户拥有的知识库。
@@ -173,6 +177,19 @@ public class DocumentServiceImpl implements DocumentService {
                 .build();
     }
 
+    @Override
+    public List<DocumentListVO> listByKnowledgeBase(Long knowledgeBaseId) {
+        Long userId = CurrentUser.getUserId();
+        ensureOwnKnowledgeBase(knowledgeBaseId, userId);
+
+        return documentMapper.selectList(new LambdaQueryWrapper<Document>()
+                        .eq(Document::getKnowledgeBaseId, knowledgeBaseId)
+                        .orderByDesc(Document::getCreatedAt))
+                .stream()
+                .map(this::toListVO)
+                .toList();
+    }
+
     /**
      * 查询当前用户可访问的文档详情。
      *
@@ -184,6 +201,32 @@ public class DocumentServiceImpl implements DocumentService {
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(id, userId);
         return toDetailVO(document);
+    }
+
+    @Override
+    public DocumentStatusVO getStatus(Long id) {
+        Long userId = CurrentUser.getUserId();
+        Document document = getOwnDocument(id, userId);
+
+        DocumentEmbeddingStatusVO embeddingStatus = documentEmbeddingService.getEmbeddingStatus(document.getId());
+        TaskRecord latestTask = taskRecordMapper.selectOne(new LambdaQueryWrapper<TaskRecord>()
+                .eq(TaskRecord::getBizType, BIZ_TYPE_DOCUMENT)
+                .eq(TaskRecord::getBizId, document.getId())
+                .orderByDesc(TaskRecord::getCreatedAt)
+                .last("LIMIT 1"));
+
+        return DocumentStatusVO.builder()
+                .documentId(document.getId())
+                .knowledgeBaseId(document.getKnowledgeBaseId())
+                .parseStatus(document.getParseStatus())
+                .chunkCount(embeddingStatus.getTotalChunks())
+                // 当前阶段直接使用实时切片总数作为 embeddingTotal 的占位统计。
+                .embeddingTotal(embeddingStatus.getTotalChunks())
+                .embeddingSuccessCount(embeddingStatus.getSuccessCount())
+                .embeddingFailedCount(embeddingStatus.getFailedCount())
+                .latestTaskStatus(latestTask == null ? null : latestTask.getStatus())
+                .latestErrorMessage(latestTask == null ? null : latestTask.getErrorMessage())
+                .build();
     }
 
     /**
@@ -214,6 +257,7 @@ public class DocumentServiceImpl implements DocumentService {
         taskRecord.setBizId(document.getId());
         taskRecord.setStatus(TASK_STATUS_PENDING);
         taskRecord.setRetryCount(0);
+        taskRecord.setCreatedBy(userId);
 
         int rows = taskRecordMapper.insert(taskRecord);
         if (rows != 1 || taskRecord.getId() == null) {
@@ -295,6 +339,7 @@ public class DocumentServiceImpl implements DocumentService {
     private DocumentListVO toListVO(Document document) {
         return DocumentListVO.builder()
                 .id(document.getId())
+                .documentId(document.getId())
                 .knowledgeBaseId(document.getKnowledgeBaseId())
                 .fileName(document.getFileName())
                 .fileType(document.getFileType())
@@ -314,6 +359,7 @@ public class DocumentServiceImpl implements DocumentService {
     private DocumentDetailVO toDetailVO(Document document) {
         return DocumentDetailVO.builder()
                 .id(document.getId())
+                .documentId(document.getId())
                 .knowledgeBaseId(document.getKnowledgeBaseId())
                 .fileName(document.getFileName())
                 .fileType(document.getFileType())
