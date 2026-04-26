@@ -39,12 +39,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Result<Void>> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
-        return build(HttpStatus.BAD_REQUEST.value(), 40001, extractFieldErrorMessage(ex.getBindingResult().getFieldErrors()));
+        return build(HttpStatus.BAD_REQUEST.value(), 40001,
+                extractFieldErrorMessage(ex.getBindingResult().getFieldErrors()));
     }
 
     @ExceptionHandler(BindException.class)
     public ResponseEntity<Result<Void>> handleBindException(BindException ex) {
-        return build(HttpStatus.BAD_REQUEST.value(), 40001, extractFieldErrorMessage(ex.getBindingResult().getFieldErrors()));
+        return build(HttpStatus.BAD_REQUEST.value(), 40001,
+                extractFieldErrorMessage(ex.getBindingResult().getFieldErrors()));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -79,6 +81,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Result<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
         return build(HttpStatus.BAD_REQUEST.value(), 40001, normalizeMessage(ex.getMessage(), "参数不合法"));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Result<Void>> handleIllegalStateException(IllegalStateException ex) {
+        return build(HttpStatus.BAD_REQUEST.value(), 40001, normalizeMessage(ex.getMessage(), "状态不允许当前操作"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

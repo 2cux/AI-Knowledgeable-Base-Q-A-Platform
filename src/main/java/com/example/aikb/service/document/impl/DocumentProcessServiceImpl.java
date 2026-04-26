@@ -11,6 +11,7 @@ import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.DocumentChunkMapper;
 import com.example.aikb.mapper.DocumentMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
+import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.document.DocumentProcessService;
 import com.example.aikb.service.document.SimpleDocumentParser;
@@ -33,10 +34,18 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private static final String PARSE_STATUS_CHUNKING = "CHUNKING";
     private static final String PARSE_STATUS_CHUNKED = "CHUNKED";
     private static final String TASK_STATUS_SUCCESS = "SUCCESS";
+    private static final String TASK_TYPE_DOCUMENT_PROCESS = "DOCUMENT_PROCESS";
+    private static final String TASK_TYPE_DOCUMENT_EMBEDDING = "DOCUMENT_EMBEDDING";
+    private static final String TASK_STATUS_PROCESSING = "PROCESSING";
+    private static final String TASK_BIZ_TYPE_DOCUMENT = "DOCUMENT";
+    private static final String MESSAGE_DOCUMENT_NOT_FOUND = "文档不存在或无权限访问";
+    private static final String MESSAGE_DOCUMENT_PROCESSING = "文档正在处理中，请勿重复提交";
+    private static final String MESSAGE_DOCUMENT_ALREADY_PROCESSED = "文档已处理完成，请勿重复处理";
 
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final DocumentChunkMapper documentChunkMapper;
+    private final TaskRecordMapper taskRecordMapper;
     private final SimpleDocumentParser simpleDocumentParser;
     private final TextSplitter textSplitter;
     private final TaskRecordService taskRecordService;
@@ -58,6 +67,8 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
 
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
+        validateProcessAllowed(document);
+
         TaskRecord taskRecord = taskRecordService.createDocumentProcessTask(document, userId);
         taskRecordService.markProcessing(taskRecord.getId());
 
@@ -82,11 +93,9 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private DocumentProcessVO processInTransaction(Document document, DocumentProcessRequest safeRequest, Long taskId) {
         Document latestDocument = documentMapper.selectById(document.getId());
         if (latestDocument == null) {
-            throw new BusinessException(40400, "文档不存在");
+            throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
         }
-        if (PARSE_STATUS_CHUNKING.equals(latestDocument.getParseStatus())) {
-            throw new BusinessException("文档正在切片处理中，请稍后再试");
-        }
+        validateLatestProcessState(latestDocument);
 
         markDocumentChunking(latestDocument.getId());
         String text = simpleDocumentParser.parse(latestDocument, safeRequest.getTextContent());
@@ -174,7 +183,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private Document getOwnDocument(Long documentId, Long userId) {
         Document document = documentMapper.selectById(documentId);
         if (document == null) {
-            throw new BusinessException(40400, "文档不存在");
+            throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
         }
 
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
@@ -183,9 +192,38 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
                 .eq(KnowledgeBase::getStatus, 1)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
-            throw new BusinessException(40400, "文档不存在");
+            throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
         }
         return document;
+    }
+
+    /**
+     * 创建处理任务前，先拦截已在处理或已处理完成的文档，避免重复提交。
+     */
+    private void validateProcessAllowed(Document document) {
+        validateLatestProcessState(document);
+        if (hasRunningDocumentTask(document.getId())) {
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
+        }
+    }
+
+    private void validateLatestProcessState(Document document) {
+        String parseStatus = document.getParseStatus();
+        if (PARSE_STATUS_CHUNKING.equals(parseStatus)) {
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
+        }
+        if (PARSE_STATUS_CHUNKED.equals(parseStatus)) {
+            throw new BusinessException(MESSAGE_DOCUMENT_ALREADY_PROCESSED);
+        }
+    }
+
+    private boolean hasRunningDocumentTask(Long documentId) {
+        Long count = taskRecordMapper.selectCount(new LambdaQueryWrapper<TaskRecord>()
+                .eq(TaskRecord::getBizType, TASK_BIZ_TYPE_DOCUMENT)
+                .eq(TaskRecord::getBizId, documentId)
+                .eq(TaskRecord::getStatus, TASK_STATUS_PROCESSING)
+                .in(TaskRecord::getTaskType, TASK_TYPE_DOCUMENT_PROCESS, TASK_TYPE_DOCUMENT_EMBEDDING));
+        return count != null && count > 0;
     }
 
     /**
@@ -197,7 +235,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
                 .ne(Document::getParseStatus, PARSE_STATUS_CHUNKING)
                 .set(Document::getParseStatus, PARSE_STATUS_CHUNKING));
         if (rows != 1) {
-            throw new BusinessException("文档正在切片处理中，请稍后再试");
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
     }
 

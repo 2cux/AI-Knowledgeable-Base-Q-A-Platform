@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 /**
- * 检索服务实现。负责权限校验、生成查询向量，并将相关性排序委托给向量检索适配层。
+ * 检索服务实现，负责权限校验、生成查询向量，并将相关性排序委托给向量检索适配层。
  */
 @Service
 @Slf4j
@@ -78,8 +78,11 @@ public class RetrievalServiceImpl implements RetrievalService {
 
     private int resolveTopK(Integer topK) {
         int resolvedTopK = topK == null ? DEFAULT_TOP_K : topK;
-        if (resolvedTopK < MIN_TOP_K || resolvedTopK > MAX_TOP_K) {
-            throw new BusinessException("topK必须在1到20之间");
+        if (resolvedTopK < MIN_TOP_K) {
+            throw new BusinessException("topK 必须大于 0");
+        }
+        if (resolvedTopK > MAX_TOP_K) {
+            throw new BusinessException("topK 不能超过 20");
         }
         return resolvedTopK;
     }

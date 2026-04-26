@@ -31,9 +31,9 @@ public class RetrievalSearchRequest {
     @Schema(description = "知识库ID", example = "1")
     private Long knowledgeBaseId;
 
-    /** 返回的 chunk 数量。MVP 阶段限制上限，避免一次检索扫描过多数据。 */
-    @Min(value = 1, message = "topK必须大于等于1")
-    @Max(value = 20, message = "topK不能超过20")
+    /** 返回的 chunk 数量，MVP 阶段限制上限，避免一次检索扫描过多数据。 */
+    @Min(value = 1, message = "topK 必须大于 0")
+    @Max(value = 20, message = "topK 不能超过 20")
     @Schema(description = "返回最相关chunk数量，不传默认5", example = "5")
     private Integer topK;
 }
