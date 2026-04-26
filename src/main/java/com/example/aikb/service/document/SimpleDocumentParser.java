@@ -89,12 +89,12 @@ public class SimpleDocumentParser {
     }
 
     /**
-     * 按 UTF-8 读取真实上传的 txt/md 文件；md 在 MVP 阶段按纯文本处理。
+     * 按 UTF-8 读取真实上传的 txt/md 文件，md 在 MVP 阶段按纯文本处理。
      */
     private String readStoredText(Document document) {
         Path path = localDocumentStorage.resolveStoredPath(document.getStoragePath());
         if (!Files.exists(path)) {
-            throw new BusinessException("文档文件不存在，请重新上传");
+            throw new BusinessException("文件不存在或已被删除，请重新上传");
         }
         if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
             throw new BusinessException("文档文件不可读");
