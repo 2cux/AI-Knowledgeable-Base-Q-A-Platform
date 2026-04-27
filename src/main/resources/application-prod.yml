@@ -1,0 +1,5 @@
+app:
+  debug:
+    ai-test:
+      # Production must keep AI debug endpoints disabled by default.
+      enabled: false
