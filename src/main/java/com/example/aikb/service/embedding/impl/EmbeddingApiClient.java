@@ -63,25 +63,23 @@ public class EmbeddingApiClient {
 
         HttpEntity<EmbeddingRequest> entity = new HttpEntity<>(request, headers);
         try {
-            String requestBody = toJson(request);
             log.info(
-                    "Embedding API request. enabled={}, baseUrl={}, model={}, normalized={}, embeddingType={}, body={}",
+                    "Embedding API request. enabled={}, baseUrl={}, model={}, normalized={}, embeddingType={}, inputCount={}",
                     properties.isEnabled(),
                     baseUrl,
                     request.getModel(),
                     properties.getNormalized(),
                     properties.getEmbeddingType(),
-                    requestBody);
+                    request.getInput() == null ? 0 : request.getInput().size());
             ResponseEntity<EmbeddingResponse> response = restTemplate.postForEntity(
                     baseUrl,
                     entity,
                     EmbeddingResponse.class);
             return response.getBody();
         } catch (RestClientResponseException ex) {
-            String responseBody = truncate(ex.getResponseBodyAsString());
             log.error(
                     "Embedding API HTTP error. enabled={}, baseUrl={}, model={}, normalized={}, embeddingType={}, "
-                            + "statusCode={}, statusText={}, responseBody={}",
+                            + "statusCode={}, statusText={}",
                     properties.isEnabled(),
                     baseUrl,
                     request.getModel(),
@@ -89,12 +87,9 @@ public class EmbeddingApiClient {
                     properties.getEmbeddingType(),
                     ex.getStatusCode().value(),
                     ex.getStatusText(),
-                    responseBody,
                     ex);
-            throw new BusinessException(50000, "Embedding API 调用失败: HTTP "
-                    + ex.getStatusCode().value() + " " + ex.getStatusText()
-                    + ", responseBody=" + responseBody
-                    + ", requestBody=" + toJson(request));
+            throw new BusinessException(50000,
+                    "Embedding API 调用失败: HTTP " + ex.getStatusCode().value() + " " + ex.getStatusText());
         } catch (ResourceAccessException ex) {
             log.error(
                     "Embedding API network or timeout error. enabled={}, baseUrl={}, model={}, normalized={}, "
@@ -144,14 +139,6 @@ public class EmbeddingApiClient {
             throw new BusinessException(50000, message);
         }
         return trimmedValue;
-    }
-
-    private String toJson(EmbeddingRequest request) {
-        try {
-            return truncate(objectMapper.writeValueAsString(request));
-        } catch (JsonProcessingException ex) {
-            return "unserializable request: " + ex.getMessage();
-        }
     }
 
     private String safeMessage(Exception ex) {

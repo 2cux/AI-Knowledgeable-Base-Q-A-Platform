@@ -42,7 +42,8 @@ export APP_EMBEDDING_API_KEY="$OPENAI_API_KEY"
 
 - `OPENAI_LLM_BASE_URL`
 - `OPENAI_EMBEDDING_BASE_URL`
-- `OPENAI_BASE_URL`
+
+为避免把通用根地址误当成完整接口地址，当前不再直接读取 `OPENAI_BASE_URL`。
 
 注意：本项目当前 `base-url` 需要填写“完整接口地址”，不是仅 `/v1` 根路径。
 
