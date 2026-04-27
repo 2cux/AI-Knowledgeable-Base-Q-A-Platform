@@ -3,3 +3,7 @@ app:
     ai-test:
       # Production must keep AI debug endpoints disabled by default.
       enabled: false
+
+jwt:
+  # Production must provide JWT_SECRET explicitly. Do not fall back to local development defaults.
+  secret: ${JWT_SECRET}

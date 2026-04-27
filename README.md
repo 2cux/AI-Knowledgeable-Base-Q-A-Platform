@@ -23,6 +23,13 @@ $env:APP_LLM_API_KEY=$env:OPENAI_API_KEY
 $env:APP_EMBEDDING_API_KEY=$env:OPENAI_API_KEY
 ```
 
+Windows 长期环境变量可使用 `setx`，但只会对新打开的终端和新启动的应用进程生效：
+```powershell
+setx OPENAI_API_KEY "your-real-api-key"
+setx APP_LLM_API_KEY "your-real-api-key"
+setx APP_EMBEDDING_API_KEY "your-real-api-key"
+```
+
 macOS / Linux：
 
 ```bash

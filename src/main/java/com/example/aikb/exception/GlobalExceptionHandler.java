@@ -22,6 +22,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理器，统一返回结构化的 JSON 错误响应。
@@ -115,6 +117,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({FileNotFoundException.class, NoSuchFileException.class})
     public ResponseEntity<Result<Void>> handleFileNotFoundException(Exception ex) {
         return build(HttpStatus.NOT_FOUND.value(), 40400, "文件不存在或已被删除，请重新上传");
+    }
+
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<Result<Void>> handleNotFoundException(Exception ex) {
+        return build(HttpStatus.NOT_FOUND.value(), 40400, "接口不存在");
     }
 
     @ExceptionHandler(Exception.class)

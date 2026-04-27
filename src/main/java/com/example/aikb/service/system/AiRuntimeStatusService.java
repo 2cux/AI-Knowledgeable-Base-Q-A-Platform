@@ -74,7 +74,7 @@ public class AiRuntimeStatusService {
         AiRuntimeMode mode;
         String model;
         if (!enabled) {
-            mode = embeddingClient instanceof MockEmbeddingClient ? AiRuntimeMode.MOCK : AiRuntimeMode.FALLBACK;
+            mode = AiRuntimeMode.DISABLED;
             model = StringUtils.hasText(configuredModel) && !DEFAULT_EMBEDDING_PLACEHOLDER_MODEL.equals(configuredModel)
                     ? configuredModel
                     : LOCAL_HASH_MODEL;

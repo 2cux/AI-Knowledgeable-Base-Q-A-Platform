@@ -18,7 +18,7 @@ import org.springframework.mock.env.MockEnvironment;
 class AiRuntimeStatusServiceTest {
 
     @Test
-    void shouldReportEmbeddingFallbackWhenEmbeddingDisabled() {
+    void shouldReportEmbeddingDisabledWhenEmbeddingDisabled() {
         AppEmbeddingProperties embeddingProperties = new AppEmbeddingProperties();
         embeddingProperties.setEnabled(false);
         embeddingProperties.setModel("");
@@ -43,7 +43,7 @@ class AiRuntimeStatusServiceTest {
 
         RuntimeModeVO runtimeMode = service.getRuntimeMode();
 
-        assertEquals(AiRuntimeMode.FALLBACK, runtimeMode.getEmbedding().getMode());
+        assertEquals(AiRuntimeMode.DISABLED, runtimeMode.getEmbedding().getMode());
         assertEquals("local-hash", runtimeMode.getEmbedding().getProvider());
         assertFalse(runtimeMode.getEmbedding().isEnabled());
         assertTrue(runtimeMode.isDebugAiTestEnabled());

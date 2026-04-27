@@ -54,7 +54,8 @@ public class LlmApiClient {
             ResponseEntity<JsonNode> response = restTemplate.postForEntity(baseUrl, entity, JsonNode.class);
             return response.getBody();
         } catch (RestClientException ex) {
-            log.warn("LLM API 调用失败，model={}，error={}", request.getModel(), ex.getMessage());
+            log.warn("LLM API 调用失败，model={}，errorType={}",
+                    request.getModel(), ex.getClass().getSimpleName());
             throw new BusinessException(50000, "LLM API 调用失败");
         }
     }

@@ -28,8 +28,6 @@ import org.springframework.web.client.RestTemplate;
 @ConditionalOnProperty(prefix = "app.embedding", name = "enabled", havingValue = "true")
 public class EmbeddingApiClient {
 
-    private static final int LOG_BODY_LIMIT = 2000;
-
     private final AppEmbeddingProperties properties;
     private final RestTemplate restTemplate;
     public EmbeddingApiClient(
@@ -80,46 +78,42 @@ public class EmbeddingApiClient {
                     properties.getNormalized(),
                     properties.getEmbeddingType(),
                     ex.getStatusCode().value(),
-                    ex.getStatusText(),
-                    ex);
+                    ex.getStatusText());
             throw new BusinessException(50000,
                     "Embedding API 调用失败: HTTP " + ex.getStatusCode().value() + " " + ex.getStatusText());
         } catch (ResourceAccessException ex) {
             log.error(
                     "Embedding API network or timeout error. enabled={}, baseUrl={}, model={}, normalized={}, "
-                            + "embeddingType={}, error={}",
+                            + "embeddingType={}, errorType={}",
                     properties.isEnabled(),
                     baseUrl,
                     request.getModel(),
                     properties.getNormalized(),
                     properties.getEmbeddingType(),
-                    ex.getMessage(),
-                    ex);
-            throw new BusinessException(50000, "Embedding API 调用失败: 网络或超时异常，" + safeMessage(ex));
+                    ex.getClass().getSimpleName());
+            throw new BusinessException(50000, "Embedding API 调用失败: 网络或超时异常");
         } catch (HttpMessageConversionException ex) {
             log.error(
                     "Embedding API JSON conversion error. enabled={}, baseUrl={}, model={}, normalized={}, "
-                            + "embeddingType={}, error={}",
+                            + "embeddingType={}, errorType={}",
                     properties.isEnabled(),
                     baseUrl,
                     request.getModel(),
                     properties.getNormalized(),
                     properties.getEmbeddingType(),
-                    ex.getMessage(),
-                    ex);
-            throw new BusinessException(50000, "Embedding API 调用失败: JSON 解析失败，" + safeMessage(ex));
+                    ex.getClass().getSimpleName());
+            throw new BusinessException(50000, "Embedding API 调用失败: JSON 解析失败");
         } catch (RestClientException ex) {
             log.error(
                     "Embedding API client error. enabled={}, baseUrl={}, model={}, normalized={}, embeddingType={}, "
-                            + "error={}",
+                            + "errorType={}",
                     properties.isEnabled(),
                     baseUrl,
                     request.getModel(),
                     properties.getNormalized(),
                     properties.getEmbeddingType(),
-                    ex.getMessage(),
-                    ex);
-            throw new BusinessException(50000, "Embedding API 调用失败: " + safeMessage(ex));
+                    ex.getClass().getSimpleName());
+            throw new BusinessException(50000, "Embedding API 调用失败");
         }
     }
 
@@ -135,28 +129,10 @@ public class EmbeddingApiClient {
         return trimmedValue;
     }
 
-    private String safeMessage(Exception ex) {
-        String message = ex.getMessage();
-        if (message == null || message.isBlank()) {
-            return ex.getClass().getSimpleName();
-        }
-        return truncate(message);
-    }
-
     private int resolveInputCount(Object input) {
         if (input instanceof java.util.List<?> inputList) {
             return inputList.size();
         }
         return input == null ? 0 : 1;
-    }
-
-    private String truncate(String value) {
-        if (value == null) {
-            return "";
-        }
-        if (value.length() <= LOG_BODY_LIMIT) {
-            return value;
-        }
-        return value.substring(0, LOG_BODY_LIMIT) + "...(truncated)";
     }
 }
