@@ -115,7 +115,7 @@ public class AiDebugController {
     }
 
     private boolean isApiKeyConfigured(String apiKey) {
-        return StringUtils.hasText(apiKey) && !"YOUR_API_KEY_HERE".equals(apiKey);
+        return StringUtils.hasText(apiKey);
     }
 
     private void validateDebugInput(List<EmbeddingInputItem> input) {

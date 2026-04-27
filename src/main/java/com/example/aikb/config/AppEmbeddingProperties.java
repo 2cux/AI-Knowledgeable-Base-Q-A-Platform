@@ -22,12 +22,14 @@ public class AppEmbeddingProperties {
     private String baseUrl = "https://your-vendor-base-url";
 
     /**
-     * embedding 服务提供商使用的认证令牌。
+     * embedding 服务认证密钥。
+     *
+     * <p>必须通过环境变量注入，例如 APP_EMBEDDING_API_KEY 或 OPENAI_API_KEY。</p>
      */
-    private String apiKey = "YOUR_API_KEY_HERE";
+    private String apiKey = "";
 
     /**
-     * embedding 模型名称。放在配置中便于不同环境切换模型，无需修改代码。
+     * embedding 模型名称，放在配置中便于不同环境切换模型。
      */
     private String model = "your-embedding-model";
 
@@ -37,7 +39,7 @@ public class AppEmbeddingProperties {
     private Boolean normalized = true;
 
     /**
-     * 服务提供商定义的 embedding 类型，具体取值需要以实际接口文档为准。
+     * 服务提供商定义的 embedding 类型，具体取值以实际接口文档为准。
      */
     private String embeddingType = "float";
 

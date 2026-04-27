@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 /**
- * 最小 LLM 服务实现，负责组装请求体并保守返回原始 JSON。
+ * 最小 LLM 服务实现，负责组装请求体并保留返回原始 JSON。
  */
 @Service
 @RequiredArgsConstructor
@@ -55,9 +55,9 @@ public class LlmServiceImpl implements LlmService {
         if (!StringUtils.hasText(properties.getBaseUrl())) {
             throw new BusinessException(50000, "LLM base-url 未配置");
         }
-        if (!StringUtils.hasText(properties.getApiKey())
-                || "YOUR_API_KEY_HERE".equals(properties.getApiKey())) {
-            throw new BusinessException(50000, "LLM api-key 未配置");
+        if (!StringUtils.hasText(properties.getApiKey())) {
+            throw new BusinessException(50000,
+                    "LLM api-key 未配置，请通过环境变量 APP_LLM_API_KEY 或 OPENAI_API_KEY 注入");
         }
         if (!StringUtils.hasText(properties.getModel())) {
             throw new BusinessException(50000, "LLM model 未配置");

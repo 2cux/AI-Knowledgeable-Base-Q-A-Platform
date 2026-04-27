@@ -24,17 +24,17 @@ jwt:
 app:
   llm:
     enabled: true
-    base-url: https://api.xiaocaseai.com/v1/messages
-    api-key: ${APP_LLM_API_KEY:}
-    model: claude-opus-4-6
+    base-url: ${APP_LLM_BASE_URL:${OPENAI_LLM_BASE_URL:${OPENAI_BASE_URL:https://api.xiaocaseai.com/v1/messages}}}
+    api-key: ${APP_LLM_API_KEY:${OPENAI_API_KEY:}}
+    model: ${APP_LLM_MODEL:claude-opus-4-6}
     max-tokens: 1024
     connect-timeout: 5s
     read-timeout: 60s
   embedding:
     enabled: true
-    base-url: https://api.xiaocaseai.com/v1/embeddings
-    api-key: ${APP_EMBEDDING_API_KEY:}
-    model: text-embedding-3-large
+    base-url: ${APP_EMBEDDING_BASE_URL:${OPENAI_EMBEDDING_BASE_URL:${OPENAI_BASE_URL:https://api.xiaocaseai.com/v1/embeddings}}}
+    api-key: ${APP_EMBEDDING_API_KEY:${OPENAI_API_KEY:}}
+    model: ${APP_EMBEDDING_MODEL:text-embedding-3-large}
     normalized: true
     embedding-type: float
     connect-timeout: 5s

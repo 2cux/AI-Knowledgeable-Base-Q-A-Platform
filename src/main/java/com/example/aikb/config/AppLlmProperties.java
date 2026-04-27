@@ -17,8 +17,12 @@ public class AppLlmProperties {
     /** 完整的 LLM API 地址，例如：https://your-vendor-base-url。 */
     private String baseUrl = "https://your-vendor-base-url";
 
-    /** LLM 服务提供商使用的认证令牌。 */
-    private String apiKey = "YOUR_API_KEY_HERE";
+    /**
+     * LLM 服务认证密钥。
+     *
+     * <p>必须通过环境变量注入，例如 APP_LLM_API_KEY 或 OPENAI_API_KEY。</p>
+     */
+    private String apiKey = "";
 
     /** LLM 模型名称。 */
     private String model = "claude-3-5-sonnet-20240620";

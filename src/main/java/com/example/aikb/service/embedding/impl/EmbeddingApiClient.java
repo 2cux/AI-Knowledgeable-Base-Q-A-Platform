@@ -48,15 +48,14 @@ public class EmbeddingApiClient {
     /**
      * 按指定协议调用 embedding 接口。
      *
-     * <p>请求头固定为 Authorization: Bearer {API_KEY}，
-     * Content-Type 固定为 application/json。</p>
+     * <p>请求头固定为 Authorization: Bearer {API_KEY}，Content-Type 固定为 application/json。</p>
      *
-     * @param request embedding 请求体
-     * @return embedding 响应体
+     * <p>API Key 必须来自环境变量注入，日志和响应中都不得输出真实密钥。</p>
      */
     public EmbeddingResponse embed(EmbeddingRequest request) {
         String baseUrl = requireText(properties.getBaseUrl(), "embedding base-url 未配置");
-        String apiKey = requireText(properties.getApiKey(), "embedding api-key 未配置");
+        String apiKey = requireText(properties.getApiKey(),
+                "embedding api-key 未配置，请通过环境变量 APP_EMBEDDING_API_KEY 或 OPENAI_API_KEY 注入");
 
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);

@@ -58,7 +58,7 @@ public class EmbeddingServiceImpl implements EmbeddingService {
     @Override
     public List<Float> embedRequest(EmbeddingRequest request) {
         if (request == null) {
-            throw new BusinessException("embedding request不能为空");
+            throw new BusinessException("embedding request 不能为空");
         }
         validateInput(request.getInput());
         validateConfig();
@@ -108,20 +108,20 @@ public class EmbeddingServiceImpl implements EmbeddingService {
 
     private void validateInput(Object input) {
         if (!(input instanceof List<?> inputList) || inputList.isEmpty()) {
-            throw new BusinessException("embedding input不能为空");
+            throw new BusinessException("embedding input 不能为空");
         }
         for (int i = 0; i < inputList.size(); i++) {
             Object item = inputList.get(i);
             if (item == null) {
-                throw new BusinessException("embedding input[" + i + "]不能为空");
+                throw new BusinessException("embedding input[" + i + "] 不能为空");
             }
             if (item instanceof String text) {
                 if (!StringUtils.hasText(text)) {
-                    throw new BusinessException("embedding input[" + i + "]文本不能为空");
+                    throw new BusinessException("embedding input[" + i + "] 文本不能为空");
                 }
             } else if (item instanceof EmbeddingInputItem embeddingInputItem) {
                 if (!StringUtils.hasText(embeddingInputItem.getText())) {
-                    throw new BusinessException("embedding input[" + i + "].text不能为空");
+                    throw new BusinessException("embedding input[" + i + "].text 不能为空");
                 }
                 if (embeddingInputItem.getImage() == null) {
                     embeddingInputItem.setImage("");
@@ -136,9 +136,9 @@ public class EmbeddingServiceImpl implements EmbeddingService {
         if (!StringUtils.hasText(properties.getBaseUrl())) {
             throw new BusinessException(50000, "embedding base-url 未配置");
         }
-        if (!StringUtils.hasText(properties.getApiKey())
-                || "YOUR_API_KEY_HERE".equals(properties.getApiKey())) {
-            throw new BusinessException(50000, "embedding api-key 未配置");
+        if (!StringUtils.hasText(properties.getApiKey())) {
+            throw new BusinessException(50000,
+                    "embedding api-key 未配置，请通过环境变量 APP_EMBEDDING_API_KEY 或 OPENAI_API_KEY 注入");
         }
         if (!StringUtils.hasText(properties.getModel())
                 || "your-embedding-model".equals(properties.getModel())) {
