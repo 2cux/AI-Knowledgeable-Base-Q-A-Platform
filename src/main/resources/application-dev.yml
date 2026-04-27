@@ -25,7 +25,7 @@ app:
   llm:
     enabled: true
     base-url: https://api.xiaocaseai.com/v1/messages
-    api-key: sk-3923hDFgZucHTAttjwhq9O4uAf1vGn2ClakWT4V334P47KYI
+    api-key: ${APP_LLM_API_KEY:}
     model: claude-opus-4-6
     max-tokens: 1024
     connect-timeout: 5s
@@ -33,7 +33,7 @@ app:
   embedding:
     enabled: true
     base-url: https://api.xiaocaseai.com/v1/embeddings
-    api-key: sk-8kiUdG7WqyDXzI2cI86dgbzsrQxX3e7qRMGaPMlawTxIIzAH
+    api-key: ${APP_EMBEDDING_API_KEY:}
     model: text-embedding-3-large
     normalized: true
     embedding-type: float

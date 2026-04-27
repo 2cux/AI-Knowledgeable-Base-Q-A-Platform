@@ -56,4 +56,20 @@ class AiDebugAccessGuardTest {
 
         verify(adminPermissionService).ensureAdmin("仅管理员可访问 AI 调试接口");
     }
+
+    @Test
+    void shouldRejectInProdEvenWhenExplicitlyEnabled() {
+        AppDebugAiTestProperties properties = new AppDebugAiTestProperties();
+        properties.setEnabled(true);
+        AdminPermissionService adminPermissionService = mock(AdminPermissionService.class);
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("prod");
+
+        AiDebugAccessGuard guard = new AiDebugAccessGuard(properties, adminPermissionService, environment);
+
+        BusinessException exception = assertThrows(BusinessException.class, guard::ensureAccessible);
+
+        assertEquals(40301, exception.getCode());
+        assertEquals(403, exception.getHttpStatus());
+    }
 }

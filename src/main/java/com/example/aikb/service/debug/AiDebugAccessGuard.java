@@ -25,6 +25,9 @@ public class AiDebugAccessGuard {
      * 校验当前请求是否允许访问 AI 调试接口。
      */
     public void ensureAccessible() {
+        if (isProdProfile()) {
+            throw new BusinessException(40301, "生产环境禁止访问 AI 调试接口");
+        }
         if (!isDebugEnabled()) {
             throw new BusinessException(40301,
                     "AI 调试接口未开启，仅允许 dev 环境本地联调，或显式开启 app.debug.ai-test.enabled 后访问");
@@ -37,6 +40,10 @@ public class AiDebugAccessGuard {
      */
     public boolean isDebugEnabled() {
         return properties.isEnabled() || isDevProfile();
+    }
+
+    private boolean isProdProfile() {
+        return environment.acceptsProfiles(Profiles.of("prod"));
     }
 
     private boolean isDevProfile() {
