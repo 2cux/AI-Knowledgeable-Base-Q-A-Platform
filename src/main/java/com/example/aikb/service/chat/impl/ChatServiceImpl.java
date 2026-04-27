@@ -75,15 +75,16 @@ public class ChatServiceImpl implements ChatService {
         List<CitationVO> citations = matched
                 ? effectiveChunks.stream().map(this::toCitation).toList()
                 : Collections.emptyList();
+        boolean llmCalled = matched;
         String answer = answerGeneratorService.generate(question, effectiveChunks, historyRecords);
 
         saveRecord(userId, knowledgeBase.getId(), conversationId, question, answer, matched, effectiveChunks.size(), topK,
                 citations);
 
-        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}",
-                userId, knowledgeBase.getId(), conversationId, topK,
+        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, llmCalled={}",
+                userId, knowledgeBase.getId(), conversationId, question.length(), topK,
                 retrievalResult == null ? null : retrievalResult.getMinEffectiveScore(),
-                rawChunks.size(), effectiveChunks.size(), matched);
+                rawChunks.size(), effectiveChunks.size(), matched, llmCalled);
 
         return ChatAskResponse.builder()
                 .conversationId(conversationId)

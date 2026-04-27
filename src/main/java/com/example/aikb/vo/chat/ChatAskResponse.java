@@ -20,6 +20,7 @@ public class ChatAskResponse {
     private Boolean matched;
 
     @Schema(description = "实际命中的切片数量", example = "3")
+    // Legacy field: stores effectiveChunkCount, not rawRetrievedChunkCount.
     private Integer retrievedChunkCount;
 
     @Schema(description = "raw retrieved chunk count", example = "5")

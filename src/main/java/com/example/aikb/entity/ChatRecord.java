@@ -37,10 +37,12 @@ public class ChatRecord {
     private String answer;
 
     /** 是否检索到相关切片。 */
+    // True only when at least one effective chunk can be used as answer evidence.
     private Boolean matched;
 
     /** 实际命中的切片数量。 */
     @TableField("retrieved_chunk_count")
+    // Stores effectiveChunkCount. Raw retrieved count is not persisted in this schema.
     private Integer retrievedChunkCount;
 
     /** 本次检索请求的topK。 */

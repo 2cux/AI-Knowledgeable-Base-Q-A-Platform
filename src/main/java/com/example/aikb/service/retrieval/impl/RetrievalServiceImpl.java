@@ -53,8 +53,9 @@ public class RetrievalServiceImpl implements RetrievalService {
         double minEffectiveScore = retrievalProperties.getMinEffectiveScore();
         List<RetrievalChunkVO> effectiveChunks = filterEffectiveChunks(rawChunks, minEffectiveScore);
 
-        log.info("Retrieval finished, userId={}, knowledgeBaseId={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}",
-                userId, knowledgeBase.getId(), topK, minEffectiveScore, rawChunks.size(), effectiveChunks.size());
+        log.info("Retrieval finished, userId={}, knowledgeBaseId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}",
+                userId, knowledgeBase.getId(), query.length(), topK, minEffectiveScore, rawChunks.size(),
+                effectiveChunks.size());
 
         return RetrievalSearchVO.builder()
                 .knowledgeBaseId(knowledgeBase.getId())
@@ -123,7 +124,10 @@ public class RetrievalServiceImpl implements RetrievalService {
             return Collections.emptyList();
         }
         return rawChunks.stream()
-                .filter(chunk -> chunk.getScore() != null && chunk.getScore() >= minEffectiveScore)
+                .filter(chunk -> {
+                    Double score = chunk.getScore();
+                    return score != null && Double.isFinite(score) && score >= minEffectiveScore;
+                })
                 .toList();
     }
 }

@@ -23,9 +23,11 @@ public class RetrievalSearchVO {
     private Integer topK;
 
     @Schema(description = "命中的chunk数量", example = "3")
+    // Legacy field: stores rawRetrievedChunkCount.
     private Integer total;
 
     @Schema(description = "命中的文档切片")
+    // Legacy field: same contents as rawChunks.
     private List<RetrievalChunkVO> chunks;
 
     @Schema(description = "raw topK retrieved chunks")
