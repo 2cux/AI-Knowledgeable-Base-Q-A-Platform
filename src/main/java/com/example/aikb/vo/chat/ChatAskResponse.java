@@ -1,5 +1,6 @@
 package com.example.aikb.vo.chat;
 
+import com.example.aikb.service.chat.AnswerStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import lombok.Builder;
@@ -7,31 +8,33 @@ import lombok.Data;
 
 @Data
 @Builder
-@Schema(description = "问答响应结果")
+@Schema(description = "Chat ask response")
 public class ChatAskResponse {
 
-    @Schema(description = "会话ID", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(description = "Conversation ID", example = "550e8400-e29b-41d4-a716-446655440000")
     private String conversationId;
 
-    @Schema(description = "生成的答案")
+    @Schema(description = "Generated answer")
     private String answer;
 
-    @Schema(description = "检索是否命中切片", example = "true")
+    @Schema(description = "RAG answer status", example = "SUCCESS")
+    private AnswerStatus answerStatus;
+
+    @Schema(description = "Whether effective evidence chunks exist", example = "true")
     private Boolean matched;
 
-    @Schema(description = "实际命中的切片数量", example = "3")
-    // Legacy field: stores effectiveChunkCount, not rawRetrievedChunkCount.
+    @Schema(description = "Effective chunk count. Legacy field kept for compatibility.", example = "3")
     private Integer retrievedChunkCount;
 
-    @Schema(description = "raw retrieved chunk count", example = "5")
+    @Schema(description = "Raw retrieved chunk count", example = "5")
     private Integer rawRetrievedChunkCount;
 
-    @Schema(description = "effective chunk count", example = "3")
+    @Schema(description = "Effective chunk count", example = "3")
     private Integer effectiveChunkCount;
 
-    @Schema(description = "minimum effective score", example = "0.2")
+    @Schema(description = "Minimum effective score", example = "0.2")
     private Double minEffectiveScore;
 
-    @Schema(description = "答案引用来源")
+    @Schema(description = "Answer citations")
     private List<CitationVO> citations;
 }

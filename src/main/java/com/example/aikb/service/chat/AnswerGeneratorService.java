@@ -16,5 +16,5 @@ public interface AnswerGeneratorService {
      * @param chunks 检索命中的上下文切片
      * @return 生成的答案
      */
-    String generate(String question, List<RetrievalChunkVO> chunks, List<ChatRecord> historyRecords);
+    AnswerGenerationResult generate(String question, List<RetrievalChunkVO> chunks, List<ChatRecord> historyRecords);
 }

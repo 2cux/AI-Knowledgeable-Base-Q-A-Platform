@@ -19,5 +19,5 @@ public class AppRagRetrievalProperties {
 
     @DecimalMin("0.0")
     @DecimalMax("1.0")
-    private double minEffectiveScore = 0.2D;
+    private double minEffectiveScore = 0.3D;
 }

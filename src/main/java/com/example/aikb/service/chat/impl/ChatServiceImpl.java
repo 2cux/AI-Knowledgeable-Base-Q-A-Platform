@@ -10,7 +10,9 @@ import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.security.CurrentUser;
+import com.example.aikb.service.chat.AnswerGenerationResult;
 import com.example.aikb.service.chat.AnswerGeneratorService;
+import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.service.chat.ChatRecordService;
 import com.example.aikb.service.chat.ChatService;
 import com.example.aikb.service.retrieval.RetrievalService;
@@ -30,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 问答服务实现，串联知识库权限校验、会话上下文、检索、答案生成和问答记录保存。
+ * Chat ask service for retrieval, answer generation and chat record persistence.
  */
 @Service
 @Slf4j
@@ -38,6 +40,13 @@ import org.springframework.stereotype.Service;
 public class ChatServiceImpl implements ChatService {
 
     private static final int HISTORY_LIMIT = 5;
+    private static final String NO_HIT_ANSWER =
+            "\u672a\u68c0\u7d22\u5230\u76f8\u5173\u77e5\u8bc6\u7247\u6bb5\uff0c"
+                    + "\u65e0\u6cd5\u57fa\u4e8e\u5f53\u524d\u77e5\u8bc6\u5e93"
+                    + "\u56de\u7b54\u8be5\u95ee\u9898\u3002";
+    private static final String WEAK_HIT_ANSWER =
+            "\u68c0\u7d22\u5230\u7684\u77e5\u8bc6\u7247\u6bb5\u76f8\u5173\u6027\u8f83\u5f31\uff0c"
+                    + "\u65e0\u6cd5\u652f\u6301\u53ef\u9760\u56de\u7b54\u3002";
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final ChatRecordMapper chatRecordMapper;
@@ -67,35 +76,50 @@ public class ChatServiceImpl implements ChatService {
         List<RetrievalChunkVO> rawChunks = retrievalResult == null || retrievalResult.getRawChunks() == null
                 ? Collections.emptyList()
                 : retrievalResult.getRawChunks();
-
         List<RetrievalChunkVO> effectiveChunks = retrievalResult == null || retrievalResult.getEffectiveChunks() == null
                 ? Collections.emptyList()
                 : retrievalResult.getEffectiveChunks();
-        boolean matched = !effectiveChunks.isEmpty();
-        List<CitationVO> citations = matched
-                ? effectiveChunks.stream().map(this::toCitation).toList()
-                : Collections.emptyList();
-        boolean llmCalled = matched;
-        String answer = answerGeneratorService.generate(question, effectiveChunks, historyRecords);
 
-        saveRecord(userId, knowledgeBase.getId(), conversationId, question, answer, matched, effectiveChunks.size(), topK,
-                citations);
+        AnswerResolution resolution = resolveAnswer(question, historyRecords, rawChunks, effectiveChunks);
+        Double minEffectiveScore = retrievalResult == null ? null : retrievalResult.getMinEffectiveScore();
 
-        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, llmCalled={}",
+        saveRecord(userId, knowledgeBase.getId(), conversationId, question, resolution.answer(),
+                resolution.answerStatus(), resolution.matched(), effectiveChunks.size(), topK, resolution.citations());
+
+        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
                 userId, knowledgeBase.getId(), conversationId, question.length(), topK,
                 retrievalResult == null ? null : retrievalResult.getMinEffectiveScore(),
-                rawChunks.size(), effectiveChunks.size(), matched, llmCalled);
+                rawChunks.size(), effectiveChunks.size(), resolution.matched(), resolution.answerStatus(),
+                resolution.llmCalled());
 
         return ChatAskResponse.builder()
                 .conversationId(conversationId)
-                .answer(answer)
-                .matched(matched)
+                .answer(resolution.answer())
+                .answerStatus(resolution.answerStatus())
+                .matched(resolution.matched())
                 .retrievedChunkCount(effectiveChunks.size())
                 .rawRetrievedChunkCount(rawChunks.size())
                 .effectiveChunkCount(effectiveChunks.size())
-                .minEffectiveScore(retrievalResult == null ? null : retrievalResult.getMinEffectiveScore())
-                .citations(citations)
+                .minEffectiveScore(minEffectiveScore)
+                .citations(resolution.citations())
                 .build();
+    }
+
+    private AnswerResolution resolveAnswer(String question, List<ChatRecord> historyRecords,
+            List<RetrievalChunkVO> rawChunks, List<RetrievalChunkVO> effectiveChunks) {
+        if (rawChunks.isEmpty()) {
+            return new AnswerResolution(NO_HIT_ANSWER, AnswerStatus.NO_HIT, false, Collections.emptyList(), false);
+        }
+        if (effectiveChunks.isEmpty()) {
+            return new AnswerResolution(WEAK_HIT_ANSWER, AnswerStatus.WEAK_HIT, false, Collections.emptyList(), false);
+        }
+
+        List<CitationVO> citations = effectiveChunks.stream().map(this::toCitation).toList();
+        AnswerGenerationResult answerResult = answerGeneratorService.generate(question, effectiveChunks, historyRecords);
+        AnswerStatus answerStatus = answerResult.isLlmAvailable()
+                ? AnswerStatus.SUCCESS
+                : AnswerStatus.LLM_UNAVAILABLE;
+        return new AnswerResolution(answerResult.getAnswer(), answerStatus, true, citations, true);
     }
 
     private String resolveConversationId(String conversationId) {
@@ -104,7 +128,7 @@ public class ChatServiceImpl implements ChatService {
         }
         String trimmed = conversationId.trim();
         if (trimmed.isEmpty()) {
-            throw new BusinessException(40001, "conversationId不能为空白");
+            throw new BusinessException(40001, "conversationId\u4e0d\u80fd\u4e3a\u7a7a\u767d");
         }
         return trimmed;
     }
@@ -119,7 +143,7 @@ public class ChatServiceImpl implements ChatService {
                 .orderByDesc(ChatRecord::getId)
                 .last("LIMIT " + HISTORY_LIMIT));
         if (requireExistingConversation && records.isEmpty()) {
-            throw new BusinessException(40400, "会话不存在");
+            throw new BusinessException(40400, "\u4f1a\u8bdd\u4e0d\u5b58\u5728");
         }
         List<ChatRecord> orderedRecords = new ArrayList<>(records);
         Collections.reverse(orderedRecords);
@@ -133,7 +157,7 @@ public class ChatServiceImpl implements ChatService {
                 .eq(KnowledgeBase::getStatus, 1)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
-            throw new BusinessException(40400, "知识库不存在");
+            throw new BusinessException(40400, "\u77e5\u8bc6\u5e93\u4e0d\u5b58\u5728");
         }
         return knowledgeBase;
     }
@@ -151,13 +175,14 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private void saveRecord(Long userId, Long knowledgeBaseId, String conversationId, String question, String answer,
-            boolean matched, int retrievedChunkCount, int topK, List<CitationVO> citations) {
+            AnswerStatus answerStatus, boolean matched, int retrievedChunkCount, int topK, List<CitationVO> citations) {
         ChatRecord record = new ChatRecord();
         record.setUserId(userId);
         record.setKnowledgeBaseId(knowledgeBaseId);
         record.setConversationId(conversationId);
         record.setQuestion(question);
         record.setAnswer(answer);
+        record.setAnswerStatus(answerStatus);
         record.setMatched(matched);
         record.setRetrievedChunkCount(retrievedChunkCount);
         record.setTopK(topK);
@@ -170,7 +195,7 @@ public class ChatServiceImpl implements ChatService {
         try {
             return objectMapper.writeValueAsString(citations);
         } catch (JsonProcessingException ex) {
-            throw new BusinessException(50001, "引用来源序列化失败");
+            throw new BusinessException(50001, "\u5f15\u7528\u6765\u6e90\u5e8f\u5217\u5316\u5931\u8d25");
         }
     }
 
@@ -179,5 +204,9 @@ public class ChatServiceImpl implements ChatService {
             return content;
         }
         return content.substring(0, maxLength) + "...";
+    }
+
+    private record AnswerResolution(String answer, AnswerStatus answerStatus, boolean matched,
+            List<CitationVO> citations, boolean llmCalled) {
     }
 }
