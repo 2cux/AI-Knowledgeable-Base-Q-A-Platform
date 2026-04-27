@@ -17,7 +17,8 @@ logging:
   level:
     '[com.example.aikb]': DEBUG
 jwt:
-  secret: ${JWT_SECRET:your-secret-key-change-me}
+  # Local development default only. Override with JWT_SECRET in real environments.
+  secret: ${JWT_SECRET:dev-only-jwt-secret-please-change-2026-very-long}
   expiration: ${JWT_EXPIRATION:86400000}
   issuer: ${JWT_ISSUER:aikb-backend}
 
@@ -28,7 +29,7 @@ app:
     api-key: ${APP_LLM_API_KEY:${OPENAI_API_KEY:}}
     model: ${APP_LLM_MODEL:claude-opus-4-6}
     max-tokens: 1024
-    connect-timeout: 5s
+    connect-timeout: 10s
     read-timeout: 60s
   embedding:
     enabled: true
