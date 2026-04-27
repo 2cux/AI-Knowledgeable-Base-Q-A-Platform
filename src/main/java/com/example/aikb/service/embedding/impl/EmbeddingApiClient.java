@@ -4,8 +4,6 @@ import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.dto.embedding.request.EmbeddingRequest;
 import com.example.aikb.dto.embedding.response.EmbeddingResponse;
 import com.example.aikb.exception.BusinessException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -34,15 +32,11 @@ public class EmbeddingApiClient {
 
     private final AppEmbeddingProperties properties;
     private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
-
     public EmbeddingApiClient(
             AppEmbeddingProperties properties,
-            @Qualifier("embeddingRestTemplate") RestTemplate restTemplate,
-            ObjectMapper objectMapper) {
+            @Qualifier("embeddingRestTemplate") RestTemplate restTemplate) {
         this.properties = properties;
         this.restTemplate = restTemplate;
-        this.objectMapper = objectMapper;
     }
 
     /**
@@ -70,7 +64,7 @@ public class EmbeddingApiClient {
                     request.getModel(),
                     properties.getNormalized(),
                     properties.getEmbeddingType(),
-                    request.getInput() == null ? 0 : request.getInput().size());
+                    resolveInputCount(request.getInput()));
             ResponseEntity<EmbeddingResponse> response = restTemplate.postForEntity(
                     baseUrl,
                     entity,
@@ -147,6 +141,13 @@ public class EmbeddingApiClient {
             return ex.getClass().getSimpleName();
         }
         return truncate(message);
+    }
+
+    private int resolveInputCount(Object input) {
+        if (input instanceof java.util.List<?> inputList) {
+            return inputList.size();
+        }
+        return input == null ? 0 : 1;
     }
 
     private String truncate(String value) {

@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.dto.embedding.request.EmbeddingRequest;
 import com.example.aikb.exception.BusinessException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -41,7 +40,7 @@ class EmbeddingApiClientTest {
         when(restTemplate.postForEntity(eq("https://example.com/v1/embeddings"), any(), eq(com.example.aikb.dto.embedding.response.EmbeddingResponse.class)))
                 .thenThrow(exception);
 
-        EmbeddingApiClient client = new EmbeddingApiClient(properties, restTemplate, new ObjectMapper());
+        EmbeddingApiClient client = new EmbeddingApiClient(properties, restTemplate);
         EmbeddingRequest request = EmbeddingRequest.builder()
                 .model("text-embedding-3-large")
                 .input(List.of("secret user content"))
