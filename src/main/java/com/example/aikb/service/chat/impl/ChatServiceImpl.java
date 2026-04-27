@@ -1,6 +1,7 @@
 package com.example.aikb.service.chat.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.aikb.config.AppRagRetrievalProperties;
 import com.example.aikb.dto.chat.ChatAskRequest;
 import com.example.aikb.dto.retrieval.RetrievalSearchRequest;
 import com.example.aikb.entity.ChatRecord;
@@ -25,18 +26,18 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
  * 问答服务实现，串联知识库权限校验、会话上下文、检索、答案生成和问答记录保存。
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
 
-    private static final int DEFAULT_TOP_K = 5;
     private static final int HISTORY_LIMIT = 5;
-    private static final double MIN_RELEVANCE_SCORE = 0.05D;
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final ChatRecordMapper chatRecordMapper;
@@ -44,13 +45,14 @@ public class ChatServiceImpl implements ChatService {
     private final AnswerGeneratorService answerGeneratorService;
     private final ChatRecordService chatRecordService;
     private final ObjectMapper objectMapper;
+    private final AppRagRetrievalProperties retrievalProperties;
 
     @Override
     public ChatAskResponse ask(ChatAskRequest request) {
         Long userId = CurrentUser.getUserId();
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
         String question = request.getQuestion().trim();
-        int topK = request.getTopK() == null ? DEFAULT_TOP_K : request.getTopK();
+        int topK = request.getTopK() == null ? retrievalProperties.getTopK() : request.getTopK();
         boolean hasConversationId = request.getConversationId() != null;
         String conversationId = resolveConversationId(request.getConversationId());
         List<ChatRecord> historyRecords = loadHistoryRecords(userId, knowledgeBase.getId(), conversationId,
@@ -62,11 +64,13 @@ public class ChatServiceImpl implements ChatService {
         retrievalRequest.setTopK(topK);
 
         RetrievalSearchVO retrievalResult = retrievalService.search(retrievalRequest);
-        List<RetrievalChunkVO> chunks = retrievalResult == null || retrievalResult.getChunks() == null
+        List<RetrievalChunkVO> rawChunks = retrievalResult == null || retrievalResult.getRawChunks() == null
                 ? Collections.emptyList()
-                : retrievalResult.getChunks();
+                : retrievalResult.getRawChunks();
 
-        List<RetrievalChunkVO> effectiveChunks = filterRelevantChunks(chunks);
+        List<RetrievalChunkVO> effectiveChunks = retrievalResult == null || retrievalResult.getEffectiveChunks() == null
+                ? Collections.emptyList()
+                : retrievalResult.getEffectiveChunks();
         boolean matched = !effectiveChunks.isEmpty();
         List<CitationVO> citations = matched
                 ? effectiveChunks.stream().map(this::toCitation).toList()
@@ -76,11 +80,19 @@ public class ChatServiceImpl implements ChatService {
         saveRecord(userId, knowledgeBase.getId(), conversationId, question, answer, matched, effectiveChunks.size(), topK,
                 citations);
 
+        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}",
+                userId, knowledgeBase.getId(), conversationId, topK,
+                retrievalResult == null ? null : retrievalResult.getMinEffectiveScore(),
+                rawChunks.size(), effectiveChunks.size(), matched);
+
         return ChatAskResponse.builder()
                 .conversationId(conversationId)
                 .answer(answer)
                 .matched(matched)
                 .retrievedChunkCount(effectiveChunks.size())
+                .rawRetrievedChunkCount(rawChunks.size())
+                .effectiveChunkCount(effectiveChunks.size())
+                .minEffectiveScore(retrievalResult == null ? null : retrievalResult.getMinEffectiveScore())
                 .citations(citations)
                 .build();
     }
@@ -135,15 +147,6 @@ public class ChatServiceImpl implements ChatService {
                 .score(chunk.getScore())
                 .contentSnippet(shorten(chunk.getContent(), 300))
                 .build();
-    }
-
-    private List<RetrievalChunkVO> filterRelevantChunks(List<RetrievalChunkVO> chunks) {
-        if (chunks == null || chunks.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return chunks.stream()
-                .filter(chunk -> chunk.getScore() != null && chunk.getScore() >= MIN_RELEVANCE_SCORE)
-                .toList();
     }
 
     private void saveRecord(Long userId, Long knowledgeBaseId, String conversationId, String question, String answer,

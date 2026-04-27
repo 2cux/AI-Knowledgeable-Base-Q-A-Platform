@@ -22,6 +22,15 @@ public class ChatAskResponse {
     @Schema(description = "实际命中的切片数量", example = "3")
     private Integer retrievedChunkCount;
 
+    @Schema(description = "raw retrieved chunk count", example = "5")
+    private Integer rawRetrievedChunkCount;
+
+    @Schema(description = "effective chunk count", example = "3")
+    private Integer effectiveChunkCount;
+
+    @Schema(description = "minimum effective score", example = "0.2")
+    private Double minEffectiveScore;
+
     @Schema(description = "答案引用来源")
     private List<CitationVO> citations;
 }

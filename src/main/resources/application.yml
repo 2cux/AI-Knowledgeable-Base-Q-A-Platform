@@ -46,6 +46,10 @@ app:
   debug:
     ai-test:
       enabled: false
+  rag:
+    retrieval:
+      top-k: ${APP_RAG_RETRIEVAL_TOP_K:5}
+      min-effective-score: ${APP_RAG_RETRIEVAL_MIN_EFFECTIVE_SCORE:0.2}
   llm:
     enabled: true
     # AI sensitive config must come from environment variables instead of committed secrets.

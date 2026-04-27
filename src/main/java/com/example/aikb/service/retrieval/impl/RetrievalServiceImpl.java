@@ -1,6 +1,7 @@
 package com.example.aikb.service.retrieval.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.aikb.config.AppRagRetrievalProperties;
 import com.example.aikb.dto.retrieval.RetrievalSearchRequest;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.exception.BusinessException;
@@ -13,6 +14,7 @@ import com.example.aikb.service.retrieval.adapter.RetrievalQueryEmbedding;
 import com.example.aikb.service.retrieval.adapter.VectorSearchAdapter;
 import com.example.aikb.vo.retrieval.RetrievalChunkVO;
 import com.example.aikb.vo.retrieval.RetrievalSearchVO;
+import java.util.Collections;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,13 +29,13 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class RetrievalServiceImpl implements RetrievalService {
 
-    private static final int DEFAULT_TOP_K = 5;
     private static final int MIN_TOP_K = 1;
     private static final int MAX_TOP_K = 20;
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final QueryEmbeddingService queryEmbeddingService;
     private final VectorSearchAdapter vectorSearchAdapter;
+    private final AppRagRetrievalProperties retrievalProperties;
 
     @Override
     public RetrievalSearchVO search(RetrievalSearchRequest request) {
@@ -44,20 +46,27 @@ public class RetrievalServiceImpl implements RetrievalService {
 
         RetrievalQueryEmbedding queryEmbedding = queryEmbeddingService.embed(query);
 
-        List<RetrievalChunkVO> chunks = vectorSearchAdapter.search(knowledgeBase.getId(), queryEmbedding, topK)
+        List<RetrievalChunkVO> rawChunks = vectorSearchAdapter.search(knowledgeBase.getId(), queryEmbedding, topK)
                 .stream()
                 .map(this::toVO)
                 .toList();
+        double minEffectiveScore = retrievalProperties.getMinEffectiveScore();
+        List<RetrievalChunkVO> effectiveChunks = filterEffectiveChunks(rawChunks, minEffectiveScore);
 
-        log.info("Retrieval finished, userId={}, knowledgeBaseId={}, topK={}, hitCount={}",
-                userId, knowledgeBase.getId(), topK, chunks.size());
+        log.info("Retrieval finished, userId={}, knowledgeBaseId={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}",
+                userId, knowledgeBase.getId(), topK, minEffectiveScore, rawChunks.size(), effectiveChunks.size());
 
         return RetrievalSearchVO.builder()
                 .knowledgeBaseId(knowledgeBase.getId())
                 .question(query)
                 .topK(topK)
-                .total(chunks.size())
-                .chunks(chunks)
+                .total(rawChunks.size())
+                .chunks(rawChunks)
+                .rawChunks(rawChunks)
+                .effectiveChunks(effectiveChunks)
+                .rawRetrievedChunkCount(rawChunks.size())
+                .effectiveChunkCount(effectiveChunks.size())
+                .minEffectiveScore(minEffectiveScore)
                 .build();
     }
 
@@ -77,7 +86,7 @@ public class RetrievalServiceImpl implements RetrievalService {
     }
 
     private int resolveTopK(Integer topK) {
-        int resolvedTopK = topK == null ? DEFAULT_TOP_K : topK;
+        int resolvedTopK = topK == null ? retrievalProperties.getTopK() : topK;
         if (resolvedTopK < MIN_TOP_K) {
             throw new BusinessException("topK 必须大于 0");
         }
@@ -107,5 +116,14 @@ public class RetrievalServiceImpl implements RetrievalService {
                 .score(candidate.getScore())
                 .documentName(candidate.getDocumentName())
                 .build();
+    }
+
+    private List<RetrievalChunkVO> filterEffectiveChunks(List<RetrievalChunkVO> rawChunks, double minEffectiveScore) {
+        if (rawChunks == null || rawChunks.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return rawChunks.stream()
+                .filter(chunk -> chunk.getScore() != null && chunk.getScore() >= minEffectiveScore)
+                .toList();
     }
 }

@@ -27,4 +27,19 @@ public class RetrievalSearchVO {
 
     @Schema(description = "命中的文档切片")
     private List<RetrievalChunkVO> chunks;
+
+    @Schema(description = "raw topK retrieved chunks")
+    private List<RetrievalChunkVO> rawChunks;
+
+    @Schema(description = "effective chunks that can be used as answer evidence")
+    private List<RetrievalChunkVO> effectiveChunks;
+
+    @Schema(description = "raw retrieved chunk count", example = "5")
+    private Integer rawRetrievedChunkCount;
+
+    @Schema(description = "effective chunk count", example = "3")
+    private Integer effectiveChunkCount;
+
+    @Schema(description = "minimum effective score", example = "0.2")
+    private Double minEffectiveScore;
 }
