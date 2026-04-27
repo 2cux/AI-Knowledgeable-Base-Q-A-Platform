@@ -39,7 +39,7 @@ app:
     max-size: 20MB
   debug:
     ai-test:
-      enabled: true
+      enabled: false
   llm:
     enabled: true
     base-url: https://api.xiaocaseai.com/v1/messages

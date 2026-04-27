@@ -1,11 +1,13 @@
 package com.example.aikb.controller.debug;
 
 import com.example.aikb.common.Result;
+import com.example.aikb.config.AppDebugAiTestProperties;
 import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.config.AppLlmProperties;
 import com.example.aikb.dto.embedding.request.EmbeddingInputItem;
 import com.example.aikb.dto.embedding.request.EmbeddingRequest;
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.service.debug.AiDebugAccessGuard;
 import com.example.aikb.service.embedding.EmbeddingService;
 import com.example.aikb.service.llm.LlmService;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -16,7 +18,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,18 +25,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * AI 外部接口联调用临时调试接口。
+ * AI 外部能力联调调试接口。
  *
- * <p>仅在 app.debug.ai-test.enabled=true 时注册，联调结束后建议关闭。</p>
+ * <p>该接口仅用于本地开发/联调，不应在生产环境开放。</p>
  */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/debug/ai")
-@ConditionalOnProperty(prefix = "app.debug.ai-test", name = "enabled", havingValue = "true")
 public class AiDebugController {
 
     private static final int VECTOR_PREVIEW_SIZE = 5;
 
+    private final AiDebugAccessGuard aiDebugAccessGuard;
+    private final AppDebugAiTestProperties debugAiTestProperties;
     private final ObjectProvider<EmbeddingService> embeddingServiceProvider;
     private final LlmService llmService;
     private final AppEmbeddingProperties embeddingProperties;
@@ -46,6 +48,8 @@ public class AiDebugController {
      */
     @PostMapping("/embedding")
     public Result<EmbeddingDebugResponse> testEmbedding(@RequestBody(required = false) TextDebugRequest request) {
+        aiDebugAccessGuard.ensureAccessible();
+
         EmbeddingService embeddingService = embeddingServiceProvider.getIfAvailable();
         if (embeddingService == null) {
             throw new BusinessException(50000, "EmbeddingService 未注册，请检查 app.embedding.enabled");
@@ -66,6 +70,8 @@ public class AiDebugController {
         }
 
         return Result.success(EmbeddingDebugResponse.builder()
+                .debugEnabled(aiDebugAccessGuard.isDebugEnabled())
+                .explicitlyEnabled(debugAiTestProperties.isEnabled())
                 .enabled(embeddingProperties.isEnabled())
                 .baseUrlConfigured(StringUtils.hasText(embeddingProperties.getBaseUrl()))
                 .apiKeyConfigured(isApiKeyConfigured(embeddingProperties.getApiKey()))
@@ -80,6 +86,8 @@ public class AiDebugController {
      */
     @PostMapping("/llm")
     public Result<LlmDebugResponse> testLlm(@RequestBody(required = false) TextDebugRequest request) {
+        aiDebugAccessGuard.ensureAccessible();
+
         String question = resolveText(request == null ? null : request.getText(), "请用一句话回答：你已经接通了吗？");
         JsonNode response = llmService.chatText(question);
         if (response == null || response.isNull() || response.isMissingNode()) {
@@ -92,6 +100,8 @@ public class AiDebugController {
         }
 
         return Result.success(LlmDebugResponse.builder()
+                .debugEnabled(aiDebugAccessGuard.isDebugEnabled())
+                .explicitlyEnabled(debugAiTestProperties.isEnabled())
                 .enabled(llmProperties.isEnabled())
                 .baseUrlConfigured(StringUtils.hasText(llmProperties.getBaseUrl()))
                 .apiKeyConfigured(isApiKeyConfigured(llmProperties.getApiKey()))
@@ -109,8 +119,7 @@ public class AiDebugController {
     }
 
     private void validateDebugInput(List<EmbeddingInputItem> input) {
-        for (int i = 0; i < input.size(); i++) {
-            EmbeddingInputItem item = input.get(i);
+        for (EmbeddingInputItem item : input) {
             if (item != null) {
                 validateDebugImage(item.getImage());
             }
@@ -120,7 +129,7 @@ public class AiDebugController {
     private void validateDebugImage(String image) {
         if ("string".equalsIgnoreCase(image == null ? null : image.trim())) {
             throw new BusinessException(50000,
-                    "embedding image不能使用接口文档占位值string，请传真实图片URL/Base64，或确认是否应使用纯文本embedding模型/接口");
+                    "embedding image 不能使用接口文档占位值 string，请传真实图片 URL/Base64，或确认是否应使用纯文本 embedding 模型/接口");
         }
     }
 
@@ -144,18 +153,19 @@ public class AiDebugController {
 
     @Data
     public static class TextDebugRequest {
+
         /**
-         * embedding 测试文本或 LLM 测试问题。不传时使用默认测试文本。
+         * embedding 测试文本或 LLM 测试问题，不传时使用默认测试文本。
          */
         private String text;
 
         /**
-         * embedding 图片内容或图片地址。上游协议要求 input[].image 为字符串；不传时使用空字符串。
+         * embedding 图片内容或图片地址，不传时使用空字符串。
          */
         private String image;
 
         /**
-         * 直接按上游协议透传 input 数组；传了 input 时会优先使用它，忽略 text/image。
+         * 直接透传上游协议 input 数组；传入 input 时优先使用它，忽略 text/image。
          */
         private List<EmbeddingInputItem> input;
 
@@ -180,6 +190,17 @@ public class AiDebugController {
     @Builder
     @AllArgsConstructor
     public static class EmbeddingDebugResponse {
+
+        /**
+         * 当前环境下 debug 接口是否已放行。
+         */
+        private boolean debugEnabled;
+
+        /**
+         * 是否通过配置显式开启。
+         */
+        private boolean explicitlyEnabled;
+
         private boolean enabled;
         private boolean baseUrlConfigured;
         private boolean apiKeyConfigured;
@@ -192,6 +213,17 @@ public class AiDebugController {
     @Builder
     @AllArgsConstructor
     public static class LlmDebugResponse {
+
+        /**
+         * 当前环境下 debug 接口是否已放行。
+         */
+        private boolean debugEnabled;
+
+        /**
+         * 是否通过配置显式开启。
+         */
+        private boolean explicitlyEnabled;
+
         private boolean enabled;
         private boolean baseUrlConfigured;
         private boolean apiKeyConfigured;

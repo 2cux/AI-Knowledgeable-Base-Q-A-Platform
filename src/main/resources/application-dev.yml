@@ -22,9 +22,6 @@ jwt:
   issuer: ${JWT_ISSUER:aikb-backend}
 
 app:
-  debug:
-    ai-test:
-      enabled: true
   llm:
     enabled: true
     base-url: https://api.xiaocaseai.com/v1/messages
