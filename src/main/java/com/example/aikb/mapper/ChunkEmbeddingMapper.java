@@ -36,6 +36,7 @@ public interface ChunkEmbeddingMapper extends BaseMapper<ChunkEmbedding> {
               AND ce.status = #{status}
               AND ce.embedding_model = #{embeddingModel}
               AND ce.vector_json IS NOT NULL
+              AND d.parse_status IN ('CHUNKED', 'DONE')
             ORDER BY ce.id ASC
             LIMIT #{limit}
             """)

@@ -11,7 +11,8 @@ public enum AnswerStatus {
     SUCCESS("SUCCESS"),
     NO_HIT("NO_HIT"),
     WEAK_HIT("WEAK_HIT"),
-    LLM_UNAVAILABLE("LLM_UNAVAILABLE");
+    LLM_UNAVAILABLE("LLM_UNAVAILABLE"),
+    RETRIEVAL_UNAVAILABLE("RETRIEVAL_UNAVAILABLE");
 
     @EnumValue
     private final String value;

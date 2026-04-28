@@ -10,6 +10,7 @@ import com.example.aikb.config.AppRagRetrievalProperties;
 import com.example.aikb.dto.chat.ChatAskRequest;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.entity.KnowledgeBase;
+import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.security.LoginUser;
@@ -142,6 +143,40 @@ class ChatServiceImplTest {
         assertThat(response.getAnswer()).isEqualTo("llm unavailable");
         assertThat(response.getCitations()).hasSize(1);
         assertSavedStatus(AnswerStatus.LLM_UNAVAILABLE, true);
+    }
+
+    @Test
+    void askReturnsRetrievalUnavailableWithoutCallingLlmWhenRetrievalFails() {
+        when(retrievalService.search(any())).thenThrow(new BusinessException(50000, "embedding unavailable"));
+
+        ChatAskResponse response = chatService.ask(request());
+
+        assertThat(response.getAnswerStatus()).isEqualTo(AnswerStatus.RETRIEVAL_UNAVAILABLE);
+        assertThat(response.getMatched()).isFalse();
+        assertThat(response.getRetrievedChunkCount()).isZero();
+        assertThat(response.getCitations()).isEmpty();
+        verify(answerGeneratorService, never()).generate(any(), any(), any());
+        assertSavedStatus(AnswerStatus.RETRIEVAL_UNAVAILABLE, false);
+    }
+
+    @Test
+    void askLoadsOnlySuccessfulHistoryForExistingConversation() {
+        ChatAskRequest request = request();
+        request.setConversationId("conversation-1");
+        RetrievalChunkVO chunk = chunk(0.9D);
+        when(chatRecordMapper.selectCount(any())).thenReturn(1L);
+        when(retrievalService.search(any())).thenReturn(retrievalResult(List.of(chunk), List.of(chunk)));
+        when(answerGeneratorService.generate(any(), any(), any())).thenReturn(AnswerGenerationResult.builder()
+                .answer("answer")
+                .llmAvailable(true)
+                .build());
+
+        chatService.ask(request);
+
+        ArgumentCaptor<List<ChatRecord>> historyCaptor = ArgumentCaptor.forClass(List.class);
+        verify(answerGeneratorService).generate(any(), any(), historyCaptor.capture());
+        assertThat(historyCaptor.getValue()).isEmpty();
+        verify(chatRecordMapper).selectCount(any());
     }
 
     private void assertSavedStatus(AnswerStatus answerStatus, boolean matched) {

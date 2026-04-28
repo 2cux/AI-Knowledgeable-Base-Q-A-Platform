@@ -47,6 +47,10 @@ public class ChatServiceImpl implements ChatService {
     private static final String WEAK_HIT_ANSWER =
             "\u68c0\u7d22\u5230\u7684\u77e5\u8bc6\u7247\u6bb5\u76f8\u5173\u6027\u8f83\u5f31\uff0c"
                     + "\u65e0\u6cd5\u652f\u6301\u53ef\u9760\u56de\u7b54\u3002";
+    private static final String RETRIEVAL_UNAVAILABLE_ANSWER =
+            "\u77e5\u8bc6\u5e93\u68c0\u7d22\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c"
+                    + "\u65e0\u6cd5\u57fa\u4e8e\u5f53\u524d\u77e5\u8bc6\u5e93"
+                    + "\u751f\u6210\u53ef\u9760\u56de\u7b54\u3002\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002";
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final ChatRecordMapper chatRecordMapper;
@@ -72,7 +76,19 @@ public class ChatServiceImpl implements ChatService {
         retrievalRequest.setQuery(question);
         retrievalRequest.setTopK(topK);
 
-        RetrievalSearchVO retrievalResult = retrievalService.search(retrievalRequest);
+        RetrievalSearchVO retrievalResult;
+        try {
+            retrievalResult = retrievalService.search(retrievalRequest);
+        } catch (BusinessException ex) {
+            log.warn("Chat RAG retrieval unavailable, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, error={}",
+                    userId, knowledgeBase.getId(), conversationId, question.length(), topK, ex.getMessage());
+            return retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
+        } catch (RuntimeException ex) {
+            log.warn("Chat RAG retrieval unavailable unexpectedly, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, errorType={}",
+                    userId, knowledgeBase.getId(), conversationId, question.length(), topK,
+                    ex.getClass().getSimpleName());
+            return retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
+        }
         List<RetrievalChunkVO> rawChunks = retrievalResult == null || retrievalResult.getRawChunks() == null
                 ? Collections.emptyList()
                 : retrievalResult.getRawChunks();
@@ -122,6 +138,26 @@ public class ChatServiceImpl implements ChatService {
         return new AnswerResolution(answerResult.getAnswer(), answerStatus, true, citations, true);
     }
 
+    private ChatAskResponse retrievalUnavailable(Long userId, Long knowledgeBaseId, String conversationId,
+            String question, int topK) {
+        saveRecord(userId, knowledgeBaseId, conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER,
+                AnswerStatus.RETRIEVAL_UNAVAILABLE, false, 0, topK, Collections.emptyList());
+        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
+                userId, knowledgeBaseId, conversationId, question.length(), topK, null, 0, 0, false,
+                AnswerStatus.RETRIEVAL_UNAVAILABLE, false);
+        return ChatAskResponse.builder()
+                .conversationId(conversationId)
+                .answer(RETRIEVAL_UNAVAILABLE_ANSWER)
+                .answerStatus(AnswerStatus.RETRIEVAL_UNAVAILABLE)
+                .matched(false)
+                .retrievedChunkCount(0)
+                .rawRetrievedChunkCount(0)
+                .effectiveChunkCount(0)
+                .minEffectiveScore(null)
+                .citations(Collections.emptyList())
+                .build();
+    }
+
     private String resolveConversationId(String conversationId) {
         if (conversationId == null) {
             return UUID.randomUUID().toString();
@@ -139,15 +175,25 @@ public class ChatServiceImpl implements ChatService {
                 .eq(ChatRecord::getUserId, userId)
                 .eq(ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
                 .eq(ChatRecord::getConversationId, conversationId)
+                .eq(ChatRecord::getAnswerStatus, AnswerStatus.SUCCESS)
                 .orderByDesc(ChatRecord::getCreatedAt)
                 .orderByDesc(ChatRecord::getId)
                 .last("LIMIT " + HISTORY_LIMIT));
-        if (requireExistingConversation && records.isEmpty()) {
+        if (requireExistingConversation && records.isEmpty()
+                && !conversationExists(userId, knowledgeBaseId, conversationId)) {
             throw new BusinessException(40400, "\u4f1a\u8bdd\u4e0d\u5b58\u5728");
         }
         List<ChatRecord> orderedRecords = new ArrayList<>(records);
         Collections.reverse(orderedRecords);
         return orderedRecords;
+    }
+
+    private boolean conversationExists(Long userId, Long knowledgeBaseId, String conversationId) {
+        Long count = chatRecordMapper.selectCount(new LambdaQueryWrapper<ChatRecord>()
+                .eq(ChatRecord::getUserId, userId)
+                .eq(ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(ChatRecord::getConversationId, conversationId));
+        return count != null && count > 0;
     }
 
     private KnowledgeBase getOwnKnowledgeBase(Long knowledgeBaseId, Long userId) {
