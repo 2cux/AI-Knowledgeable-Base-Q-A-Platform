@@ -40,6 +40,8 @@ public class RagAnswerGeneratorServiceImpl implements AnswerGeneratorService {
 
         try {
             String rawResponse = llmClient.chat(ragPromptBuilder.build(question, chunks, historyRecords));
+            log.info("LLM raw response preview before extraction, questionLength={}, chunkCount={}, preview={}",
+                    question == null ? 0 : question.length(), chunks.size(), preview(rawResponse));
             AnswerExtractResult extractResult = answerExtractor.extract(rawResponse);
             if (!extractResult.isSuccess()) {
                 log.warn("LLM answer extraction failed, questionLength={}, chunkCount={}, failureReason={}",
@@ -66,5 +68,16 @@ public class RagAnswerGeneratorServiceImpl implements AnswerGeneratorService {
                 .answer(LLM_FAILED_ANSWER)
                 .llmAvailable(false)
                 .build();
+    }
+
+    private String preview(String rawResponse) {
+        if (rawResponse == null) {
+            return "<null>";
+        }
+        String normalized = rawResponse.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= 1000) {
+            return normalized;
+        }
+        return normalized.substring(0, 1000);
     }
 }

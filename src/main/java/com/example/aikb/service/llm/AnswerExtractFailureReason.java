@@ -5,6 +5,7 @@ package com.example.aikb.service.llm;
  */
 public enum AnswerExtractFailureReason {
 
+    EMPTY_CONTENT,
     EMPTY_RESPONSE,
     INVALID_JSON,
     MISSING_ANSWER_FIELD,
