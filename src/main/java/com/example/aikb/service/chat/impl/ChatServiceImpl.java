@@ -78,6 +78,9 @@ public class ChatServiceImpl implements ChatService {
         try {
             retrievalResult = retrievalService.search(retrievalRequest);
         } catch (BusinessException ex) {
+            if (isClientBusinessException(ex)) {
+                throw ex;
+            }
             log.warn("Chat RAG retrieval unavailable, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, error={}",
                     userId, knowledgeBase.getId(), conversationId, question.length(), topK, ex.getMessage());
             return retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
@@ -155,6 +158,10 @@ public class ChatServiceImpl implements ChatService {
                 .minEffectiveScore(null)
                 .citations(Collections.emptyList())
                 .build();
+    }
+
+    private boolean isClientBusinessException(BusinessException ex) {
+        return ex.getHttpStatus() >= 400 && ex.getHttpStatus() < 500;
     }
 
     private String resolveConversationId(String conversationId) {

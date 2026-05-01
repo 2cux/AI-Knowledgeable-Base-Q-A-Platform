@@ -1,7 +1,9 @@
 package com.example.aikb.service.chat.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -72,9 +74,9 @@ class ChatServiceImplTest {
         knowledgeBase.setId(KNOWLEDGE_BASE_ID);
         knowledgeBase.setOwnerId(USER_ID);
         knowledgeBase.setStatus(1);
-        when(knowledgeBaseMapper.selectOne(any())).thenReturn(knowledgeBase);
-        when(chatRecordMapper.selectList(any())).thenReturn(Collections.emptyList());
-        when(chatRecordService.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(knowledgeBaseMapper.selectOne(any())).thenReturn(knowledgeBase);
+        lenient().when(chatRecordMapper.selectList(any())).thenReturn(Collections.emptyList());
+        lenient().when(chatRecordService.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @AfterEach
@@ -92,7 +94,7 @@ class ChatServiceImplTest {
         assertThat(response.getMatched()).isFalse();
         assertThat(response.getCitations()).isEmpty();
         verify(answerGeneratorService, never()).generate(any(), any(), any());
-        assertSavedStatus(AnswerStatus.NO_HIT, false);
+        assertSavedRecord(AnswerStatus.NO_HIT, false, 0, 0, "[]");
     }
 
     @Test
@@ -107,7 +109,7 @@ class ChatServiceImplTest {
         assertThat(response.getMatched()).isFalse();
         assertThat(response.getCitations()).isEmpty();
         verify(answerGeneratorService, never()).generate(any(), any(), any());
-        assertSavedStatus(AnswerStatus.WEAK_HIT, false);
+        assertSavedRecord(AnswerStatus.WEAK_HIT, false, 0, 1, "[]");
     }
 
     @Test
@@ -125,7 +127,7 @@ class ChatServiceImplTest {
         assertThat(response.getMatched()).isTrue();
         assertThat(response.getAnswer()).isEqualTo("answer");
         assertThat(response.getCitations()).hasSize(1);
-        assertSavedStatus(AnswerStatus.SUCCESS, true);
+        assertSavedRecord(AnswerStatus.SUCCESS, true, 1, 1, "\"chunkId\":101");
     }
 
     @Test
@@ -143,7 +145,7 @@ class ChatServiceImplTest {
         assertThat(response.getMatched()).isTrue();
         assertThat(response.getAnswer()).isEqualTo("llm unavailable");
         assertThat(response.getCitations()).hasSize(1);
-        assertSavedStatus(AnswerStatus.LLM_UNAVAILABLE, true);
+        assertSavedRecord(AnswerStatus.LLM_UNAVAILABLE, true, 1, 1, "\"chunkId\":101");
     }
 
     @Test
@@ -157,7 +159,18 @@ class ChatServiceImplTest {
         assertThat(response.getRetrievedChunkCount()).isZero();
         assertThat(response.getCitations()).isEmpty();
         verify(answerGeneratorService, never()).generate(any(), any(), any());
-        assertSavedStatus(AnswerStatus.RETRIEVAL_UNAVAILABLE, false);
+        assertSavedRecord(AnswerStatus.RETRIEVAL_UNAVAILABLE, false, 0, 0, "[]");
+    }
+
+    @Test
+    void askRethrowsClientBusinessExceptionWithoutSavingRecord() {
+        when(retrievalService.search(any())).thenThrow(new BusinessException(40000, "topK 必须大于 0"));
+
+        assertThatThrownBy(() -> chatService.ask(request()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("topK 必须大于 0");
+
+        verify(chatRecordService, never()).save(any());
     }
 
     @Test
@@ -180,14 +193,25 @@ class ChatServiceImplTest {
         verify(chatRecordMapper).selectCount(any());
     }
 
-    private void assertSavedStatus(AnswerStatus answerStatus, boolean matched) {
+    @Test
+    void citationCodecReturnsEmptyListForBlankOrInvalidJson() {
+        CitationJsonCodec codec = new CitationJsonCodec(new ObjectMapper());
+
+        assertThat(codec.deserialize(null, 1L)).isEmpty();
+        assertThat(codec.deserialize("", 1L)).isEmpty();
+        assertThat(codec.deserialize("not-json", 1L)).isEmpty();
+    }
+
+    private void assertSavedRecord(AnswerStatus answerStatus, boolean matched, int retrievedChunkCount,
+            int rawRetrievedChunkCount, String citationsJsonFragment) {
         ArgumentCaptor<ChatRecord> captor = ArgumentCaptor.forClass(ChatRecord.class);
         verify(chatRecordService).save(captor.capture());
         assertThat(captor.getValue().getAnswerStatus()).isEqualTo(answerStatus);
         assertThat(captor.getValue().getMatched()).isEqualTo(matched);
+        assertThat(captor.getValue().getRetrievedChunkCount()).isEqualTo(retrievedChunkCount);
         assertThat(captor.getValue().getTopK()).isEqualTo(5);
-        assertThat(captor.getValue().getRawRetrievedChunkCount()).isNotNull();
-        assertThat(captor.getValue().getCitationsJson()).isNotNull();
+        assertThat(captor.getValue().getRawRetrievedChunkCount()).isEqualTo(rawRetrievedChunkCount);
+        assertThat(captor.getValue().getCitationsJson()).contains(citationsJsonFragment);
     }
 
     private ChatAskRequest request() {
