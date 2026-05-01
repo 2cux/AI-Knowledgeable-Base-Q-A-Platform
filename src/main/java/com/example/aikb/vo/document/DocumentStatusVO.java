@@ -1,6 +1,7 @@
 package com.example.aikb.vo.document;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Data;
 
@@ -24,6 +25,15 @@ public class DocumentStatusVO {
     @Schema(description = "当前切片数量", example = "12")
     private Integer chunkCount;
 
+    @Schema(description = "Embedding status", example = "SUCCESS")
+    private String embeddingStatus;
+
+    @Schema(description = "Embedded chunk count", example = "10")
+    private Integer embeddedChunkCount;
+
+    @Schema(description = "Total chunk count", example = "12")
+    private Integer totalChunkCount;
+
     @Schema(description = "向量化总数", example = "12")
     private Integer embeddingTotal;
 
@@ -33,9 +43,21 @@ public class DocumentStatusVO {
     @Schema(description = "向量化失败数", example = "2")
     private Integer embeddingFailedCount;
 
+    @Schema(description = "Latest task type", example = "DOCUMENT_PROCESS")
+    private String latestTaskType;
+
     @Schema(description = "最近任务状态", example = "SUCCESS")
     private String latestTaskStatus;
 
     @Schema(description = "最近任务错误信息")
     private String latestErrorMessage;
+
+    @Schema(description = "Whether force process is allowed", example = "true")
+    private Boolean canReprocess;
+
+    @Schema(description = "Whether embedding is allowed", example = "true")
+    private Boolean canReembed;
+
+    @Schema(description = "Updated time")
+    private LocalDateTime updatedAt;
 }

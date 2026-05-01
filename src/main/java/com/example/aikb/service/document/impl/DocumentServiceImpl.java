@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -40,9 +41,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocumentServiceImpl implements DocumentService {
 
-    private static final String PARSE_STATUS_UPLOADED = "UPLOADED";
+    private static final String PARSE_STATUS_NOT_STARTED = "NOT_STARTED";
+    private static final String PARSE_STATUS_SUCCESS = "SUCCESS";
+    private static final String PARSE_STATUS_PROCESSING = "PROCESSING";
     private static final String PARSE_STATUS_PENDING = "PENDING";
     private static final String TASK_TYPE_DOCUMENT_PARSE = "DOCUMENT_PARSE";
     private static final String TASK_TYPE_DOCUMENT_PROCESS = "DOCUMENT_PROCESS";
@@ -51,6 +55,7 @@ public class DocumentServiceImpl implements DocumentService {
     private static final String TASK_STATUS_PENDING = "PENDING";
     private static final String EMBEDDING_STATUS_SUCCESS = "SUCCESS";
     private static final String EMBEDDING_STATUS_FAILED = "FAILED";
+    private static final String EMBEDDING_STATUS_NOT_STARTED = "NOT_STARTED";
     private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
     private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("pdf", "doc", "docx", "txt", "md");
 
@@ -79,7 +84,10 @@ public class DocumentServiceImpl implements DocumentService {
         document.setFileType(fileType);
         document.setFileSize(request.getFileSize());
         document.setStoragePath(resolveMetadataStoragePath(request.getKnowledgeBaseId(), fileName));
-        document.setParseStatus(PARSE_STATUS_UPLOADED);
+        document.setParseStatus(PARSE_STATUS_NOT_STARTED);
+        document.setEmbeddingStatus(EMBEDDING_STATUS_NOT_STARTED);
+        document.setChunkCount(0);
+        document.setEmbeddedChunkCount(0);
         document.setCreatedBy(userId);
 
         int rows = documentMapper.insert(document);
@@ -112,7 +120,10 @@ public class DocumentServiceImpl implements DocumentService {
             document.setFileType(storedFile.getFileType());
             document.setFileSize(storedFile.getFileSize());
             document.setStoragePath(storedFile.getStoragePath());
-            document.setParseStatus(PARSE_STATUS_UPLOADED);
+            document.setParseStatus(PARSE_STATUS_NOT_STARTED);
+            document.setEmbeddingStatus(EMBEDDING_STATUS_NOT_STARTED);
+            document.setChunkCount(0);
+            document.setEmbeddedChunkCount(0);
             document.setCreatedBy(userId);
 
             int rows = documentMapper.insert(document);
@@ -139,6 +150,19 @@ public class DocumentServiceImpl implements DocumentService {
                 if (status == STATUS_ROLLED_BACK) {
                     localDocumentStorage.deleteQuietly(storedFile);
                 }
+            }
+        });
+    }
+
+    private void registerAfterCommitFileDelete(String storagePath) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            localDocumentStorage.deleteByStoragePathQuietly(storagePath);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                localDocumentStorage.deleteByStoragePathQuietly(storagePath);
             }
         });
     }
@@ -196,6 +220,28 @@ public class DocumentServiceImpl implements DocumentService {
         return toDetailVO(document);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long id) {
+        Long userId = CurrentUser.getUserId();
+        Document document = getOwnDocument(id, userId);
+        String storagePath = document.getStoragePath();
+
+        chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
+                .eq(ChunkEmbedding::getDocumentId, document.getId()));
+        documentChunkMapper.delete(new LambdaQueryWrapper<DocumentChunk>()
+                .eq(DocumentChunk::getDocumentId, document.getId()));
+        taskRecordMapper.delete(new LambdaQueryWrapper<TaskRecord>()
+                .eq(TaskRecord::getBizType, BIZ_TYPE_DOCUMENT)
+                .eq(TaskRecord::getBizId, document.getId()));
+        int rows = documentMapper.deleteById(document.getId());
+        if (rows != 1) {
+            throw new BusinessException("文档删除失败");
+        }
+        registerAfterCommitFileDelete(storagePath);
+        log.info("Document deleted, documentId={}, userId={}", document.getId(), userId);
+    }
+
     /**
      * 查询文档状态概览。
      * 当前实现只做轻量统计，不再复用 embedding 明细接口，避免状态查询接口被大文档拖慢。
@@ -204,27 +250,26 @@ public class DocumentServiceImpl implements DocumentService {
     public DocumentStatusVO getStatus(Long id) {
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(id, userId);
-        int chunkCount = Math.toIntExact(documentChunkMapper.selectCount(new LambdaQueryWrapper<DocumentChunk>()
-                .eq(DocumentChunk::getDocumentId, document.getId())));
-        int embeddingSuccessCount = Math.toIntExact(chunkEmbeddingMapper.selectCount(new LambdaQueryWrapper<ChunkEmbedding>()
-                .eq(ChunkEmbedding::getDocumentId, document.getId())
-                .eq(ChunkEmbedding::getStatus, EMBEDDING_STATUS_SUCCESS)));
-        int embeddingFailedCount = Math.toIntExact(chunkEmbeddingMapper.selectCount(new LambdaQueryWrapper<ChunkEmbedding>()
-                .eq(ChunkEmbedding::getDocumentId, document.getId())
-                .eq(ChunkEmbedding::getStatus, EMBEDDING_STATUS_FAILED)));
+        DocumentLifecycleStats stats = calculateStats(document);
         TaskRecord latestTask = findLatestStatusTask(document.getId());
 
         return DocumentStatusVO.builder()
                 .documentId(document.getId())
                 .knowledgeBaseId(document.getKnowledgeBaseId())
                 .parseStatus(document.getParseStatus())
-                .chunkCount(chunkCount)
-                // 当前阶段直接使用实时切片总数作为 embeddingTotal 的占位统计。
-                .embeddingTotal(chunkCount)
-                .embeddingSuccessCount(embeddingSuccessCount)
-                .embeddingFailedCount(embeddingFailedCount)
-                .latestTaskStatus(latestTask == null ? null : latestTask.getStatus())
-                .latestErrorMessage(latestTask == null ? null : latestTask.getErrorMessage())
+                .chunkCount(stats.chunkCount())
+                .embeddingStatus(stats.embeddingStatus())
+                .embeddedChunkCount(stats.embeddingSuccessCount())
+                .totalChunkCount(stats.chunkCount())
+                .embeddingTotal(stats.chunkCount())
+                .embeddingSuccessCount(stats.embeddingSuccessCount())
+                .embeddingFailedCount(stats.embeddingFailedCount())
+                .latestTaskType(latestTask == null ? document.getLatestTaskType() : latestTask.getTaskType())
+                .latestTaskStatus(latestTask == null ? document.getLatestTaskStatus() : latestTask.getStatus())
+                .latestErrorMessage(resolveLatestError(document, latestTask))
+                .canReprocess(canReprocess(document))
+                .canReembed(canReembed(document, stats.chunkCount()))
+                .updatedAt(document.getUpdatedAt())
                 .build();
     }
 
@@ -332,10 +377,67 @@ public class DocumentServiceImpl implements DocumentService {
         return "metadata/" + knowledgeBaseId + "/" + fileName;
     }
 
+    private DocumentLifecycleStats calculateStats(Document document) {
+        int chunkCount = Math.toIntExact(documentChunkMapper.selectCount(new LambdaQueryWrapper<DocumentChunk>()
+                .eq(DocumentChunk::getDocumentId, document.getId())));
+        int embeddingSuccessCount = Math.toIntExact(chunkEmbeddingMapper.selectCount(new LambdaQueryWrapper<ChunkEmbedding>()
+                .eq(ChunkEmbedding::getDocumentId, document.getId())
+                .eq(ChunkEmbedding::getStatus, EMBEDDING_STATUS_SUCCESS)));
+        int embeddingFailedCount = Math.toIntExact(chunkEmbeddingMapper.selectCount(new LambdaQueryWrapper<ChunkEmbedding>()
+                .eq(ChunkEmbedding::getDocumentId, document.getId())
+                .eq(ChunkEmbedding::getStatus, EMBEDDING_STATUS_FAILED)));
+        String embeddingStatus = resolveEmbeddingStatus(document.getEmbeddingStatus(), chunkCount,
+                embeddingSuccessCount, embeddingFailedCount);
+        return new DocumentLifecycleStats(chunkCount, embeddingSuccessCount, embeddingFailedCount, embeddingStatus);
+    }
+
+    private String resolveEmbeddingStatus(String storedStatus, int chunkCount, int successCount, int failedCount) {
+        if (chunkCount == 0) {
+            return EMBEDDING_STATUS_NOT_STARTED;
+        }
+        if (successCount == chunkCount) {
+            return EMBEDDING_STATUS_SUCCESS;
+        }
+        if (failedCount == chunkCount) {
+            return EMBEDDING_STATUS_FAILED;
+        }
+        if (successCount > 0 || failedCount > 0) {
+            return "PARTIAL_SUCCESS";
+        }
+        return storedStatus == null ? EMBEDDING_STATUS_NOT_STARTED : storedStatus;
+    }
+
+    private String resolveLatestError(Document document, TaskRecord latestTask) {
+        if (latestTask != null && latestTask.getErrorMessage() != null) {
+            return latestTask.getErrorMessage();
+        }
+        return document.getLatestErrorMessage();
+    }
+
+    private boolean canReprocess(Document document) {
+        return !PARSE_STATUS_PROCESSING.equals(document.getParseStatus())
+                && !"CHUNKING".equals(document.getParseStatus());
+    }
+
+    private boolean canReembed(Document document, int chunkCount) {
+        return chunkCount > 0
+                && !PARSE_STATUS_PROCESSING.equals(document.getParseStatus())
+                && !"CHUNKING".equals(document.getParseStatus());
+    }
+
+    private record DocumentLifecycleStats(
+            int chunkCount,
+            int embeddingSuccessCount,
+            int embeddingFailedCount,
+            String embeddingStatus) {
+    }
+
     /**
      * 将文档实体转换为列表展示对象。
      */
     private DocumentListVO toListVO(Document document) {
+        DocumentLifecycleStats stats = calculateStats(document);
+        TaskRecord latestTask = findLatestStatusTask(document.getId());
         return DocumentListVO.builder()
                 .id(document.getId())
                 .documentId(document.getId())
@@ -344,6 +446,11 @@ public class DocumentServiceImpl implements DocumentService {
                 .fileType(document.getFileType())
                 .fileSize(document.getFileSize())
                 .parseStatus(document.getParseStatus())
+                .chunkCount(stats.chunkCount())
+                .embeddingStatus(stats.embeddingStatus())
+                .embeddedChunkCount(stats.embeddingSuccessCount())
+                .latestTaskStatus(latestTask == null ? document.getLatestTaskStatus() : latestTask.getStatus())
+                .latestErrorMessage(resolveLatestError(document, latestTask))
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
                 .build();
@@ -353,15 +460,26 @@ public class DocumentServiceImpl implements DocumentService {
      * 将文档实体转换为详情展示对象。
      */
     private DocumentDetailVO toDetailVO(Document document) {
+        DocumentLifecycleStats stats = calculateStats(document);
+        TaskRecord latestTask = findLatestStatusTask(document.getId());
         return DocumentDetailVO.builder()
                 .id(document.getId())
                 .documentId(document.getId())
                 .knowledgeBaseId(document.getKnowledgeBaseId())
                 .fileName(document.getFileName())
+                .originalFileName(document.getFileName())
                 .fileType(document.getFileType())
                 .fileSize(document.getFileSize())
                 .storagePath(document.getStoragePath())
                 .parseStatus(document.getParseStatus())
+                .chunkCount(stats.chunkCount())
+                .embeddingStatus(stats.embeddingStatus())
+                .embeddedChunkCount(stats.embeddingSuccessCount())
+                .latestTaskType(latestTask == null ? document.getLatestTaskType() : latestTask.getTaskType())
+                .latestTaskStatus(latestTask == null ? document.getLatestTaskStatus() : latestTask.getStatus())
+                .latestErrorMessage(resolveLatestError(document, latestTask))
+                .canReprocess(canReprocess(document))
+                .canReembed(canReembed(document, stats.chunkCount()))
                 .createdBy(document.getCreatedBy())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())

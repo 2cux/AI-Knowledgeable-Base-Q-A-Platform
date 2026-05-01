@@ -15,4 +15,7 @@ public class DocumentEmbeddingRequest {
     @Schema(description = "向量化模型名称，不传则使用默认本地向量模型", example = "local-hash-embedding-v1")
     @Size(max = 128, message = "embeddingModel不能超过128个字符")
     private String embeddingModel;
+
+    @Schema(description = "Whether to clear old embeddings and rebuild all chunks", example = "false")
+    private Boolean force = false;
 }

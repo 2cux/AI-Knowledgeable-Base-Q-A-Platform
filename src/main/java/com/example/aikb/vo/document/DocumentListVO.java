@@ -34,6 +34,21 @@ public class DocumentListVO {
     @Schema(description = "解析状态", example = "UPLOADED")
     private String parseStatus;
 
+    @Schema(description = "Chunk count", example = "12")
+    private Integer chunkCount;
+
+    @Schema(description = "Embedding status", example = "SUCCESS")
+    private String embeddingStatus;
+
+    @Schema(description = "Embedded chunk count", example = "12")
+    private Integer embeddedChunkCount;
+
+    @Schema(description = "Latest task status", example = "SUCCESS")
+    private String latestTaskStatus;
+
+    @Schema(description = "Latest error message")
+    private String latestErrorMessage;
+
     @Schema(description = "创建时间")
     private LocalDateTime createdAt;
 

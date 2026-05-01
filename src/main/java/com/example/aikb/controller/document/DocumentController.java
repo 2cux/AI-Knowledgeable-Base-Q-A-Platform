@@ -27,6 +27,7 @@ import jakarta.validation.constraints.Positive;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -73,6 +74,14 @@ public class DocumentController {
     public Result<DocumentDetailVO> getById(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
         return Result.success(documentService.getById(documentId));
+    }
+
+    @Operation(summary = "鍒犻櫎鏂囨。")
+    @DeleteMapping("/{documentId}")
+    public Result<Void> delete(
+            @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        documentService.delete(documentId);
+        return Result.success(null, "Document deleted successfully");
     }
 
     @Operation(summary = "查询文档状态概览")

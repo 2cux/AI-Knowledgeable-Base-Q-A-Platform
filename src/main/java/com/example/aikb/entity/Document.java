@@ -51,6 +51,30 @@ public class Document {
     @TableField("parse_status")
     private String parseStatus;
 
+    @Schema(description = "Embedding status", example = "NOT_STARTED")
+    @TableField("embedding_status")
+    private String embeddingStatus;
+
+    @Schema(description = "Chunk count", example = "12")
+    @TableField("chunk_count")
+    private Integer chunkCount;
+
+    @Schema(description = "Embedded chunk count", example = "10")
+    @TableField("embedded_chunk_count")
+    private Integer embeddedChunkCount;
+
+    @Schema(description = "Latest task type", example = "DOCUMENT_PROCESS")
+    @TableField("latest_task_type")
+    private String latestTaskType;
+
+    @Schema(description = "Latest task status", example = "SUCCESS")
+    @TableField("latest_task_status")
+    private String latestTaskStatus;
+
+    @Schema(description = "Latest error message")
+    @TableField("latest_error_message")
+    private String latestErrorMessage;
+
     /** 上传用户 ID。 */
     @Schema(description = "上传用户 ID", example = "1")
     @TableField("created_by")

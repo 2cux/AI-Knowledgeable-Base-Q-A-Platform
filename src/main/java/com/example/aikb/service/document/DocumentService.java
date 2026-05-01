@@ -25,6 +25,8 @@ public interface DocumentService {
 
     DocumentDetailVO getById(Long id);
 
+    void delete(Long id);
+
     DocumentStatusVO getStatus(Long id);
 
     Long createParseTask(Long id);

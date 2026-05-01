@@ -3,6 +3,7 @@ package com.example.aikb.service.document.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.aikb.dto.document.DocumentProcessRequest;
+import com.example.aikb.entity.ChunkEmbedding;
 import com.example.aikb.entity.Document;
 import com.example.aikb.entity.DocumentChunk;
 import com.example.aikb.entity.KnowledgeBase;
@@ -10,6 +11,7 @@ import com.example.aikb.entity.TaskRecord;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.DocumentChunkMapper;
 import com.example.aikb.mapper.DocumentMapper;
+import com.example.aikb.mapper.ChunkEmbeddingMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.security.CurrentUser;
@@ -31,12 +33,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class DocumentProcessServiceImpl implements DocumentProcessService {
 
-    private static final String PARSE_STATUS_CHUNKING = "CHUNKING";
-    private static final String PARSE_STATUS_CHUNKED = "CHUNKED";
+    private static final String PARSE_STATUS_PROCESSING = "PROCESSING";
+    private static final String PARSE_STATUS_SUCCESS = "SUCCESS";
+    private static final String PARSE_STATUS_FAILED = "FAILED";
+    private static final String LEGACY_PARSE_STATUS_CHUNKING = "CHUNKING";
+    private static final String LEGACY_PARSE_STATUS_CHUNKED = "CHUNKED";
+    private static final String LEGACY_PARSE_STATUS_DONE = "DONE";
+    private static final String EMBEDDING_STATUS_NOT_STARTED = "NOT_STARTED";
     private static final String TASK_STATUS_SUCCESS = "SUCCESS";
     private static final String TASK_TYPE_DOCUMENT_PROCESS = "DOCUMENT_PROCESS";
     private static final String TASK_TYPE_DOCUMENT_EMBEDDING = "DOCUMENT_EMBEDDING";
     private static final String TASK_STATUS_PROCESSING = "PROCESSING";
+    private static final String TASK_STATUS_FAILED = "FAILED";
     private static final String TASK_BIZ_TYPE_DOCUMENT = "DOCUMENT";
     private static final String MESSAGE_DOCUMENT_NOT_FOUND = "文档不存在或无权限访问";
     private static final String MESSAGE_DOCUMENT_PROCESSING = "文档正在处理中，请勿重复提交";
@@ -45,6 +53,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final DocumentChunkMapper documentChunkMapper;
+    private final ChunkEmbeddingMapper chunkEmbeddingMapper;
     private final TaskRecordMapper taskRecordMapper;
     private final SimpleDocumentParser simpleDocumentParser;
     private final TextSplitter textSplitter;
@@ -67,7 +76,19 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
 
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
-        validateProcessAllowed(document);
+        boolean force = Boolean.TRUE.equals(safeRequest.getForce());
+        if (!force && isProcessSuccess(document)) {
+            int chunkCount = Math.toIntExact(documentChunkMapper.selectCount(new LambdaQueryWrapper<DocumentChunk>()
+                    .eq(DocumentChunk::getDocumentId, document.getId())));
+            return DocumentProcessVO.builder()
+                    .documentId(document.getId())
+                    .knowledgeBaseId(document.getKnowledgeBaseId())
+                    .chunkCount(chunkCount)
+                    .parseStatus(PARSE_STATUS_SUCCESS)
+                    .taskStatus(TASK_STATUS_SUCCESS)
+                    .build();
+        }
+        validateProcessAllowed(document, force);
 
         TaskRecord taskRecord = taskRecordService.createDocumentProcessTask(document, userId);
         taskRecordService.markProcessing(taskRecord.getId());
@@ -83,6 +104,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
             return result;
         } catch (RuntimeException ex) {
             taskRecordService.markFailed(taskRecord.getId(), ex.getMessage());
+            markDocumentProcessFailed(document.getId(), ex.getMessage());
             throw ex;
         }
     }
@@ -95,7 +117,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         if (latestDocument == null) {
             throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
         }
-        validateLatestProcessState(latestDocument);
+        validateLatestProcessState(latestDocument, Boolean.TRUE.equals(safeRequest.getForce()));
 
         markDocumentChunking(latestDocument.getId());
         String text = simpleDocumentParser.parse(latestDocument, safeRequest.getTextContent());
@@ -105,13 +127,13 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         }
 
         rebuildChunks(latestDocument, chunks);
-        updateDocumentStatus(latestDocument.getId(), PARSE_STATUS_CHUNKED);
+        updateDocumentProcessSuccess(latestDocument.getId(), chunks.size());
 
         return DocumentProcessVO.builder()
                 .documentId(latestDocument.getId())
                 .knowledgeBaseId(latestDocument.getKnowledgeBaseId())
                 .chunkCount(chunks.size())
-                .parseStatus(PARSE_STATUS_CHUNKED)
+                .parseStatus(PARSE_STATUS_SUCCESS)
                 .taskId(taskId)
                 .build();
     }
@@ -158,6 +180,8 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
      * @param chunks 切片文本列表
      */
     private void rebuildChunks(Document document, List<String> chunks) {
+        chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
+                .eq(ChunkEmbedding::getDocumentId, document.getId()));
         documentChunkMapper.delete(new LambdaQueryWrapper<DocumentChunk>()
                 .eq(DocumentChunk::getDocumentId, document.getId()));
 
@@ -200,21 +224,28 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     /**
      * 创建处理任务前，先拦截已在处理或已处理完成的文档，避免重复提交。
      */
-    private void validateProcessAllowed(Document document) {
-        validateLatestProcessState(document);
+    private void validateProcessAllowed(Document document, boolean force) {
+        validateLatestProcessState(document, force);
         if (hasRunningDocumentTask(document.getId())) {
             throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
     }
 
-    private void validateLatestProcessState(Document document) {
+    private void validateLatestProcessState(Document document, boolean force) {
         String parseStatus = document.getParseStatus();
-        if (PARSE_STATUS_CHUNKING.equals(parseStatus)) {
+        if (PARSE_STATUS_PROCESSING.equals(parseStatus) || LEGACY_PARSE_STATUS_CHUNKING.equals(parseStatus)) {
             throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
-        if (PARSE_STATUS_CHUNKED.equals(parseStatus)) {
+        if (!force && isProcessSuccess(document)) {
             throw new BusinessException(MESSAGE_DOCUMENT_ALREADY_PROCESSED);
         }
+    }
+
+    private boolean isProcessSuccess(Document document) {
+        String parseStatus = document.getParseStatus();
+        return PARSE_STATUS_SUCCESS.equals(parseStatus)
+                || LEGACY_PARSE_STATUS_CHUNKED.equals(parseStatus)
+                || LEGACY_PARSE_STATUS_DONE.equals(parseStatus);
     }
 
     private boolean hasRunningDocumentTask(Long documentId) {
@@ -232,8 +263,11 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private void markDocumentChunking(Long documentId) {
         int rows = documentMapper.update(null, new LambdaUpdateWrapper<Document>()
                 .eq(Document::getId, documentId)
-                .ne(Document::getParseStatus, PARSE_STATUS_CHUNKING)
-                .set(Document::getParseStatus, PARSE_STATUS_CHUNKING));
+                .ne(Document::getParseStatus, PARSE_STATUS_PROCESSING)
+                .set(Document::getParseStatus, PARSE_STATUS_PROCESSING)
+                .set(Document::getLatestTaskType, TASK_TYPE_DOCUMENT_PROCESS)
+                .set(Document::getLatestTaskStatus, TASK_STATUS_PROCESSING)
+                .set(Document::getLatestErrorMessage, null));
         if (rows != 1) {
             throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
@@ -245,10 +279,26 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
      * @param documentId 文档 ID
      * @param parseStatus 解析状态
      */
-    private void updateDocumentStatus(Long documentId, String parseStatus) {
+    private void updateDocumentProcessSuccess(Long documentId, int chunkCount) {
         Document update = new Document();
         update.setId(documentId);
-        update.setParseStatus(parseStatus);
+        update.setParseStatus(PARSE_STATUS_SUCCESS);
+        update.setChunkCount(chunkCount);
+        update.setEmbeddingStatus(EMBEDDING_STATUS_NOT_STARTED);
+        update.setEmbeddedChunkCount(0);
+        update.setLatestTaskType(TASK_TYPE_DOCUMENT_PROCESS);
+        update.setLatestTaskStatus(TASK_STATUS_SUCCESS);
+        update.setLatestErrorMessage(null);
+        documentMapper.updateById(update);
+    }
+
+    private void markDocumentProcessFailed(Long documentId, String errorMessage) {
+        Document update = new Document();
+        update.setId(documentId);
+        update.setParseStatus(PARSE_STATUS_FAILED);
+        update.setLatestTaskType(TASK_TYPE_DOCUMENT_PROCESS);
+        update.setLatestTaskStatus(TASK_STATUS_FAILED);
+        update.setLatestErrorMessage(errorMessage);
         documentMapper.updateById(update);
     }
 

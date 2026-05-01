@@ -29,4 +29,7 @@ public class DocumentProcessRequest {
     @Schema(description = "调试兼容文本；有真实storagePath时服务端优先读取本地txt/md文件")
     @Size(max = 200000, message = "文本内容不能超过200000个字符")
     private String textContent;
+
+    @Schema(description = "Whether to rebuild chunks and clear old embeddings", example = "false")
+    private Boolean force = false;
 }

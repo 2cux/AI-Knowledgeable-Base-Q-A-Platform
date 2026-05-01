@@ -133,6 +133,20 @@ public class LocalDocumentStorage {
     }
 
     /**
+     * Delete a stored document by its database storage path, logging failures only.
+     */
+    public void deleteByStoragePathQuietly(String storagePath) {
+        if (!StringUtils.hasText(storagePath)) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(resolveStoredPath(storagePath));
+        } catch (RuntimeException | IOException ex) {
+            log.warn("Delete stored document failed, storagePath={}", storagePath, ex);
+        }
+    }
+
+    /**
      * 静默删除指定路径，用于保存失败或业务回滚时清理文件。
      */
     private void deletePathQuietly(Path path) {
