@@ -4,13 +4,14 @@ import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.service.chat.AnswerGenerationResult;
 import com.example.aikb.service.chat.AnswerGeneratorService;
+import com.example.aikb.service.llm.AnswerExtractResult;
+import com.example.aikb.service.llm.AnswerExtractor;
 import com.example.aikb.service.llm.LlmClient;
 import com.example.aikb.vo.retrieval.RetrievalChunkVO;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 /**
  * Real RAG answer generator based on retrieved chunks and LLM calls.
@@ -28,6 +29,7 @@ public class RagAnswerGeneratorServiceImpl implements AnswerGeneratorService {
 
     private final RagPromptBuilder ragPromptBuilder;
     private final LlmClient llmClient;
+    private final AnswerExtractor answerExtractor;
 
     @Override
     public AnswerGenerationResult generate(String question, List<RetrievalChunkVO> chunks,
@@ -37,14 +39,15 @@ public class RagAnswerGeneratorServiceImpl implements AnswerGeneratorService {
         }
 
         try {
-            String answer = llmClient.chat(ragPromptBuilder.build(question, chunks, historyRecords));
-            if (!StringUtils.hasText(answer)) {
-                log.warn("LLM answer generation returned empty answer, questionLength={}, chunkCount={}",
-                        question == null ? 0 : question.length(), chunks.size());
+            String rawResponse = llmClient.chat(ragPromptBuilder.build(question, chunks, historyRecords));
+            AnswerExtractResult extractResult = answerExtractor.extract(rawResponse);
+            if (!extractResult.isSuccess()) {
+                log.warn("LLM answer extraction failed, questionLength={}, chunkCount={}, failureReason={}",
+                        question == null ? 0 : question.length(), chunks.size(), extractResult.getFailureReason());
                 return unavailable();
             }
             return AnswerGenerationResult.builder()
-                    .answer(answer.trim())
+                    .answer(extractResult.getAnswer())
                     .llmAvailable(true)
                     .build();
         } catch (BusinessException ex) {
