@@ -1,6 +1,7 @@
 package com.example.aikb.service.chat.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
@@ -38,22 +39,26 @@ public class ConversationServiceImpl implements ConversationService {
         if (conversationId == null || conversationId.isBlank()) {
             return create(userId, knowledgeBaseId, question);
         }
-        Conversation conversation = getByUid(conversationId.trim());
-        validateOwnerAndKnowledgeBase(conversation, userId, knowledgeBaseId);
+        Conversation conversation = getByUidForUser(conversationId.trim(), userId);
+        validateKnowledgeBase(conversation, knowledgeBaseId);
         return conversation;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void touchAfterAsk(String conversationUid, String question, String answer, int appendedMessageCount) {
-        Conversation conversation = getByUid(conversationUid);
-        conversation.setMessageCount((conversation.getMessageCount() == null ? 0 : conversation.getMessageCount())
-                + appendedMessageCount);
-        conversation.setLastQuestion(question);
-        conversation.setLastAnswerPreview(preview(answer));
-        conversation.setLastActiveAt(LocalDateTime.now());
-        conversation.setUpdatedAt(LocalDateTime.now());
-        conversationMapper.updateById(conversation);
+        LocalDateTime now = LocalDateTime.now();
+        int updated = conversationMapper.update(null, new LambdaUpdateWrapper<Conversation>()
+                .eq(Conversation::getConversationUid, conversationUid)
+                .eq(Conversation::getDeleted, false)
+                .setSql("message_count = message_count + " + appendedMessageCount)
+                .set(Conversation::getLastQuestion, question)
+                .set(Conversation::getLastAnswerPreview, preview(answer))
+                .set(Conversation::getLastActiveAt, now)
+                .set(Conversation::getUpdatedAt, now));
+        if (updated == 0) {
+            throw new BusinessException(40400, "会话不存在");
+        }
     }
 
     @Override
@@ -80,10 +85,7 @@ public class ConversationServiceImpl implements ConversationService {
     @Override
     public ConversationDetailVO getCurrentUserDetail(String conversationId) {
         Long userId = CurrentUser.getUserId();
-        Conversation conversation = getByUid(conversationId);
-        if (!userId.equals(conversation.getUserId())) {
-            throw new BusinessException(40300, "无权访问当前会话");
-        }
+        Conversation conversation = getByUidForUser(conversationId, userId);
         List<MessageVO> messages = messageService
                 .listByConversation(conversation.getConversationUid(), userId, conversation.getKnowledgeBaseId())
                 .stream()
@@ -115,12 +117,13 @@ public class ConversationServiceImpl implements ConversationService {
         return conversation;
     }
 
-    private Conversation getByUid(String conversationId) {
+    private Conversation getByUidForUser(String conversationId, Long userId) {
         if (conversationId == null || conversationId.isBlank()) {
             throw new BusinessException(40001, "conversationId不能为空");
         }
         Conversation conversation = conversationMapper.selectOne(new LambdaQueryWrapper<Conversation>()
                 .eq(Conversation::getConversationUid, conversationId.trim())
+                .eq(Conversation::getUserId, userId)
                 .eq(Conversation::getDeleted, false)
                 .last("LIMIT 1"));
         if (conversation == null) {
@@ -129,10 +132,7 @@ public class ConversationServiceImpl implements ConversationService {
         return conversation;
     }
 
-    private void validateOwnerAndKnowledgeBase(Conversation conversation, Long userId, Long knowledgeBaseId) {
-        if (!userId.equals(conversation.getUserId())) {
-            throw new BusinessException(40300, "无权访问当前会话");
-        }
+    private void validateKnowledgeBase(Conversation conversation, Long knowledgeBaseId) {
         if (!knowledgeBaseId.equals(conversation.getKnowledgeBaseId())) {
             throw new BusinessException(40001, "conversationId与knowledgeBaseId不一致");
         }

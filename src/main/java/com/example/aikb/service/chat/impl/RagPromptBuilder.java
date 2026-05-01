@@ -19,10 +19,10 @@ public class RagPromptBuilder {
         messages.add(LlmMessage.builder()
                 .role("system")
                 .content("""
-                        You are an enterprise knowledge-base Q&A assistant.
-                        Answer primarily from the provided knowledge-base chunks.
-                        If the chunks do not support an answer, say that the current knowledge base has insufficient information.
-                        Keep the answer concise and prefer Chinese when the user asks in Chinese.
+                        你是企业 AI 知识库问答助手。
+                        必须优先依据用户提供的知识库片段回答。
+                        如果知识库片段不足以回答问题，请明确说明当前知识库资料不足，不要编造。
+                        回答要简洁、清晰，并尽量使用中文。
                         """)
                 .build());
         messages.add(LlmMessage.builder()
@@ -36,9 +36,9 @@ public class RagPromptBuilder {
         StringBuilder prompt = new StringBuilder();
         appendHistory(prompt, conversationContext);
         appendChunks(prompt, chunks);
-        prompt.append("\nUser question:\n").append(question).append("\n\n");
-        prompt.append("Please answer based on the knowledge-base chunks above. ");
-        prompt.append("If the chunks cannot support the answer, clearly say you do not know.");
+        prompt.append("\n用户问题：\n").append(question).append("\n\n");
+        prompt.append("请基于以上知识库片段回答。");
+        prompt.append("如果片段无法支持答案，请明确说明不知道。");
         return prompt.toString();
     }
 
@@ -50,16 +50,16 @@ public class RagPromptBuilder {
     }
 
     private void appendChunks(StringBuilder prompt, List<RetrievalChunkVO> chunks) {
-        prompt.append("Knowledge-base chunks:\n");
+        prompt.append("知识库片段：\n");
         for (int i = 0; i < chunks.size(); i++) {
             RetrievalChunkVO chunk = chunks.get(i);
             prompt.append("[Source ")
                     .append(i + 1)
-                    .append("] document: ")
-                    .append(chunk.getDocumentName() == null ? "unknown" : chunk.getDocumentName())
-                    .append(", chunkIndex: ")
+                    .append("] 文档：")
+                    .append(chunk.getDocumentName() == null ? "未知文档" : chunk.getDocumentName())
+                    .append("，chunkIndex：")
                     .append(chunk.getChunkIndex())
-                    .append(", score: ")
+                    .append("，score：")
                     .append(chunk.getScore())
                     .append("\n")
                     .append(shorten(chunk.getContent(), MAX_CHUNK_TEXT_LENGTH))

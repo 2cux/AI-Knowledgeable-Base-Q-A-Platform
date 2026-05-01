@@ -29,7 +29,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Chat ask service for retrieval, answer generation and conversation persistence.
@@ -60,9 +60,9 @@ public class ChatServiceImpl implements ChatService {
     private final ConversationService conversationService;
     private final MessageService messageService;
     private final ConversationContextLoader conversationContextLoader;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public ChatAskResponse ask(ChatAskRequest request) {
         Long userId = CurrentUser.getUserId();
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
@@ -178,25 +178,28 @@ public class ChatServiceImpl implements ChatService {
     private ChatRecord persistAskResult(Long userId, Long knowledgeBaseId, String conversationId, String question,
             String answer, AnswerStatus answerStatus, boolean matched, int retrievedChunkCount,
             int rawRetrievedChunkCount, int topK, List<CitationVO> citations) {
-        ChatRecord record = new ChatRecord();
-        record.setUserId(userId);
-        record.setKnowledgeBaseId(knowledgeBaseId);
-        record.setConversationId(conversationId);
-        record.setQuestion(question);
-        record.setAnswer(answer);
-        record.setAnswerStatus(answerStatus);
-        record.setMatched(matched);
-        record.setRetrievedChunkCount(retrievedChunkCount);
-        record.setRawRetrievedChunkCount(rawRetrievedChunkCount);
-        record.setTopK(topK);
-        record.setCitationsJson(citationJsonCodec.serialize(citations));
-        record.setCreatedAt(LocalDateTime.now());
-        chatRecordService.save(record);
+        return transactionTemplate.execute(status -> {
+            ChatRecord record = new ChatRecord();
+            record.setUserId(userId);
+            record.setKnowledgeBaseId(knowledgeBaseId);
+            record.setConversationId(conversationId);
+            record.setQuestion(question);
+            record.setAnswer(answer);
+            record.setAnswerStatus(answerStatus);
+            record.setMatched(matched);
+            record.setRetrievedChunkCount(retrievedChunkCount);
+            record.setRawRetrievedChunkCount(rawRetrievedChunkCount);
+            record.setTopK(topK);
+            record.setCitationsJson(citationJsonCodec.serialize(citations));
+            record.setCreatedAt(LocalDateTime.now());
+            chatRecordService.save(record);
 
-        messageService.saveUserMessage(userId, knowledgeBaseId, conversationId, question);
-        messageService.saveAssistantMessage(userId, knowledgeBaseId, conversationId, answer, citations, record.getId());
-        conversationService.touchAfterAsk(conversationId, question, answer, 2);
-        return record;
+            messageService.saveUserMessage(userId, knowledgeBaseId, conversationId, question);
+            messageService.saveAssistantMessage(userId, knowledgeBaseId, conversationId, answer, citations,
+                    record.getId());
+            conversationService.touchAfterAsk(conversationId, question, answer, 2);
+            return record;
+        });
     }
 
     private ChatAskResponse buildResponse(String conversationId, Long chatRecordId, String answer,

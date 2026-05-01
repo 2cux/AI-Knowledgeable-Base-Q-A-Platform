@@ -39,6 +39,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class ChatServiceImplTest {
@@ -67,6 +69,9 @@ class ChatServiceImplTest {
     @Mock
     private ConversationContextLoader conversationContextLoader;
 
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     private ChatServiceImpl chatService;
 
     @BeforeEach
@@ -75,7 +80,8 @@ class ChatServiceImplTest {
         retrievalProperties.setTopK(5);
         chatService = new ChatServiceImpl(knowledgeBaseMapper, retrievalService,
                 answerGeneratorService, chatRecordService, new CitationJsonCodec(new ObjectMapper()),
-                retrievalProperties, conversationService, messageService, conversationContextLoader);
+                retrievalProperties, conversationService, messageService, conversationContextLoader,
+                transactionTemplate);
 
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new LoginUser(USER_ID, "tester"), null, Collections.emptyList()));
@@ -91,6 +97,10 @@ class ChatServiceImplTest {
         });
         lenient().when(conversationService.resolveForAsk(any(), any(), any(), any())).thenReturn(conversation());
         lenient().when(conversationContextLoader.load(any(), any(), any())).thenReturn("");
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
     }
 
     @AfterEach
