@@ -1,0 +1,41 @@
+CREATE TABLE IF NOT EXISTS `conversation` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+    `conversation_uid` VARCHAR(64) NOT NULL COMMENT 'Business conversation ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `knowledge_base_id` BIGINT NOT NULL COMMENT 'Knowledge base ID',
+    `title` VARCHAR(100) NOT NULL COMMENT 'Conversation title',
+    `message_count` INT NOT NULL DEFAULT 0 COMMENT 'Message count',
+    `last_question` TEXT DEFAULT NULL COMMENT 'Last user question',
+    `last_answer_preview` VARCHAR(300) DEFAULT NULL COMMENT 'Last assistant answer preview',
+    `last_active_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Last active time',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+    `deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Logical delete flag',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_conversation_uid` (`conversation_uid`),
+    KEY `idx_conversation_user_kb_active` (`user_id`, `knowledge_base_id`, `last_active_at`),
+    CONSTRAINT `fk_conversation_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`),
+    CONSTRAINT `fk_conversation_kb_id` FOREIGN KEY (`knowledge_base_id`) REFERENCES `knowledge_base` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Conversation table';
+
+CREATE TABLE IF NOT EXISTS `message` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+    `message_uid` VARCHAR(64) NOT NULL COMMENT 'Business message ID',
+    `conversation_uid` VARCHAR(64) NOT NULL COMMENT 'Business conversation ID',
+    `user_id` BIGINT NOT NULL COMMENT 'User ID',
+    `knowledge_base_id` BIGINT NOT NULL COMMENT 'Knowledge base ID',
+    `role` VARCHAR(20) NOT NULL COMMENT 'USER or ASSISTANT',
+    `content` MEDIUMTEXT NOT NULL COMMENT 'Message content',
+    `citations` TEXT DEFAULT NULL COMMENT 'Answer citations JSON',
+    `chat_record_id` BIGINT DEFAULT NULL COMMENT 'Related chat_record.id',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+    `deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Logical delete flag',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_message_uid` (`message_uid`),
+    KEY `idx_message_conversation_created` (`conversation_uid`, `created_at`),
+    KEY `idx_message_chat_record_id` (`chat_record_id`),
+    KEY `idx_message_user_kb_conversation` (`user_id`, `knowledge_base_id`, `conversation_uid`),
+    CONSTRAINT `fk_message_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`),
+    CONSTRAINT `fk_message_kb_id` FOREIGN KEY (`knowledge_base_id`) REFERENCES `knowledge_base` (`id`),
+    CONSTRAINT `fk_message_chat_record_id` FOREIGN KEY (`chat_record_id`) REFERENCES `chat_record` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Conversation message table';

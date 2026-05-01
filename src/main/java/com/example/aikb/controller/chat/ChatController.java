@@ -1,17 +1,27 @@
 package com.example.aikb.controller.chat;
 
+import com.example.aikb.common.PageResult;
 import com.example.aikb.common.Result;
 import com.example.aikb.dto.chat.ChatAskRequest;
 import com.example.aikb.service.chat.ChatService;
+import com.example.aikb.service.chat.ConversationService;
 import com.example.aikb.vo.chat.ChatAskResponse;
+import com.example.aikb.vo.chat.ConversationDetailVO;
+import com.example.aikb.vo.chat.ConversationListItemVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Validated
@@ -22,10 +32,28 @@ import org.springframework.web.bind.annotation.RestController;
 public class ChatController {
 
     private final ChatService chatService;
+    private final ConversationService conversationService;
 
     @Operation(summary = "发起提问", description = "检索相关切片，生成答案，并保存问答记录")
     @PostMapping("/ask")
     public Result<ChatAskResponse> ask(@Valid @RequestBody ChatAskRequest request) {
         return Result.success(chatService.ask(request));
+    }
+
+    @Operation(summary = "分页查询会话列表", description = "分页查询当前登录用户自己的会话")
+    @GetMapping("/conversations")
+    public Result<PageResult<ConversationListItemVO>> conversations(
+            @RequestParam(required = false) @Positive(message = "knowledgeBaseId必须大于0") Long knowledgeBaseId,
+            @RequestParam(defaultValue = "1") @Min(value = 1, message = "page不能小于1") long page,
+            @RequestParam(defaultValue = "10")
+            @Min(value = 1, message = "size不能小于1")
+            @Max(value = 100, message = "size不能大于100") long size) {
+        return Result.success(conversationService.pageCurrentUser(knowledgeBaseId, page, size));
+    }
+
+    @Operation(summary = "查询会话详情", description = "查询当前登录用户自己的指定会话及消息")
+    @GetMapping("/conversations/{conversationId}")
+    public Result<ConversationDetailVO> conversationDetail(@PathVariable String conversationId) {
+        return Result.success(conversationService.getCurrentUserDetail(conversationId));
     }
 }

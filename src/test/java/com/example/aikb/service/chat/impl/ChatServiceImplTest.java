@@ -13,13 +13,16 @@ import com.example.aikb.dto.chat.ChatAskRequest;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.exception.BusinessException;
-import com.example.aikb.mapper.ChatRecordMapper;
+import com.example.aikb.entity.Conversation;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.security.LoginUser;
 import com.example.aikb.service.chat.AnswerGenerationResult;
 import com.example.aikb.service.chat.AnswerGeneratorService;
 import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.service.chat.ChatRecordService;
+import com.example.aikb.service.chat.ConversationContextLoader;
+import com.example.aikb.service.chat.ConversationService;
+import com.example.aikb.service.chat.MessageService;
 import com.example.aikb.service.retrieval.RetrievalService;
 import com.example.aikb.vo.chat.ChatAskResponse;
 import com.example.aikb.vo.retrieval.RetrievalChunkVO;
@@ -47,9 +50,6 @@ class ChatServiceImplTest {
     private KnowledgeBaseMapper knowledgeBaseMapper;
 
     @Mock
-    private ChatRecordMapper chatRecordMapper;
-
-    @Mock
     private RetrievalService retrievalService;
 
     @Mock
@@ -58,15 +58,24 @@ class ChatServiceImplTest {
     @Mock
     private ChatRecordService chatRecordService;
 
+    @Mock
+    private ConversationService conversationService;
+
+    @Mock
+    private MessageService messageService;
+
+    @Mock
+    private ConversationContextLoader conversationContextLoader;
+
     private ChatServiceImpl chatService;
 
     @BeforeEach
     void setUp() {
         AppRagRetrievalProperties retrievalProperties = new AppRagRetrievalProperties();
         retrievalProperties.setTopK(5);
-        chatService = new ChatServiceImpl(knowledgeBaseMapper, chatRecordMapper, retrievalService,
+        chatService = new ChatServiceImpl(knowledgeBaseMapper, retrievalService,
                 answerGeneratorService, chatRecordService, new CitationJsonCodec(new ObjectMapper()),
-                retrievalProperties);
+                retrievalProperties, conversationService, messageService, conversationContextLoader);
 
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new LoginUser(USER_ID, "tester"), null, Collections.emptyList()));
@@ -75,8 +84,13 @@ class ChatServiceImplTest {
         knowledgeBase.setOwnerId(USER_ID);
         knowledgeBase.setStatus(1);
         lenient().when(knowledgeBaseMapper.selectOne(any())).thenReturn(knowledgeBase);
-        lenient().when(chatRecordMapper.selectList(any())).thenReturn(Collections.emptyList());
-        lenient().when(chatRecordService.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(chatRecordService.save(any())).thenAnswer(invocation -> {
+            ChatRecord record = invocation.getArgument(0);
+            record.setId(99L);
+            return record;
+        });
+        lenient().when(conversationService.resolveForAsk(any(), any(), any(), any())).thenReturn(conversation());
+        lenient().when(conversationContextLoader.load(any(), any(), any())).thenReturn("");
     }
 
     @AfterEach
@@ -174,11 +188,12 @@ class ChatServiceImplTest {
     }
 
     @Test
-    void askLoadsOnlySuccessfulHistoryForExistingConversation() {
+    void askLoadsConversationContextForExistingConversation() {
         ChatAskRequest request = request();
         request.setConversationId("conversation-1");
         RetrievalChunkVO chunk = chunk(0.9D);
-        when(chatRecordMapper.selectCount(any())).thenReturn(1L);
+        lenient().when(conversationService.resolveForAsk(any(), any(), any(), any())).thenReturn(conversation("conversation-1"));
+        when(conversationContextLoader.load(any(), any(), any())).thenReturn("context text");
         when(retrievalService.search(any())).thenReturn(retrievalResult(List.of(chunk), List.of(chunk)));
         when(answerGeneratorService.generate(any(), any(), any())).thenReturn(AnswerGenerationResult.builder()
                 .answer("answer")
@@ -187,10 +202,10 @@ class ChatServiceImplTest {
 
         chatService.ask(request);
 
-        ArgumentCaptor<List<ChatRecord>> historyCaptor = ArgumentCaptor.forClass(List.class);
-        verify(answerGeneratorService).generate(any(), any(), historyCaptor.capture());
-        assertThat(historyCaptor.getValue()).isEmpty();
-        verify(chatRecordMapper).selectCount(any());
+        ArgumentCaptor<String> contextCaptor = ArgumentCaptor.forClass(String.class);
+        verify(answerGeneratorService).generate(any(), any(), contextCaptor.capture());
+        assertThat(contextCaptor.getValue()).isEqualTo("context text");
+        verify(conversationContextLoader).load(USER_ID, KNOWLEDGE_BASE_ID, "conversation-1");
     }
 
     @Test
@@ -212,6 +227,18 @@ class ChatServiceImplTest {
         assertThat(captor.getValue().getTopK()).isEqualTo(5);
         assertThat(captor.getValue().getRawRetrievedChunkCount()).isEqualTo(rawRetrievedChunkCount);
         assertThat(captor.getValue().getCitationsJson()).contains(citationsJsonFragment);
+    }
+
+    private Conversation conversation() {
+        return conversation("conversation-1");
+    }
+
+    private Conversation conversation(String conversationUid) {
+        Conversation conversation = new Conversation();
+        conversation.setConversationUid(conversationUid);
+        conversation.setUserId(USER_ID);
+        conversation.setKnowledgeBaseId(KNOWLEDGE_BASE_ID);
+        return conversation;
     }
 
     private ChatAskRequest request() {

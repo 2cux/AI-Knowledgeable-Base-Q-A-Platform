@@ -14,6 +14,9 @@ public class ChatAskResponse {
     @Schema(description = "Conversation ID", example = "550e8400-e29b-41d4-a716-446655440000")
     private String conversationId;
 
+    @Schema(description = "Chat record primary key", example = "1001")
+    private Long chatRecordId;
+
     @Schema(description = "Generated answer")
     private String answer;
 

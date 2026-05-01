@@ -30,7 +30,7 @@ class RagAnswerGeneratorServiceImplTest {
     void shouldReturnExtractedAnswerFromRawLlmResponse() {
         when(llmClient.chat(anyList())).thenReturn("{\"answer\":\"  extracted answer  \"}");
 
-        AnswerGenerationResult result = service.generate("question", List.of(chunk()), List.of());
+        AnswerGenerationResult result = service.generate("question", List.of(chunk()), "");
 
         assertThat(result.isLlmAvailable()).isTrue();
         assertThat(result.getAnswer()).isEqualTo("extracted answer");
@@ -40,7 +40,7 @@ class RagAnswerGeneratorServiceImplTest {
     void shouldFallbackWhenAnswerExtractionFails() {
         when(llmClient.chat(anyList())).thenReturn("{\"answer\":\"   \"}");
 
-        AnswerGenerationResult result = service.generate("question", List.of(chunk()), List.of());
+        AnswerGenerationResult result = service.generate("question", List.of(chunk()), "");
 
         assertThat(result.isLlmAvailable()).isFalse();
         assertThat(result.getAnswer()).contains("LLM");

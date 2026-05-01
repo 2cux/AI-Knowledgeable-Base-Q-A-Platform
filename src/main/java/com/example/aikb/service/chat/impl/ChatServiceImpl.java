@@ -5,9 +5,9 @@ import com.example.aikb.config.AppRagRetrievalProperties;
 import com.example.aikb.dto.chat.ChatAskRequest;
 import com.example.aikb.dto.retrieval.RetrievalSearchRequest;
 import com.example.aikb.entity.ChatRecord;
+import com.example.aikb.entity.Conversation;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.exception.BusinessException;
-import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.chat.AnswerGenerationResult;
@@ -15,29 +15,30 @@ import com.example.aikb.service.chat.AnswerGeneratorService;
 import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.service.chat.ChatRecordService;
 import com.example.aikb.service.chat.ChatService;
+import com.example.aikb.service.chat.ConversationContextLoader;
+import com.example.aikb.service.chat.ConversationService;
+import com.example.aikb.service.chat.MessageService;
 import com.example.aikb.service.retrieval.RetrievalService;
 import com.example.aikb.vo.chat.ChatAskResponse;
 import com.example.aikb.vo.chat.CitationVO;
 import com.example.aikb.vo.retrieval.RetrievalChunkVO;
 import com.example.aikb.vo.retrieval.RetrievalSearchVO;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Chat ask service for retrieval, answer generation and chat record persistence.
+ * Chat ask service for retrieval, answer generation and conversation persistence.
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
 
-    private static final int HISTORY_LIMIT = 5;
     private static final String NO_HIT_ANSWER =
             "\u672a\u68c0\u7d22\u5230\u76f8\u5173\u77e5\u8bc6\u7247\u6bb5\uff0c"
                     + "\u65e0\u6cd5\u57fa\u4e8e\u5f53\u524d\u77e5\u8bc6\u5e93"
@@ -51,23 +52,26 @@ public class ChatServiceImpl implements ChatService {
                     + "\u751f\u6210\u53ef\u9760\u56de\u7b54\u3002\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002";
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
-    private final ChatRecordMapper chatRecordMapper;
     private final RetrievalService retrievalService;
     private final AnswerGeneratorService answerGeneratorService;
     private final ChatRecordService chatRecordService;
     private final CitationJsonCodec citationJsonCodec;
     private final AppRagRetrievalProperties retrievalProperties;
+    private final ConversationService conversationService;
+    private final MessageService messageService;
+    private final ConversationContextLoader conversationContextLoader;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ChatAskResponse ask(ChatAskRequest request) {
         Long userId = CurrentUser.getUserId();
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
         String question = request.getQuestion().trim();
         int topK = request.getTopK() == null ? retrievalProperties.getTopK() : request.getTopK();
-        boolean hasConversationId = request.getConversationId() != null;
-        String conversationId = resolveConversationId(request.getConversationId());
-        List<ChatRecord> historyRecords = loadHistoryRecords(userId, knowledgeBase.getId(), conversationId,
-                hasConversationId);
+        Conversation conversation = conversationService.resolveForAsk(userId, knowledgeBase.getId(),
+                request.getConversationId(), question);
+        String conversationId = conversation.getConversationUid();
+        String conversationContext = conversationContextLoader.load(userId, knowledgeBase.getId(), conversationId);
 
         RetrievalSearchRequest retrievalRequest = new RetrievalSearchRequest();
         retrievalRequest.setKnowledgeBaseId(knowledgeBase.getId());
@@ -97,33 +101,23 @@ public class ChatServiceImpl implements ChatService {
                 ? Collections.emptyList()
                 : retrievalResult.getEffectiveChunks();
 
-        AnswerResolution resolution = resolveAnswer(question, historyRecords, rawChunks, effectiveChunks);
+        AnswerResolution resolution = resolveAnswer(question, conversationContext, rawChunks, effectiveChunks);
         Double minEffectiveScore = retrievalResult == null ? null : retrievalResult.getMinEffectiveScore();
+        ChatRecord record = persistAskResult(userId, knowledgeBase.getId(), conversationId, question,
+                resolution.answer(), resolution.answerStatus(), resolution.matched(), effectiveChunks.size(),
+                rawChunks.size(), topK, resolution.citations());
 
-        saveRecord(userId, knowledgeBase.getId(), conversationId, question, resolution.answer(),
-                resolution.answerStatus(), resolution.matched(), effectiveChunks.size(), rawChunks.size(), topK,
+        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, chatRecordId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
+                userId, knowledgeBase.getId(), conversationId, record.getId(), question.length(), topK,
+                minEffectiveScore, rawChunks.size(), effectiveChunks.size(), resolution.matched(),
+                resolution.answerStatus(), resolution.llmCalled());
+
+        return buildResponse(conversationId, record.getId(), resolution.answer(), resolution.answerStatus(),
+                resolution.matched(), effectiveChunks.size(), rawChunks.size(), minEffectiveScore,
                 resolution.citations());
-
-        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
-                userId, knowledgeBase.getId(), conversationId, question.length(), topK,
-                retrievalResult == null ? null : retrievalResult.getMinEffectiveScore(),
-                rawChunks.size(), effectiveChunks.size(), resolution.matched(), resolution.answerStatus(),
-                resolution.llmCalled());
-
-        return ChatAskResponse.builder()
-                .conversationId(conversationId)
-                .answer(resolution.answer())
-                .answerStatus(resolution.answerStatus())
-                .matched(resolution.matched())
-                .retrievedChunkCount(effectiveChunks.size())
-                .rawRetrievedChunkCount(rawChunks.size())
-                .effectiveChunkCount(effectiveChunks.size())
-                .minEffectiveScore(minEffectiveScore)
-                .citations(resolution.citations())
-                .build();
     }
 
-    private AnswerResolution resolveAnswer(String question, List<ChatRecord> historyRecords,
+    private AnswerResolution resolveAnswer(String question, String conversationContext,
             List<RetrievalChunkVO> rawChunks, List<RetrievalChunkVO> effectiveChunks) {
         if (rawChunks.isEmpty()) {
             return new AnswerResolution(NO_HIT_ANSWER, AnswerStatus.NO_HIT, false, Collections.emptyList(), false);
@@ -133,7 +127,8 @@ public class ChatServiceImpl implements ChatService {
         }
 
         List<CitationVO> citations = effectiveChunks.stream().map(this::toCitation).toList();
-        AnswerGenerationResult answerResult = answerGeneratorService.generate(question, effectiveChunks, historyRecords);
+        AnswerGenerationResult answerResult = answerGeneratorService.generate(question, effectiveChunks,
+                conversationContext);
         AnswerStatus answerStatus = answerResult.isLlmAvailable()
                 ? AnswerStatus.SUCCESS
                 : AnswerStatus.LLM_UNAVAILABLE;
@@ -142,64 +137,18 @@ public class ChatServiceImpl implements ChatService {
 
     private ChatAskResponse retrievalUnavailable(Long userId, Long knowledgeBaseId, String conversationId,
             String question, int topK) {
-        saveRecord(userId, knowledgeBaseId, conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER,
-                AnswerStatus.RETRIEVAL_UNAVAILABLE, false, 0, 0, topK, Collections.emptyList());
-        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
-                userId, knowledgeBaseId, conversationId, question.length(), topK, null, 0, 0, false,
+        ChatRecord record = persistAskResult(userId, knowledgeBaseId, conversationId, question,
+                RETRIEVAL_UNAVAILABLE_ANSWER, AnswerStatus.RETRIEVAL_UNAVAILABLE, false, 0, 0, topK,
+                Collections.emptyList());
+        log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, chatRecordId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
+                userId, knowledgeBaseId, conversationId, record.getId(), question.length(), topK, null, 0, 0, false,
                 AnswerStatus.RETRIEVAL_UNAVAILABLE, false);
-        return ChatAskResponse.builder()
-                .conversationId(conversationId)
-                .answer(RETRIEVAL_UNAVAILABLE_ANSWER)
-                .answerStatus(AnswerStatus.RETRIEVAL_UNAVAILABLE)
-                .matched(false)
-                .retrievedChunkCount(0)
-                .rawRetrievedChunkCount(0)
-                .effectiveChunkCount(0)
-                .minEffectiveScore(null)
-                .citations(Collections.emptyList())
-                .build();
+        return buildResponse(conversationId, record.getId(), RETRIEVAL_UNAVAILABLE_ANSWER,
+                AnswerStatus.RETRIEVAL_UNAVAILABLE, false, 0, 0, null, Collections.emptyList());
     }
 
     private boolean isClientBusinessException(BusinessException ex) {
         return ex.getHttpStatus() >= 400 && ex.getHttpStatus() < 500;
-    }
-
-    private String resolveConversationId(String conversationId) {
-        if (conversationId == null) {
-            return UUID.randomUUID().toString();
-        }
-        String trimmed = conversationId.trim();
-        if (trimmed.isEmpty()) {
-            throw new BusinessException(40001, "conversationId\u4e0d\u80fd\u4e3a\u7a7a\u767d");
-        }
-        return trimmed;
-    }
-
-    private List<ChatRecord> loadHistoryRecords(Long userId, Long knowledgeBaseId, String conversationId,
-            boolean requireExistingConversation) {
-        List<ChatRecord> records = chatRecordMapper.selectList(new LambdaQueryWrapper<ChatRecord>()
-                .eq(ChatRecord::getUserId, userId)
-                .eq(ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
-                .eq(ChatRecord::getConversationId, conversationId)
-                .eq(ChatRecord::getAnswerStatus, AnswerStatus.SUCCESS)
-                .orderByDesc(ChatRecord::getCreatedAt)
-                .orderByDesc(ChatRecord::getId)
-                .last("LIMIT " + HISTORY_LIMIT));
-        if (requireExistingConversation && records.isEmpty()
-                && !conversationExists(userId, knowledgeBaseId, conversationId)) {
-            throw new BusinessException(40400, "\u4f1a\u8bdd\u4e0d\u5b58\u5728");
-        }
-        List<ChatRecord> orderedRecords = new ArrayList<>(records);
-        Collections.reverse(orderedRecords);
-        return orderedRecords;
-    }
-
-    private boolean conversationExists(Long userId, Long knowledgeBaseId, String conversationId) {
-        Long count = chatRecordMapper.selectCount(new LambdaQueryWrapper<ChatRecord>()
-                .eq(ChatRecord::getUserId, userId)
-                .eq(ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
-                .eq(ChatRecord::getConversationId, conversationId));
-        return count != null && count > 0;
     }
 
     private KnowledgeBase getOwnKnowledgeBase(Long knowledgeBaseId, Long userId) {
@@ -226,9 +175,9 @@ public class ChatServiceImpl implements ChatService {
                 .build();
     }
 
-    private void saveRecord(Long userId, Long knowledgeBaseId, String conversationId, String question, String answer,
-            AnswerStatus answerStatus, boolean matched, int retrievedChunkCount, int rawRetrievedChunkCount, int topK,
-            List<CitationVO> citations) {
+    private ChatRecord persistAskResult(Long userId, Long knowledgeBaseId, String conversationId, String question,
+            String answer, AnswerStatus answerStatus, boolean matched, int retrievedChunkCount,
+            int rawRetrievedChunkCount, int topK, List<CitationVO> citations) {
         ChatRecord record = new ChatRecord();
         record.setUserId(userId);
         record.setKnowledgeBaseId(knowledgeBaseId);
@@ -243,6 +192,28 @@ public class ChatServiceImpl implements ChatService {
         record.setCitationsJson(citationJsonCodec.serialize(citations));
         record.setCreatedAt(LocalDateTime.now());
         chatRecordService.save(record);
+
+        messageService.saveUserMessage(userId, knowledgeBaseId, conversationId, question);
+        messageService.saveAssistantMessage(userId, knowledgeBaseId, conversationId, answer, citations, record.getId());
+        conversationService.touchAfterAsk(conversationId, question, answer, 2);
+        return record;
+    }
+
+    private ChatAskResponse buildResponse(String conversationId, Long chatRecordId, String answer,
+            AnswerStatus answerStatus, boolean matched, int effectiveChunkCount, int rawChunkCount,
+            Double minEffectiveScore, List<CitationVO> citations) {
+        return ChatAskResponse.builder()
+                .conversationId(conversationId)
+                .chatRecordId(chatRecordId)
+                .answer(answer)
+                .answerStatus(answerStatus)
+                .matched(matched)
+                .retrievedChunkCount(effectiveChunkCount)
+                .rawRetrievedChunkCount(rawChunkCount)
+                .effectiveChunkCount(effectiveChunkCount)
+                .minEffectiveScore(minEffectiveScore)
+                .citations(citations)
+                .build();
     }
 
     private String shorten(String content, int maxLength) {

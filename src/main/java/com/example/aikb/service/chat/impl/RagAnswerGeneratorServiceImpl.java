@@ -1,6 +1,5 @@
 package com.example.aikb.service.chat.impl;
 
-import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.service.chat.AnswerGenerationResult;
 import com.example.aikb.service.chat.AnswerGeneratorService;
@@ -33,13 +32,13 @@ public class RagAnswerGeneratorServiceImpl implements AnswerGeneratorService {
 
     @Override
     public AnswerGenerationResult generate(String question, List<RetrievalChunkVO> chunks,
-            List<ChatRecord> historyRecords) {
+            String conversationContext) {
         if (chunks == null || chunks.isEmpty()) {
             return unavailable();
         }
 
         try {
-            String rawResponse = llmClient.chat(ragPromptBuilder.build(question, chunks, historyRecords));
+            String rawResponse = llmClient.chat(ragPromptBuilder.build(question, chunks, conversationContext));
             log.info("LLM raw response preview before extraction, questionLength={}, chunkCount={}, preview={}",
                     question == null ? 0 : question.length(), chunks.size(), preview(rawResponse));
             AnswerExtractResult extractResult = answerExtractor.extract(rawResponse);
