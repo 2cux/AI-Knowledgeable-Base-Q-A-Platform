@@ -1,0 +1,110 @@
+[
+  {
+    "caseId": "RAG-HIT-001",
+    "name": "明确命中：上传成功不等于解析完成",
+    "scenario": "HIT",
+    "question": "文档上传成功后，是否代表已经完成解析并可以立即问答？",
+    "expectedMatched": true,
+    "expectedMinRetrievedChunkCount": 1,
+    "expectedCitationRequired": true,
+    "expectedAnswerKeywords": ["上传成功", "不代表", "解析", "embedding"],
+    "unexpectedAnswerKeywords": ["一定可以立即问答", "无需等待"],
+    "notes": "验证文档生命周期基础语义，避免把上传成功误判为可检索。"
+  },
+  {
+    "caseId": "RAG-HIT-002",
+    "name": "明确命中：matched 语义",
+    "scenario": "HIT",
+    "question": "matched 字段表示什么？",
+    "expectedMatched": true,
+    "expectedMinRetrievedChunkCount": 1,
+    "expectedCitationRequired": true,
+    "expectedAnswerKeywords": ["有效命中", "可信", "证据", "不是 LLM"],
+    "unexpectedAnswerKeywords": ["只表示模型返回了文本"],
+    "notes": "验证 matched 表示检索证据是否足够可信，而不是 LLM 是否返回内容。"
+  },
+  {
+    "caseId": "RAG-MULTI-003",
+    "name": "多 chunk 命中：解析、切片、embedding 关系",
+    "scenario": "MULTI_CHUNK_HIT",
+    "question": "文档解析、切片和 embedding 之间是什么关系？",
+    "expectedMatched": true,
+    "expectedMinRetrievedChunkCount": 2,
+    "expectedCitationRequired": true,
+    "expectedAnswerKeywords": ["解析", "切片", "embedding", "向量检索"],
+    "unexpectedAnswerKeywords": ["三者没有关系"],
+    "notes": "验证多个相关 chunk 可以共同支撑答案。"
+  },
+  {
+    "caseId": "RAG-WEAK-004",
+    "name": "弱命中：证据不足时保守拒答",
+    "scenario": "WEAK_HIT",
+    "question": "如果只检索到一点相似内容，但证据不足，系统应该怎么处理？",
+    "expectedMatched": false,
+    "expectedMinRetrievedChunkCount": 0,
+    "expectedCitationRequired": false,
+    "expectedAnswerKeywords": ["WEAK_HIT", "证据不足", "保守", "拒答"],
+    "unexpectedAnswerKeywords": ["可以直接编造", "一定正确"],
+    "notes": "弱命中可能存在 raw 召回，但不应形成可信 matched。"
+  },
+  {
+    "caseId": "RAG-NOHIT-005",
+    "name": "无命中：完全无关业务问题",
+    "scenario": "NO_HIT",
+    "question": "平台是否支持用区块链智能合约自动发放工资？",
+    "expectedMatched": false,
+    "expectedMinRetrievedChunkCount": 0,
+    "expectedCitationRequired": false,
+    "expectedAnswerKeywords": ["未找到", "无法回答", "知识库"],
+    "unexpectedAnswerKeywords": ["支持", "智能合约", "自动发放工资"],
+    "notes": "验证完全无关问题不会被 RAG 主链路强行回答。"
+  },
+  {
+    "caseId": "RAG-OUT-006",
+    "name": "文档外问题：实时外部事实",
+    "scenario": "OUT_OF_SCOPE",
+    "question": "今天上海天气怎么样？",
+    "expectedMatched": false,
+    "expectedMinRetrievedChunkCount": 0,
+    "expectedCitationRequired": false,
+    "expectedAnswerKeywords": ["知识库", "无法回答", "未包含"],
+    "unexpectedAnswerKeywords": ["晴", "多云", "气温"],
+    "notes": "验证系统不会脱离知识库回答实时外部问题。"
+  },
+  {
+    "caseId": "RAG-CITE-007",
+    "name": "引用追溯：citations 字段",
+    "scenario": "CITATION_TRACE",
+    "question": "citations 在问答结果中有什么作用？",
+    "expectedMatched": true,
+    "expectedMinRetrievedChunkCount": 1,
+    "expectedCitationRequired": true,
+    "expectedAnswerKeywords": ["documentId", "chunkId", "chunkIndex", "score", "contentSnippet"],
+    "unexpectedAnswerKeywords": ["没有作用", "无需追溯"],
+    "notes": "验证 chat/ask、用户端详情、管理端详情中的引用追溯字段。"
+  },
+  {
+    "caseId": "RAG-EXTRACT-008",
+    "name": "AnswerExtractor：最终答案抽取",
+    "scenario": "ANSWER_EXTRACTOR",
+    "question": "AnswerExtractor 的职责是什么？",
+    "expectedMatched": true,
+    "expectedMinRetrievedChunkCount": 1,
+    "expectedCitationRequired": true,
+    "expectedAnswerKeywords": ["抽取", "最终答案", "真实 LLM", "可展示文本"],
+    "unexpectedAnswerKeywords": ["choices", "message", "raw JSON"],
+    "notes": "验证对真实 LLM 返回结构的兼容修复仍然有效。"
+  },
+  {
+    "caseId": "RAG-LLM-009",
+    "name": "LLM 不可用：命中后的降级响应",
+    "scenario": "LLM_UNAVAILABLE",
+    "question": "在 LLM 服务不可用时，命中文档后系统应该如何返回？",
+    "expectedMatched": true,
+    "expectedMinRetrievedChunkCount": 1,
+    "expectedCitationRequired": true,
+    "expectedAnswerKeywords": ["LLM_UNAVAILABLE", "降级", "模型不可用", "稍后重试"],
+    "unexpectedAnswerKeywords": ["正常生成成功", "无需处理"],
+    "notes": "需临时关闭或错误配置 LLM 服务。检索命中可保留，但回答必须明确降级。"
+  }
+]
