@@ -14,6 +14,7 @@ import com.example.aikb.mapper.ChunkEmbeddingMapper;
 import com.example.aikb.mapper.DocumentChunkMapper;
 import com.example.aikb.mapper.DocumentMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
+import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.example.aikb.service.embedding.EmbeddingClient;
@@ -56,12 +57,18 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     private static final String DOCUMENT_STATUS_SUCCESS = "SUCCESS";
     private static final String DOCUMENT_STATUS_FAILED = "FAILED";
     private static final String DOCUMENT_STATUS_PARTIAL = "PARTIAL_SUCCESS";
+    private static final String PARSE_STATUS_SUCCESS = "SUCCESS";
+    private static final String LEGACY_PARSE_STATUS_CHUNKED = "CHUNKED";
+    private static final String LEGACY_PARSE_STATUS_DONE = "DONE";
+    private static final String TASK_BIZ_TYPE_DOCUMENT = "DOCUMENT";
+    private static final String TASK_TYPE_DOCUMENT_PROCESS = "DOCUMENT_PROCESS";
     private static final String TASK_TYPE_DOCUMENT_EMBEDDING = "DOCUMENT_EMBEDDING";
 
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final DocumentChunkMapper documentChunkMapper;
     private final ChunkEmbeddingMapper chunkEmbeddingMapper;
+    private final TaskRecordMapper taskRecordMapper;
     private final EmbeddingClient embeddingClient;
     private final TaskRecordService taskRecordService;
     private final ObjectMapper objectMapper;
@@ -79,14 +86,18 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     public DocumentEmbeddingVO embedDocument(Long documentId, DocumentEmbeddingRequest request) {
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
+        validateEmbeddingAllowed(document);
         TaskRecord taskRecord = taskRecordService.createDocumentEmbeddingTask(document, userId);
         taskRecordService.markProcessing(taskRecord.getId());
 
         try {
             return doEmbedDocument(document, request, taskRecord.getId());
         } catch (RuntimeException ex) {
-            taskRecordService.markFailed(taskRecord.getId(), ex.getMessage());
-            updateDocumentEmbeddingFailed(document.getId(), ex.getMessage());
+            String safeError = truncateError(ex.getMessage());
+            taskRecordService.markFailed(taskRecord.getId(), safeError);
+            if (!"文档正在处理中，请勿重复提交".equals(safeError)) {
+                updateDocumentEmbeddingFailed(document.getId(), safeError);
+            }
             throw ex;
         }
     }
@@ -257,6 +268,30 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .toList();
     }
 
+    private void validateEmbeddingAllowed(Document document) {
+        if (!isParseSuccess(document)) {
+            throw new BusinessException("文档尚未解析切片成功，不能生成 embedding");
+        }
+        if (DOCUMENT_STATUS_PROCESSING.equals(document.getEmbeddingStatus())) {
+            throw new BusinessException("文档正在处理中，请勿重复提交");
+        }
+        Long count = taskRecordMapper.selectCount(new LambdaQueryWrapper<TaskRecord>()
+                .eq(TaskRecord::getBizType, TASK_BIZ_TYPE_DOCUMENT)
+                .eq(TaskRecord::getBizId, document.getId())
+                .eq(TaskRecord::getStatus, STATUS_PROCESSING)
+                .in(TaskRecord::getTaskType, TASK_TYPE_DOCUMENT_PROCESS, TASK_TYPE_DOCUMENT_EMBEDDING));
+        if (count != null && count > 0) {
+            throw new BusinessException("文档正在处理中，请勿重复提交");
+        }
+    }
+
+    private boolean isParseSuccess(Document document) {
+        String parseStatus = document.getParseStatus();
+        return PARSE_STATUS_SUCCESS.equals(parseStatus)
+                || LEGACY_PARSE_STATUS_CHUNKED.equals(parseStatus)
+                || LEGACY_PARSE_STATUS_DONE.equals(parseStatus);
+    }
+
     private List<DocumentChunk> filterChunksWithoutSuccessfulEmbedding(List<DocumentChunk> chunks) {
         List<Long> chunkIds = chunks.stream().map(DocumentChunk::getId).toList();
         if (chunkIds.isEmpty()) {
@@ -286,13 +321,17 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     }
 
     private void updateDocumentEmbeddingProcessing(Long documentId) {
-        Document update = new Document();
-        update.setId(documentId);
-        update.setEmbeddingStatus(DOCUMENT_STATUS_PROCESSING);
-        update.setLatestTaskType(TASK_TYPE_DOCUMENT_EMBEDDING);
-        update.setLatestTaskStatus(STATUS_PROCESSING);
-        update.setLatestErrorMessage(null);
-        documentMapper.updateById(update);
+        int rows = documentMapper.update(null, new LambdaUpdateWrapper<Document>()
+                .eq(Document::getId, documentId)
+                .ne(Document::getParseStatus, DOCUMENT_STATUS_PROCESSING)
+                .ne(Document::getEmbeddingStatus, DOCUMENT_STATUS_PROCESSING)
+                .set(Document::getEmbeddingStatus, DOCUMENT_STATUS_PROCESSING)
+                .set(Document::getLatestTaskType, TASK_TYPE_DOCUMENT_EMBEDDING)
+                .set(Document::getLatestTaskStatus, STATUS_PROCESSING)
+                .set(Document::getLatestErrorMessage, null));
+        if (rows != 1) {
+            throw new BusinessException("文档正在处理中，请勿重复提交");
+        }
     }
 
     private void updateDocumentEmbeddingFinished(Long documentId, int totalChunkCount, int embeddedCount, int failedCount) {
@@ -511,7 +550,8 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
      * @return 可安全入库的错误信息
      */
     private String truncateError(String errorMessage) {
-        String error = errorMessage == null ? "向量化失败" : errorMessage;
+        String error = StringUtils.hasText(errorMessage) ? errorMessage.trim() : "向量化失败";
+        error = error.replaceAll("(?i)api[_-]?key\\s*[:=]\\s*\\S+", "apiKey=***");
         if (error.length() <= MAX_ERROR_MESSAGE_LENGTH) {
             return error;
         }

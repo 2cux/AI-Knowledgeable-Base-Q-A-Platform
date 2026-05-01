@@ -56,6 +56,7 @@ public class DocumentServiceImpl implements DocumentService {
     private static final String EMBEDDING_STATUS_SUCCESS = "SUCCESS";
     private static final String EMBEDDING_STATUS_FAILED = "FAILED";
     private static final String EMBEDDING_STATUS_NOT_STARTED = "NOT_STARTED";
+    private static final String EMBEDDING_STATUS_PROCESSING = "PROCESSING";
     private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
     private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("pdf", "doc", "docx", "txt", "md");
 
@@ -421,8 +422,17 @@ public class DocumentServiceImpl implements DocumentService {
 
     private boolean canReembed(Document document, int chunkCount) {
         return chunkCount > 0
+                && isParseSuccess(document)
                 && !PARSE_STATUS_PROCESSING.equals(document.getParseStatus())
-                && !"CHUNKING".equals(document.getParseStatus());
+                && !"CHUNKING".equals(document.getParseStatus())
+                && !EMBEDDING_STATUS_PROCESSING.equals(document.getEmbeddingStatus());
+    }
+
+    private boolean isParseSuccess(Document document) {
+        String parseStatus = document.getParseStatus();
+        return PARSE_STATUS_SUCCESS.equals(parseStatus)
+                || "CHUNKED".equals(parseStatus)
+                || "DONE".equals(parseStatus);
     }
 
     private record DocumentLifecycleStats(
@@ -432,12 +442,14 @@ public class DocumentServiceImpl implements DocumentService {
             String embeddingStatus) {
     }
 
+    private int zeroIfNull(Integer value) {
+        return value == null ? 0 : value;
+    }
+
     /**
      * 将文档实体转换为列表展示对象。
      */
     private DocumentListVO toListVO(Document document) {
-        DocumentLifecycleStats stats = calculateStats(document);
-        TaskRecord latestTask = findLatestStatusTask(document.getId());
         return DocumentListVO.builder()
                 .id(document.getId())
                 .documentId(document.getId())
@@ -446,11 +458,12 @@ public class DocumentServiceImpl implements DocumentService {
                 .fileType(document.getFileType())
                 .fileSize(document.getFileSize())
                 .parseStatus(document.getParseStatus())
-                .chunkCount(stats.chunkCount())
-                .embeddingStatus(stats.embeddingStatus())
-                .embeddedChunkCount(stats.embeddingSuccessCount())
-                .latestTaskStatus(latestTask == null ? document.getLatestTaskStatus() : latestTask.getStatus())
-                .latestErrorMessage(resolveLatestError(document, latestTask))
+                .chunkCount(zeroIfNull(document.getChunkCount()))
+                .embeddingStatus(document.getEmbeddingStatus() == null
+                        ? EMBEDDING_STATUS_NOT_STARTED : document.getEmbeddingStatus())
+                .embeddedChunkCount(zeroIfNull(document.getEmbeddedChunkCount()))
+                .latestTaskStatus(document.getLatestTaskStatus())
+                .latestErrorMessage(document.getLatestErrorMessage())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
                 .build();

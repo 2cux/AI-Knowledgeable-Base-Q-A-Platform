@@ -25,6 +25,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 
 /**
  * 文档处理服务实现类，负责将文档纯文本切片并写入 document_chunk 表。
@@ -40,12 +41,14 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private static final String LEGACY_PARSE_STATUS_CHUNKED = "CHUNKED";
     private static final String LEGACY_PARSE_STATUS_DONE = "DONE";
     private static final String EMBEDDING_STATUS_NOT_STARTED = "NOT_STARTED";
+    private static final String EMBEDDING_STATUS_PROCESSING = "PROCESSING";
     private static final String TASK_STATUS_SUCCESS = "SUCCESS";
     private static final String TASK_TYPE_DOCUMENT_PROCESS = "DOCUMENT_PROCESS";
     private static final String TASK_TYPE_DOCUMENT_EMBEDDING = "DOCUMENT_EMBEDDING";
     private static final String TASK_STATUS_PROCESSING = "PROCESSING";
     private static final String TASK_STATUS_FAILED = "FAILED";
     private static final String TASK_BIZ_TYPE_DOCUMENT = "DOCUMENT";
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
     private static final String MESSAGE_DOCUMENT_NOT_FOUND = "文档不存在或无权限访问";
     private static final String MESSAGE_DOCUMENT_PROCESSING = "文档正在处理中，请勿重复提交";
     private static final String MESSAGE_DOCUMENT_ALREADY_PROCESSED = "文档已处理完成，请勿重复处理";
@@ -103,8 +106,11 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
             result.setTaskStatus(TASK_STATUS_SUCCESS);
             return result;
         } catch (RuntimeException ex) {
-            taskRecordService.markFailed(taskRecord.getId(), ex.getMessage());
-            markDocumentProcessFailed(document.getId(), ex.getMessage());
+            String safeError = lifecycleError(ex.getMessage());
+            taskRecordService.markFailed(taskRecord.getId(), safeError);
+            if (!MESSAGE_DOCUMENT_PROCESSING.equals(safeError)) {
+                markDocumentProcessFailed(document.getId(), safeError);
+            }
             throw ex;
         }
     }
@@ -264,6 +270,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         int rows = documentMapper.update(null, new LambdaUpdateWrapper<Document>()
                 .eq(Document::getId, documentId)
                 .ne(Document::getParseStatus, PARSE_STATUS_PROCESSING)
+                .ne(Document::getEmbeddingStatus, EMBEDDING_STATUS_PROCESSING)
                 .set(Document::getParseStatus, PARSE_STATUS_PROCESSING)
                 .set(Document::getLatestTaskType, TASK_TYPE_DOCUMENT_PROCESS)
                 .set(Document::getLatestTaskStatus, TASK_STATUS_PROCESSING)
@@ -300,6 +307,15 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         update.setLatestTaskStatus(TASK_STATUS_FAILED);
         update.setLatestErrorMessage(errorMessage);
         documentMapper.updateById(update);
+    }
+
+    private String lifecycleError(String errorMessage) {
+        String message = StringUtils.hasText(errorMessage) ? errorMessage.trim() : "文档处理失败";
+        message = message.replaceAll("(?i)api[_-]?key\\s*[:=]\\s*\\S+", "apiKey=***");
+        if (message.length() <= MAX_ERROR_MESSAGE_LENGTH) {
+            return message;
+        }
+        return message.substring(0, MAX_ERROR_MESSAGE_LENGTH);
     }
 
     /**
