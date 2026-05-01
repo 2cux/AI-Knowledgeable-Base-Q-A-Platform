@@ -8,6 +8,7 @@ public enum AnswerExtractFailureReason {
     EMPTY_RESPONSE,
     INVALID_JSON,
     MISSING_ANSWER_FIELD,
+    MISSING_CONTENT,
     EMPTY_ANSWER,
     UNSUPPORTED_STRUCTURE
 }

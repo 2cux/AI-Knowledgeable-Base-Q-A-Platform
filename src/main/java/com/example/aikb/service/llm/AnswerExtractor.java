@@ -14,6 +14,14 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AnswerExtractor {
 
+    private static final String FIELD_ANSWER = "answer";
+    private static final String FIELD_CHOICES = "choices";
+    private static final String FIELD_CONTENT = "content";
+    private static final String FIELD_MESSAGE = "message";
+    private static final String FIELD_OUTPUT = "output";
+    private static final String FIELD_OUTPUT_TEXT = "output_text";
+    private static final String FIELD_TEXT = "text";
+
     private final ObjectMapper objectMapper;
 
     public AnswerExtractResult extract(String rawResponse) {
@@ -30,6 +38,9 @@ public class AnswerExtractor {
         try {
             root = objectMapper.readTree(trimmedResponse);
         } catch (JsonProcessingException ex) {
+            if (!looksLikeStructuredJson(trimmedResponse)) {
+                return AnswerExtractResult.success(trimmedResponse);
+            }
             return AnswerExtractResult.failure(AnswerExtractFailureReason.INVALID_JSON);
         }
 
@@ -51,7 +62,7 @@ public class AnswerExtractor {
             return answerFieldResult;
         }
 
-        AnswerExtractResult outputTextResult = extractTextField(root, "output_text");
+        AnswerExtractResult outputTextResult = extractTextField(root, FIELD_OUTPUT_TEXT);
         if (outputTextResult != null) {
             return outputTextResult;
         }
@@ -70,10 +81,10 @@ public class AnswerExtractor {
     }
 
     private AnswerExtractResult extractAnswerField(JsonNode root) {
-        if (!root.has("answer")) {
+        if (!root.has(FIELD_ANSWER)) {
             return null;
         }
-        return answerResult(root.path("answer").asText(null), AnswerExtractFailureReason.EMPTY_ANSWER);
+        return answerResult(root.path(FIELD_ANSWER).asText(null), AnswerExtractFailureReason.EMPTY_ANSWER);
     }
 
     private AnswerExtractResult extractTextField(JsonNode root, String fieldName) {
@@ -84,28 +95,28 @@ public class AnswerExtractor {
     }
 
     private AnswerExtractResult extractChatCompletionContent(JsonNode root) {
-        JsonNode choices = root.path("choices");
+        JsonNode choices = root.path(FIELD_CHOICES);
         if (!choices.isArray() || choices.isEmpty()) {
             return null;
         }
 
-        JsonNode content = choices.path(0).path("message").path("content");
+        JsonNode content = choices.path(0).path(FIELD_MESSAGE).path(FIELD_CONTENT);
         if (content.isMissingNode()) {
-            return AnswerExtractResult.failure(AnswerExtractFailureReason.UNSUPPORTED_STRUCTURE);
+            return AnswerExtractResult.failure(AnswerExtractFailureReason.MISSING_CONTENT);
         }
         return answerResult(textFromContent(content), AnswerExtractFailureReason.EMPTY_ANSWER);
     }
 
     private AnswerExtractResult extractResponsesOutput(JsonNode root) {
-        JsonNode output = root.path("output");
+        JsonNode output = root.path(FIELD_OUTPUT);
         if (!output.isArray() || output.isEmpty()) {
             return null;
         }
 
         StringBuilder text = new StringBuilder();
         for (JsonNode outputItem : output) {
-            appendContentText(outputItem.path("content"), text);
-            appendText(outputItem.path("text"), text);
+            appendContentText(outputItem.path(FIELD_CONTENT), text);
+            appendText(outputItem.path(FIELD_TEXT), text);
         }
         return answerResult(text.toString(), AnswerExtractFailureReason.EMPTY_ANSWER);
     }
@@ -116,8 +127,8 @@ public class AnswerExtractor {
         }
         if (content.isArray()) {
             for (JsonNode contentItem : content) {
-                appendText(contentItem.path("text"), text);
-                appendText(contentItem.path("content"), text);
+                appendText(contentItem.path(FIELD_TEXT), text);
+                appendText(contentItem.path(FIELD_CONTENT), text);
             }
             return;
         }
@@ -144,8 +155,8 @@ public class AnswerExtractor {
         if (content.isArray()) {
             StringBuilder text = new StringBuilder();
             for (JsonNode item : content) {
-                appendText(item.path("text"), text);
-                appendText(item.path("content"), text);
+                appendText(item.path(FIELD_TEXT), text);
+                appendText(item.path(FIELD_CONTENT), text);
             }
             return text.toString();
         }
@@ -162,5 +173,37 @@ public class AnswerExtractor {
     private boolean looksLikeJson(String value) {
         return value.startsWith("{") || value.startsWith("[") || value.startsWith("\"")
                 || "null".equals(value);
+    }
+
+    private boolean looksLikeStructuredJson(String value) {
+        if (value.startsWith("\"") || "null".equals(value)) {
+            return true;
+        }
+        if (value.startsWith("{")) {
+            return isNextJsonStructuralCharacter(value, 1, '"', '}');
+        }
+        if (value.startsWith("[")) {
+            return isNextJsonStructuralCharacter(value, 1, '"', '{', '[', ']', 't', 'f', 'n', '-', '0', '1', '2',
+                    '3', '4', '5', '6', '7', '8', '9');
+        }
+        return false;
+    }
+
+    private boolean isNextJsonStructuralCharacter(String value, int startIndex, char... expectedCharacters) {
+        int index = startIndex;
+        while (index < value.length() && Character.isWhitespace(value.charAt(index))) {
+            index++;
+        }
+        if (index >= value.length()) {
+            return true;
+        }
+
+        char nextCharacter = value.charAt(index);
+        for (char expectedCharacter : expectedCharacters) {
+            if (nextCharacter == expectedCharacter) {
+                return true;
+            }
+        }
+        return false;
     }
 }

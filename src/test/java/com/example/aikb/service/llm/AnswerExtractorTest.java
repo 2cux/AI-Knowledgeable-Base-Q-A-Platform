@@ -24,11 +24,35 @@ class AnswerExtractorTest {
     }
 
     @Test
+    void shouldExtractChinesePlainText() {
+        AnswerExtractResult result = answerExtractor.extract("  这是一个中文答案。  ");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAnswer()).isEqualTo("这是一个中文答案。");
+    }
+
+    @Test
+    void shouldTreatJsonLikePlainTextAsPlainTextWhenItIsNotStructuredJson() {
+        AnswerExtractResult result = answerExtractor.extract("  [结论] 这是答案  ");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAnswer()).isEqualTo("[结论] 这是答案");
+    }
+
+    @Test
     void shouldExtractAnswerFieldFromJson() {
         AnswerExtractResult result = answerExtractor.extract("{\"answer\":\"  json answer  \"}");
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAnswer()).isEqualTo("json answer");
+    }
+
+    @Test
+    void shouldExtractNonStringAnswerFieldAsText() {
+        AnswerExtractResult result = answerExtractor.extract("{\"answer\":123}");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAnswer()).isEqualTo("123");
     }
 
     @Test
@@ -57,6 +81,30 @@ class AnswerExtractorTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAnswer()).isEqualTo("chat completion answer");
+    }
+
+    @Test
+    void shouldReturnMissingAnswerFieldForEmptyChoices() {
+        AnswerExtractResult result = answerExtractor.extract("{\"choices\":[]}");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getFailureReason()).isEqualTo(AnswerExtractFailureReason.MISSING_ANSWER_FIELD);
+    }
+
+    @Test
+    void shouldReturnMissingContentForMissingChatCompletionMessage() {
+        AnswerExtractResult result = answerExtractor.extract("{\"choices\":[{}]}");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getFailureReason()).isEqualTo(AnswerExtractFailureReason.MISSING_CONTENT);
+    }
+
+    @Test
+    void shouldReturnEmptyAnswerForBlankChatCompletionContent() {
+        AnswerExtractResult result = answerExtractor.extract("{\"choices\":[{\"message\":{\"content\":\"   \"}}]}");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getFailureReason()).isEqualTo(AnswerExtractFailureReason.EMPTY_ANSWER);
     }
 
     @Test
@@ -113,6 +161,14 @@ class AnswerExtractorTest {
     @Test
     void shouldReturnEmptyResponseForBlankInput() {
         AnswerExtractResult result = answerExtractor.extract("   ");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getFailureReason()).isEqualTo(AnswerExtractFailureReason.EMPTY_RESPONSE);
+    }
+
+    @Test
+    void shouldReturnEmptyResponseForNullInput() {
+        AnswerExtractResult result = answerExtractor.extract(null);
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getFailureReason()).isEqualTo(AnswerExtractFailureReason.EMPTY_RESPONSE);
