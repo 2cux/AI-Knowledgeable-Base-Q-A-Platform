@@ -3,6 +3,7 @@ package com.example.aikb.vo.chat;
 import com.example.aikb.service.chat.AnswerStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,6 +17,9 @@ public class ChatRecordDetailVO {
 
     @Schema(description = "Knowledge base ID", example = "1")
     private Long knowledgeBaseId;
+
+    @Schema(description = "Conversation ID")
+    private String conversationId;
 
     @Schema(description = "Question")
     private String question;
@@ -31,6 +35,12 @@ public class ChatRecordDetailVO {
 
     @Schema(description = "Effective chunk count", example = "3")
     private Integer retrievedChunkCount;
+
+    @Schema(description = "Requested retrieval topK", example = "5")
+    private Integer topK;
+
+    @Schema(description = "Answer citations, empty when no effective evidence exists")
+    private List<CitationVO> citations;
 
     @Schema(description = "Created time")
     private LocalDateTime createdAt;

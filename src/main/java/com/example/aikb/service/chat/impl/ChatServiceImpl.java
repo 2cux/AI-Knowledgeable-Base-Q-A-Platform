@@ -20,8 +20,6 @@ import com.example.aikb.vo.chat.ChatAskResponse;
 import com.example.aikb.vo.chat.CitationVO;
 import com.example.aikb.vo.retrieval.RetrievalChunkVO;
 import com.example.aikb.vo.retrieval.RetrievalSearchVO;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -57,7 +55,7 @@ public class ChatServiceImpl implements ChatService {
     private final RetrievalService retrievalService;
     private final AnswerGeneratorService answerGeneratorService;
     private final ChatRecordService chatRecordService;
-    private final ObjectMapper objectMapper;
+    private final CitationJsonCodec citationJsonCodec;
     private final AppRagRetrievalProperties retrievalProperties;
 
     @Override
@@ -100,7 +98,8 @@ public class ChatServiceImpl implements ChatService {
         Double minEffectiveScore = retrievalResult == null ? null : retrievalResult.getMinEffectiveScore();
 
         saveRecord(userId, knowledgeBase.getId(), conversationId, question, resolution.answer(),
-                resolution.answerStatus(), resolution.matched(), effectiveChunks.size(), topK, resolution.citations());
+                resolution.answerStatus(), resolution.matched(), effectiveChunks.size(), rawChunks.size(), topK,
+                resolution.citations());
 
         log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
                 userId, knowledgeBase.getId(), conversationId, question.length(), topK,
@@ -141,7 +140,7 @@ public class ChatServiceImpl implements ChatService {
     private ChatAskResponse retrievalUnavailable(Long userId, Long knowledgeBaseId, String conversationId,
             String question, int topK) {
         saveRecord(userId, knowledgeBaseId, conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER,
-                AnswerStatus.RETRIEVAL_UNAVAILABLE, false, 0, topK, Collections.emptyList());
+                AnswerStatus.RETRIEVAL_UNAVAILABLE, false, 0, 0, topK, Collections.emptyList());
         log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
                 userId, knowledgeBaseId, conversationId, question.length(), topK, null, 0, 0, false,
                 AnswerStatus.RETRIEVAL_UNAVAILABLE, false);
@@ -221,7 +220,8 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private void saveRecord(Long userId, Long knowledgeBaseId, String conversationId, String question, String answer,
-            AnswerStatus answerStatus, boolean matched, int retrievedChunkCount, int topK, List<CitationVO> citations) {
+            AnswerStatus answerStatus, boolean matched, int retrievedChunkCount, int rawRetrievedChunkCount, int topK,
+            List<CitationVO> citations) {
         ChatRecord record = new ChatRecord();
         record.setUserId(userId);
         record.setKnowledgeBaseId(knowledgeBaseId);
@@ -231,18 +231,11 @@ public class ChatServiceImpl implements ChatService {
         record.setAnswerStatus(answerStatus);
         record.setMatched(matched);
         record.setRetrievedChunkCount(retrievedChunkCount);
+        record.setRawRetrievedChunkCount(rawRetrievedChunkCount);
         record.setTopK(topK);
-        record.setCitationsJson(toJson(citations));
+        record.setCitationsJson(citationJsonCodec.serialize(citations));
         record.setCreatedAt(LocalDateTime.now());
         chatRecordService.save(record);
-    }
-
-    private String toJson(List<CitationVO> citations) {
-        try {
-            return objectMapper.writeValueAsString(citations);
-        } catch (JsonProcessingException ex) {
-            throw new BusinessException(50001, "\u5f15\u7528\u6765\u6e90\u5e8f\u5217\u5316\u5931\u8d25");
-        }
     }
 
     private String shorten(String content, int maxLength) {

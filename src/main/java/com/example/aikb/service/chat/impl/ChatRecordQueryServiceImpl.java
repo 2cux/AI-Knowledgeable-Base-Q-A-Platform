@@ -25,6 +25,7 @@ public class ChatRecordQueryServiceImpl implements ChatRecordQueryService {
     private static final int ANSWER_PREVIEW_LENGTH = 120;
 
     private final ChatRecordMapper chatRecordMapper;
+    private final CitationJsonCodec citationJsonCodec;
 
     @Override
     public PageResult<ChatRecordListItemVO> page(Long knowledgeBaseId, long pageNum, long pageSize) {
@@ -80,11 +81,14 @@ public class ChatRecordQueryServiceImpl implements ChatRecordQueryService {
         return ChatRecordDetailVO.builder()
                 .id(record.getId())
                 .knowledgeBaseId(record.getKnowledgeBaseId())
+                .conversationId(record.getConversationId())
                 .question(record.getQuestion())
                 .answer(record.getAnswer())
                 .answerStatus(record.getAnswerStatus())
                 .matched(record.getMatched())
                 .retrievedChunkCount(record.getRetrievedChunkCount())
+                .topK(record.getTopK())
+                .citations(citationJsonCodec.deserialize(record.getCitationsJson(), record.getId()))
                 .createdAt(record.getCreatedAt())
                 .build();
     }

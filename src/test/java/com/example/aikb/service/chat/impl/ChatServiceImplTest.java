@@ -63,7 +63,8 @@ class ChatServiceImplTest {
         AppRagRetrievalProperties retrievalProperties = new AppRagRetrievalProperties();
         retrievalProperties.setTopK(5);
         chatService = new ChatServiceImpl(knowledgeBaseMapper, chatRecordMapper, retrievalService,
-                answerGeneratorService, chatRecordService, new ObjectMapper(), retrievalProperties);
+                answerGeneratorService, chatRecordService, new CitationJsonCodec(new ObjectMapper()),
+                retrievalProperties);
 
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new LoginUser(USER_ID, "tester"), null, Collections.emptyList()));
@@ -184,6 +185,9 @@ class ChatServiceImplTest {
         verify(chatRecordService).save(captor.capture());
         assertThat(captor.getValue().getAnswerStatus()).isEqualTo(answerStatus);
         assertThat(captor.getValue().getMatched()).isEqualTo(matched);
+        assertThat(captor.getValue().getTopK()).isEqualTo(5);
+        assertThat(captor.getValue().getRawRetrievedChunkCount()).isNotNull();
+        assertThat(captor.getValue().getCitationsJson()).isNotNull();
     }
 
     private ChatAskRequest request() {

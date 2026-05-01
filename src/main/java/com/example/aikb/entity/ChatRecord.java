@@ -40,14 +40,26 @@ public class ChatRecord {
     private Boolean matched;
 
     /**
-     * Stores effectiveChunkCount. Raw retrieved count is not persisted in this schema.
+     * Effective chunk count after retrieval quality filtering.
      */
     @TableField("retrieved_chunk_count")
     private Integer retrievedChunkCount;
 
+    /**
+     * Raw vector retrieval count before effective-score filtering.
+     */
+    @TableField("raw_retrieved_chunk_count")
+    private Integer rawRetrievedChunkCount;
+
+    /**
+     * Requested retrieval topK for this ask.
+     */
     @TableField("top_k")
     private Integer topK;
 
+    /**
+     * Serialized answer citations used for detail traceability.
+     */
     @TableField("citations_json")
     private String citationsJson;
 

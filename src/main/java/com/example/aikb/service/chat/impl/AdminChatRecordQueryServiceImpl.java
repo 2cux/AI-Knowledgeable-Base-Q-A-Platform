@@ -26,6 +26,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
 
     private final ChatRecordMapper chatRecordMapper;
     private final AdminPermissionService adminPermissionService;
+    private final CitationJsonCodec citationJsonCodec;
 
     @Override
     public PageResult<AdminChatRecordListItemVO> page(Long knowledgeBaseId, Boolean matched, long pageNum,
@@ -81,6 +82,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     private AdminChatRecordDetailVO toDetailVO(ChatRecord record) {
         return AdminChatRecordDetailVO.builder()
                 .id(record.getId())
+                .userId(record.getUserId())
                 .knowledgeBaseId(record.getKnowledgeBaseId())
                 .conversationId(record.getConversationId())
                 .question(record.getQuestion())
@@ -88,6 +90,9 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .answerStatus(record.getAnswerStatus())
                 .matched(record.getMatched())
                 .retrievedChunkCount(record.getRetrievedChunkCount())
+                .rawRetrievedChunkCount(record.getRawRetrievedChunkCount())
+                .topK(record.getTopK())
+                .citations(citationJsonCodec.deserialize(record.getCitationsJson(), record.getId()))
                 .createdAt(record.getCreatedAt())
                 .build();
     }
