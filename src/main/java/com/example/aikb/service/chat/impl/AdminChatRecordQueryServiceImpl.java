@@ -55,6 +55,9 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
 
     @Override
     public AdminChatRecordDetailVO getById(Long id) {
+        if (id == null || id <= 0) {
+            throw new BusinessException(40001, "问答记录ID必须大于0");
+        }
         adminPermissionService.ensureAdmin();
 
         ChatRecord record = chatRecordMapper.selectOne(new LambdaQueryWrapper<ChatRecord>()
