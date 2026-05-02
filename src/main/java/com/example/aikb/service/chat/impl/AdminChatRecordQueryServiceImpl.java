@@ -1,6 +1,7 @@
 package com.example.aikb.service.chat.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
@@ -72,13 +73,15 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
         long pageNum = normalizePageNum(page);
         long pageSize = normalizePageSize(size);
         Page<ChatRecord> pageRequest = Page.of(pageNum, pageSize);
-        IPage<ChatRecord> result = chatRecordMapper.selectPage(pageRequest, new LambdaQueryWrapper<ChatRecord>()
-                .eq(ChatRecord::getMatched, false)
-                .eq(knowledgeBaseId != null, ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
-                .ge(startTime != null, ChatRecord::getCreatedAt, startTime)
-                .le(endTime != null, ChatRecord::getCreatedAt, endTime)
-                .orderByDesc(ChatRecord::getCreatedAt)
-                .orderByDesc(ChatRecord::getId));
+        IPage<ChatRecord> result = chatRecordMapper.selectPage(pageRequest, new QueryWrapper<ChatRecord>()
+                .select("id", "user_id", "knowledge_base_id", "conversation_id", "question", "answer",
+                        "matched", "retrieved_chunk_count", "top_k", "created_at")
+                .eq("matched", false)
+                .eq(knowledgeBaseId != null, "knowledge_base_id", knowledgeBaseId)
+                .ge(startTime != null, "created_at", startTime)
+                .le(endTime != null, "created_at", endTime)
+                .orderByDesc("created_at")
+                .orderByDesc("id"));
 
         List<AdminMissedQuestionVO> list = result.getRecords()
                 .stream()
