@@ -195,12 +195,45 @@ class AdminChatRecordQueryServiceImplTest {
         Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 100);
         when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
 
-        service.pageFeedback(11L, "like", null, null, 2L, 200L);
+        service.pageFeedback(11L, " like ", null, null, 2L, 200L);
 
         ArgumentCaptor<Page<AdminChatFeedbackQueryRow>> pageCaptor = ArgumentCaptor.forClass(Page.class);
-        verify(chatFeedbackMapper).selectAdminFeedbackPage(pageCaptor.capture(), any(), any(), any(), any());
+        ArgumentCaptor<String> feedbackTypeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(chatFeedbackMapper).selectAdminFeedbackPage(pageCaptor.capture(), any(), feedbackTypeCaptor.capture(),
+                any(), any());
         assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2);
         assertThat(pageCaptor.getValue().getSize()).isEqualTo(100);
+        assertThat(feedbackTypeCaptor.getValue()).isEqualTo("LIKE");
+    }
+
+    @Test
+    void pageFeedbackReturnsEmptyListWhenNoFeedbackExists() {
+        Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 10);
+        mapperPage.setRecords(List.of());
+        mapperPage.setTotal(0);
+        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
+
+        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null);
+
+        assertThat(result.getPageNum()).isEqualTo(1);
+        assertThat(result.getPageSize()).isEqualTo(10);
+        assertThat(result.getTotal()).isZero();
+        assertThat(result.getList()).isEmpty();
+    }
+
+    @Test
+    void pageFeedbackReturnsEmptyAnswerPreviewWhenAnswerIsNull() {
+        AdminChatFeedbackQueryRow row = feedbackRow();
+        row.setAnswer(null);
+        Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 10);
+        mapperPage.setRecords(List.of(row));
+        mapperPage.setTotal(1);
+        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
+
+        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null);
+
+        assertThat(result.getList()).hasSize(1);
+        assertThat(result.getList().get(0).getAnswerPreview()).isEmpty();
     }
 
     @Test
