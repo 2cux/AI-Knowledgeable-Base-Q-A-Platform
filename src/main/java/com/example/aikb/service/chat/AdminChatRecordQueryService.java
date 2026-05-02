@@ -4,8 +4,11 @@ import com.example.aikb.common.PageResult;
 import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
+import com.example.aikb.vo.chat.AdminChatStatsVO;
+import com.example.aikb.vo.chat.AdminHotQuestionVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 管理端问答日志查询服务。
@@ -28,6 +31,17 @@ public interface AdminChatRecordQueryService {
      */
     PageResult<AdminChatFeedbackVO> pageFeedback(Long knowledgeBaseId, String rating, LocalDateTime startTime,
             LocalDateTime endTime, Long page, Long size);
+
+    /**
+     * Query TopN hot questions for admin operation.
+     */
+    List<AdminHotQuestionVO> listHotQuestions(Long knowledgeBaseId, LocalDateTime startTime,
+            LocalDateTime endTime, Integer limit);
+
+    /**
+     * Query basic chat statistics for admin operation.
+     */
+    AdminChatStatsVO getStats(Long knowledgeBaseId, LocalDateTime startTime, LocalDateTime endTime);
 
     /**
      * 查询单条问答日志详情。

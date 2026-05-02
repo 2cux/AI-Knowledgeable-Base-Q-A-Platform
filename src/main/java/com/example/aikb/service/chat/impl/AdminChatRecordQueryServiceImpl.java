@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
 import com.example.aikb.dto.chat.AdminChatFeedbackQueryRow;
+import com.example.aikb.dto.chat.AdminChatStatsCountRow;
+import com.example.aikb.dto.chat.AdminFeedbackStatsRow;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatFeedbackMapper;
@@ -15,7 +17,12 @@ import com.example.aikb.service.chat.AdminChatRecordQueryService;
 import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
+import com.example.aikb.vo.chat.AdminChatStatsVO;
+import com.example.aikb.vo.chat.AdminHotQuestionVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -33,6 +40,8 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     private static final long DEFAULT_PAGE_NUM = 1L;
     private static final long DEFAULT_PAGE_SIZE = 10L;
     private static final long MAX_PAGE_SIZE = 100L;
+    private static final int DEFAULT_HOT_QUESTION_LIMIT = 10;
+    private static final int MAX_HOT_QUESTION_LIMIT = 50;
     private static final Set<String> SUPPORTED_FEEDBACK_TYPES = Set.of("LIKE", "DISLIKE");
 
     private final ChatRecordMapper chatRecordMapper;
@@ -106,12 +115,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     public PageResult<AdminChatFeedbackVO> pageFeedback(Long knowledgeBaseId, String rating, LocalDateTime startTime,
             LocalDateTime endTime, Long page, Long size) {
         adminPermissionService.ensureAdmin();
-        if (knowledgeBaseId != null && knowledgeBaseId <= 0) {
-            throw new BusinessException(40001, "knowledgeBaseId must be greater than 0");
-        }
-        if (startTime != null && endTime != null && startTime.isAfter(endTime)) {
-            throw new BusinessException(40001, "startTime cannot be later than endTime");
-        }
+        validateOperationQuery(knowledgeBaseId, startTime, endTime);
 
         String feedbackType = normalizeFeedbackType(rating);
         long pageNum = normalizePageNum(page);
@@ -130,6 +134,45 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .total(result.getTotal())
                 .pageNum(pageNum)
                 .pageSize(pageSize)
+                .build();
+    }
+
+    @Override
+    public List<AdminHotQuestionVO> listHotQuestions(Long knowledgeBaseId, LocalDateTime startTime,
+            LocalDateTime endTime, Integer limit) {
+        adminPermissionService.ensureAdmin();
+        validateOperationQuery(knowledgeBaseId, startTime, endTime);
+
+        return chatRecordMapper.selectHotQuestions(knowledgeBaseId, startTime, endTime,
+                normalizeHotQuestionLimit(limit));
+    }
+
+    @Override
+    public AdminChatStatsVO getStats(Long knowledgeBaseId, LocalDateTime startTime, LocalDateTime endTime) {
+        adminPermissionService.ensureAdmin();
+        validateOperationQuery(knowledgeBaseId, startTime, endTime);
+
+        AdminChatStatsCountRow chatStats = chatRecordMapper.selectAdminChatStats(knowledgeBaseId, startTime, endTime);
+        AdminFeedbackStatsRow feedbackStats = chatFeedbackMapper.selectAdminFeedbackStats(knowledgeBaseId, startTime,
+                endTime);
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        AdminChatStatsCountRow todayStats = chatRecordMapper.selectAdminTodayChatStats(knowledgeBaseId, todayStart,
+                todayStart.plusDays(1));
+
+        long totalChatCount = safeLong(chatStats == null ? null : chatStats.getTotalChatCount());
+        long matchedCount = safeLong(chatStats == null ? null : chatStats.getMatchedCount());
+        long missedCount = safeLong(chatStats == null ? null : chatStats.getMissedCount());
+
+        return AdminChatStatsVO.builder()
+                .totalChatCount(totalChatCount)
+                .matchedCount(matchedCount)
+                .missedCount(missedCount)
+                .matchRate(calculateMatchRate(matchedCount, totalChatCount))
+                .feedbackCount(safeLong(feedbackStats == null ? null : feedbackStats.getFeedbackCount()))
+                .likeCount(safeLong(feedbackStats == null ? null : feedbackStats.getLikeCount()))
+                .dislikeCount(safeLong(feedbackStats == null ? null : feedbackStats.getDislikeCount()))
+                .todayChatCount(safeLong(todayStats == null ? null : todayStats.getTotalChatCount()))
+                .todayMissedCount(safeLong(todayStats == null ? null : todayStats.getMissedCount()))
                 .build();
     }
 
@@ -231,6 +274,34 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
             return DEFAULT_PAGE_SIZE;
         }
         return Math.min(size, MAX_PAGE_SIZE);
+    }
+
+    private int normalizeHotQuestionLimit(Integer limit) {
+        if (limit == null || limit < 1) {
+            return DEFAULT_HOT_QUESTION_LIMIT;
+        }
+        return Math.min(limit, MAX_HOT_QUESTION_LIMIT);
+    }
+
+    private void validateOperationQuery(Long knowledgeBaseId, LocalDateTime startTime, LocalDateTime endTime) {
+        if (knowledgeBaseId != null && knowledgeBaseId <= 0) {
+            throw new BusinessException(40001, "knowledgeBaseId must be greater than 0");
+        }
+        if (startTime != null && endTime != null && startTime.isAfter(endTime)) {
+            throw new BusinessException(40001, "startTime cannot be later than endTime");
+        }
+    }
+
+    private long safeLong(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private BigDecimal calculateMatchRate(long matchedCount, long totalChatCount) {
+        if (totalChatCount == 0) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.valueOf(matchedCount)
+                .divide(BigDecimal.valueOf(totalChatCount), 4, RoundingMode.HALF_UP);
     }
 
     private String normalizeFeedbackType(String rating) {

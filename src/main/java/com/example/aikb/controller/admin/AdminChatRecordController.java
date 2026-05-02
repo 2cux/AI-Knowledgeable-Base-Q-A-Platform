@@ -6,6 +6,8 @@ import com.example.aikb.service.chat.AdminChatRecordQueryService;
 import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
+import com.example.aikb.vo.chat.AdminChatStatsVO;
+import com.example.aikb.vo.chat.AdminHotQuestionVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +15,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
@@ -82,5 +85,31 @@ public class AdminChatRecordController {
             @RequestParam(required = false) Long size) {
         return Result.success(adminChatRecordQueryService.pageFeedback(
                 knowledgeBaseId, rating, startTime, endTime, page, size));
+    }
+
+    @Operation(summary = "List hot questions", description = "Admin query for TopN hot questions")
+    @GetMapping("/hot-questions")
+    public Result<List<AdminHotQuestionVO>> hotQuestions(
+            @RequestParam(required = false)
+            @Positive(message = "knowledgeBaseId must be greater than 0") Long knowledgeBaseId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @RequestParam(required = false) Integer limit) {
+        return Result.success(adminChatRecordQueryService.listHotQuestions(
+                knowledgeBaseId, startTime, endTime, limit));
+    }
+
+    @Operation(summary = "Get chat stats", description = "Admin query for basic chat and feedback statistics")
+    @GetMapping("/stats")
+    public Result<AdminChatStatsVO> stats(
+            @RequestParam(required = false)
+            @Positive(message = "knowledgeBaseId must be greater than 0") Long knowledgeBaseId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
+        return Result.success(adminChatRecordQueryService.getStats(knowledgeBaseId, startTime, endTime));
     }
 }

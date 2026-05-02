@@ -3,6 +3,7 @@ package com.example.aikb.service.chat.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
 import com.example.aikb.dto.chat.AdminChatFeedbackQueryRow;
+import com.example.aikb.dto.chat.AdminChatStatsCountRow;
+import com.example.aikb.dto.chat.AdminFeedbackStatsRow;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatFeedbackMapper;
@@ -19,8 +22,11 @@ import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
+import com.example.aikb.vo.chat.AdminChatStatsVO;
+import com.example.aikb.vo.chat.AdminHotQuestionVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -269,6 +275,102 @@ class AdminChatRecordQueryServiceImplTest {
                 .hasMessage("forbidden");
 
         verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void listHotQuestionsReturnsTopItemsAndCapsLimit() {
+        AdminHotQuestionVO hotQuestion = AdminHotQuestionVO.builder()
+                .question("question")
+                .count(3L)
+                .latestAskedAt(LocalDateTime.of(2026, 5, 2, 12, 0))
+                .build();
+        when(chatRecordMapper.selectHotQuestions(any(), any(), any(), anyInt()))
+                .thenReturn(List.of(hotQuestion));
+
+        List<AdminHotQuestionVO> result = service.listHotQuestions(11L, null, null, 200);
+
+        assertThat(result).containsExactly(hotQuestion);
+        ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(chatRecordMapper).selectHotQuestions(any(), any(), any(), limitCaptor.capture());
+        assertThat(limitCaptor.getValue()).isEqualTo(50);
+        verify(adminPermissionService).ensureAdmin();
+    }
+
+    @Test
+    void listHotQuestionsUsesDefaultLimitWhenLimitIsTooSmall() {
+        when(chatRecordMapper.selectHotQuestions(any(), any(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        service.listHotQuestions(null, null, null, 0);
+
+        ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(chatRecordMapper).selectHotQuestions(any(), any(), any(), limitCaptor.capture());
+        assertThat(limitCaptor.getValue()).isEqualTo(10);
+    }
+
+    @Test
+    void listHotQuestionsThrowsWhenStartTimeAfterEndTime() {
+        LocalDateTime startTime = LocalDateTime.of(2026, 5, 3, 10, 0);
+        LocalDateTime endTime = LocalDateTime.of(2026, 5, 2, 10, 0);
+
+        assertThatThrownBy(() -> service.listHotQuestions(null, startTime, endTime, 10))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("startTime");
+
+        verify(adminPermissionService).ensureAdmin();
+        verify(chatRecordMapper, never()).selectHotQuestions(any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void getStatsReturnsCountsAndMatchRate() {
+        AdminChatStatsCountRow chatStats = new AdminChatStatsCountRow();
+        chatStats.setTotalChatCount(10L);
+        chatStats.setMatchedCount(8L);
+        chatStats.setMissedCount(2L);
+        AdminFeedbackStatsRow feedbackStats = new AdminFeedbackStatsRow();
+        feedbackStats.setFeedbackCount(5L);
+        feedbackStats.setLikeCount(3L);
+        feedbackStats.setDislikeCount(2L);
+        AdminChatStatsCountRow todayStats = new AdminChatStatsCountRow();
+        todayStats.setTotalChatCount(4L);
+        todayStats.setMissedCount(1L);
+        when(chatRecordMapper.selectAdminChatStats(any(), any(), any())).thenReturn(chatStats);
+        when(chatFeedbackMapper.selectAdminFeedbackStats(any(), any(), any())).thenReturn(feedbackStats);
+        when(chatRecordMapper.selectAdminTodayChatStats(any(), any(), any())).thenReturn(todayStats);
+
+        AdminChatStatsVO result = service.getStats(11L, null, null);
+
+        assertThat(result.getTotalChatCount()).isEqualTo(10L);
+        assertThat(result.getMatchedCount()).isEqualTo(8L);
+        assertThat(result.getMissedCount()).isEqualTo(2L);
+        assertThat(result.getMatchRate()).isEqualByComparingTo(new BigDecimal("0.8000"));
+        assertThat(result.getFeedbackCount()).isEqualTo(5L);
+        assertThat(result.getLikeCount()).isEqualTo(3L);
+        assertThat(result.getDislikeCount()).isEqualTo(2L);
+        assertThat(result.getTodayChatCount()).isEqualTo(4L);
+        assertThat(result.getTodayMissedCount()).isEqualTo(1L);
+        verify(adminPermissionService).ensureAdmin();
+    }
+
+    @Test
+    void getStatsReturnsZeroMatchRateWhenNoChatsExist() {
+        AdminChatStatsCountRow chatStats = new AdminChatStatsCountRow();
+        chatStats.setTotalChatCount(0L);
+        chatStats.setMatchedCount(0L);
+        chatStats.setMissedCount(0L);
+        when(chatRecordMapper.selectAdminChatStats(any(), any(), any())).thenReturn(chatStats);
+        when(chatFeedbackMapper.selectAdminFeedbackStats(any(), any(), any())).thenReturn(null);
+        when(chatRecordMapper.selectAdminTodayChatStats(any(), any(), any())).thenReturn(null);
+
+        AdminChatStatsVO result = service.getStats(null, null, null);
+
+        assertThat(result.getTotalChatCount()).isZero();
+        assertThat(result.getMatchRate()).isEqualByComparingTo(new BigDecimal("0.0000"));
+        assertThat(result.getFeedbackCount()).isZero();
+        assertThat(result.getLikeCount()).isZero();
+        assertThat(result.getDislikeCount()).isZero();
+        assertThat(result.getTodayChatCount()).isZero();
+        assertThat(result.getTodayMissedCount()).isZero();
     }
 
     @Test
