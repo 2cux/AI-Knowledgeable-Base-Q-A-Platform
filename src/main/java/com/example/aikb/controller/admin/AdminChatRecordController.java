@@ -5,12 +5,15 @@ import com.example.aikb.common.Result;
 import com.example.aikb.service.chat.AdminChatRecordQueryService;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
+import com.example.aikb.vo.chat.AdminMissedQuestionVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Validated
 @RestController
-@RequestMapping("/api/admin/chat/records")
+@RequestMapping("/api/admin/chat")
 @RequiredArgsConstructor
 @Tag(name = "管理端问答日志", description = "管理员查看系统问答记录")
 public class AdminChatRecordController {
@@ -31,7 +34,7 @@ public class AdminChatRecordController {
     private final AdminChatRecordQueryService adminChatRecordQueryService;
 
     @Operation(summary = "分页查询问答日志", description = "管理端按知识库和命中状态过滤问答记录")
-    @GetMapping
+    @GetMapping("/records")
     public Result<PageResult<AdminChatRecordListItemVO>> page(
             @RequestParam(required = false) @Positive(message = "knowledgeBaseId必须大于0") Long knowledgeBaseId,
             @RequestParam(required = false) Boolean matched,
@@ -43,9 +46,24 @@ public class AdminChatRecordController {
     }
 
     @Operation(summary = "查询问答日志详情", description = "管理端查看单条问答记录完整内容")
-    @GetMapping("/{id}")
+    @GetMapping("/records/{id}")
     public Result<AdminChatRecordDetailVO> getById(
             @PathVariable @Positive(message = "问答记录ID必须大于0") Long id) {
         return Result.success(adminChatRecordQueryService.getById(id));
+    }
+
+    @Operation(summary = "Page missed questions", description = "Admin query for chat records where matched=false")
+    @GetMapping("/missed-questions")
+    public Result<PageResult<AdminMissedQuestionVO>> missedQuestions(
+            @RequestParam(required = false)
+            @Positive(message = "knowledgeBaseId must be greater than 0") Long knowledgeBaseId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @RequestParam(required = false) Long page,
+            @RequestParam(required = false) Long size) {
+        return Result.success(adminChatRecordQueryService.pageMissedQuestions(
+                knowledgeBaseId, startTime, endTime, page, size));
     }
 }

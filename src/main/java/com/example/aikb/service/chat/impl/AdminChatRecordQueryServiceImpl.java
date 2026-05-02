@@ -11,6 +11,8 @@ import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.AdminChatRecordQueryService;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
+import com.example.aikb.vo.chat.AdminMissedQuestionVO;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,9 @@ import org.springframework.stereotype.Service;
 public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryService {
 
     private static final int ANSWER_PREVIEW_LENGTH = 120;
+    private static final long DEFAULT_PAGE_NUM = 1L;
+    private static final long DEFAULT_PAGE_SIZE = 10L;
+    private static final long MAX_PAGE_SIZE = 100L;
 
     private final ChatRecordMapper chatRecordMapper;
     private final AdminPermissionService adminPermissionService;
@@ -46,6 +51,41 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .toList();
 
         return PageResult.<AdminChatRecordListItemVO>builder()
+                .list(list)
+                .total(result.getTotal())
+                .pageNum(pageNum)
+                .pageSize(pageSize)
+                .build();
+    }
+
+    @Override
+    public PageResult<AdminMissedQuestionVO> pageMissedQuestions(Long knowledgeBaseId, LocalDateTime startTime,
+            LocalDateTime endTime, Long page, Long size) {
+        adminPermissionService.ensureAdmin();
+        if (knowledgeBaseId != null && knowledgeBaseId <= 0) {
+            throw new BusinessException(40001, "knowledgeBaseId must be greater than 0");
+        }
+        if (startTime != null && endTime != null && startTime.isAfter(endTime)) {
+            throw new BusinessException(40001, "startTime cannot be later than endTime");
+        }
+
+        long pageNum = normalizePageNum(page);
+        long pageSize = normalizePageSize(size);
+        Page<ChatRecord> pageRequest = Page.of(pageNum, pageSize);
+        IPage<ChatRecord> result = chatRecordMapper.selectPage(pageRequest, new LambdaQueryWrapper<ChatRecord>()
+                .eq(ChatRecord::getMatched, false)
+                .eq(knowledgeBaseId != null, ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
+                .ge(startTime != null, ChatRecord::getCreatedAt, startTime)
+                .le(endTime != null, ChatRecord::getCreatedAt, endTime)
+                .orderByDesc(ChatRecord::getCreatedAt)
+                .orderByDesc(ChatRecord::getId));
+
+        List<AdminMissedQuestionVO> list = result.getRecords()
+                .stream()
+                .map(this::toMissedQuestionVO)
+                .toList();
+
+        return PageResult.<AdminMissedQuestionVO>builder()
                 .list(list)
                 .total(result.getTotal())
                 .pageNum(pageNum)
@@ -82,6 +122,21 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .build();
     }
 
+    private AdminMissedQuestionVO toMissedQuestionVO(ChatRecord record) {
+        return AdminMissedQuestionVO.builder()
+                .id(record.getId())
+                .userId(record.getUserId())
+                .knowledgeBaseId(record.getKnowledgeBaseId())
+                .conversationId(record.getConversationId())
+                .question(record.getQuestion())
+                .answerPreview(preview(record.getAnswer()))
+                .matched(record.getMatched())
+                .retrievedChunkCount(record.getRetrievedChunkCount())
+                .topK(record.getTopK())
+                .createdAt(record.getCreatedAt())
+                .build();
+    }
+
     private AdminChatRecordDetailVO toDetailVO(ChatRecord record) {
         return AdminChatRecordDetailVO.builder()
                 .id(record.getId())
@@ -101,9 +156,26 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     }
 
     private String preview(String answer) {
-        if (answer == null || answer.length() <= ANSWER_PREVIEW_LENGTH) {
+        if (answer == null || answer.isEmpty()) {
+            return "";
+        }
+        if (answer.length() <= ANSWER_PREVIEW_LENGTH) {
             return answer;
         }
         return answer.substring(0, ANSWER_PREVIEW_LENGTH) + "...";
+    }
+
+    private long normalizePageNum(Long page) {
+        if (page == null || page < DEFAULT_PAGE_NUM) {
+            return DEFAULT_PAGE_NUM;
+        }
+        return page;
+    }
+
+    private long normalizePageSize(Long size) {
+        if (size == null || size < 1) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(size, MAX_PAGE_SIZE);
     }
 }

@@ -8,17 +8,22 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.aikb.common.PageResult;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
+import com.example.aikb.vo.chat.AdminMissedQuestionVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -86,6 +91,70 @@ class AdminChatRecordQueryServiceImplTest {
         AdminChatRecordDetailVO detail = service.getById(1L);
 
         assertThat(detail.getCitations()).isEmpty();
+    }
+
+    @Test
+    void pageMissedQuestionsReturnsMissedRecordsWithDefaultPageAndPreview() {
+        ChatRecord record = record();
+        record.setMatched(false);
+        record.setAnswer("a".repeat(130));
+        Page<ChatRecord> mapperPage = new Page<>(1, 10);
+        mapperPage.setRecords(List.of(record));
+        mapperPage.setTotal(1);
+        when(chatRecordMapper.selectPage(any(), any())).thenReturn(mapperPage);
+
+        PageResult<AdminMissedQuestionVO> result = service.pageMissedQuestions(null, null, null, null, null);
+
+        assertThat(result.getPageNum()).isEqualTo(1);
+        assertThat(result.getPageSize()).isEqualTo(10);
+        assertThat(result.getTotal()).isEqualTo(1);
+        assertThat(result.getList()).hasSize(1);
+        AdminMissedQuestionVO item = result.getList().get(0);
+        assertThat(item.getId()).isEqualTo(1L);
+        assertThat(item.getUserId()).isEqualTo(7L);
+        assertThat(item.getConversationId()).isEqualTo("conversation-1");
+        assertThat(item.getMatched()).isFalse();
+        assertThat(item.getTopK()).isEqualTo(5);
+        assertThat(item.getAnswerPreview()).hasSize(123).endsWith("...");
+        verify(adminPermissionService).ensureAdmin();
+    }
+
+    @Test
+    void pageMissedQuestionsLimitsOversizedPageSize() {
+        Page<ChatRecord> mapperPage = new Page<>(1, 100);
+        when(chatRecordMapper.selectPage(any(), any())).thenReturn(mapperPage);
+
+        service.pageMissedQuestions(11L, null, null, 2L, 200L);
+
+        ArgumentCaptor<Page<ChatRecord>> pageCaptor = ArgumentCaptor.forClass(Page.class);
+        verify(chatRecordMapper).selectPage(pageCaptor.capture(), any());
+        assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2);
+        assertThat(pageCaptor.getValue().getSize()).isEqualTo(100);
+    }
+
+    @Test
+    void pageMissedQuestionsThrowsWhenStartTimeAfterEndTime() {
+        LocalDateTime startTime = LocalDateTime.of(2026, 5, 3, 10, 0);
+        LocalDateTime endTime = LocalDateTime.of(2026, 5, 2, 10, 0);
+
+        assertThatThrownBy(() -> service.pageMissedQuestions(null, startTime, endTime, 1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("startTime");
+
+        verify(adminPermissionService).ensureAdmin();
+        verify(chatRecordMapper, never()).selectPage(any(), any());
+    }
+
+    @Test
+    void pageMissedQuestionsRequiresAdminBeforeQueryingRecords() {
+        doThrow(new BusinessException(40300, "forbidden"))
+                .when(adminPermissionService).ensureAdmin();
+
+        assertThatThrownBy(() -> service.pageMissedQuestions(null, null, null, 1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("forbidden");
+
+        verify(chatRecordMapper, never()).selectPage(any(), any());
     }
 
     @Test
