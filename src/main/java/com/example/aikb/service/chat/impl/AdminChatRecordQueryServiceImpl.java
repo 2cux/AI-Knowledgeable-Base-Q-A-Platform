@@ -5,16 +5,20 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
+import com.example.aikb.dto.chat.AdminChatFeedbackQueryRow;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.mapper.ChatFeedbackMapper;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.AdminChatRecordQueryService;
+import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -29,8 +33,10 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     private static final long DEFAULT_PAGE_NUM = 1L;
     private static final long DEFAULT_PAGE_SIZE = 10L;
     private static final long MAX_PAGE_SIZE = 100L;
+    private static final Set<String> SUPPORTED_FEEDBACK_TYPES = Set.of("LIKE", "DISLIKE");
 
     private final ChatRecordMapper chatRecordMapper;
+    private final ChatFeedbackMapper chatFeedbackMapper;
     private final AdminPermissionService adminPermissionService;
     private final CitationJsonCodec citationJsonCodec;
 
@@ -97,6 +103,37 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     }
 
     @Override
+    public PageResult<AdminChatFeedbackVO> pageFeedback(Long knowledgeBaseId, String rating, LocalDateTime startTime,
+            LocalDateTime endTime, Long page, Long size) {
+        adminPermissionService.ensureAdmin();
+        if (knowledgeBaseId != null && knowledgeBaseId <= 0) {
+            throw new BusinessException(40001, "knowledgeBaseId must be greater than 0");
+        }
+        if (startTime != null && endTime != null && startTime.isAfter(endTime)) {
+            throw new BusinessException(40001, "startTime cannot be later than endTime");
+        }
+
+        String feedbackType = normalizeFeedbackType(rating);
+        long pageNum = normalizePageNum(page);
+        long pageSize = normalizePageSize(size);
+        Page<AdminChatFeedbackQueryRow> pageRequest = Page.of(pageNum, pageSize);
+        IPage<AdminChatFeedbackQueryRow> result = chatFeedbackMapper.selectAdminFeedbackPage(pageRequest,
+                knowledgeBaseId, feedbackType, startTime, endTime);
+
+        List<AdminChatFeedbackVO> list = result.getRecords()
+                .stream()
+                .map(this::toFeedbackVO)
+                .toList();
+
+        return PageResult.<AdminChatFeedbackVO>builder()
+                .list(list)
+                .total(result.getTotal())
+                .pageNum(pageNum)
+                .pageSize(pageSize)
+                .build();
+    }
+
+    @Override
     public AdminChatRecordDetailVO getById(Long id) {
         if (id == null || id <= 0) {
             throw new BusinessException(40001, "问答记录ID必须大于0");
@@ -140,6 +177,20 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .build();
     }
 
+    private AdminChatFeedbackVO toFeedbackVO(AdminChatFeedbackQueryRow row) {
+        return AdminChatFeedbackVO.builder()
+                .id(row.getId())
+                .chatRecordId(row.getChatRecordId())
+                .userId(row.getUserId())
+                .knowledgeBaseId(row.getKnowledgeBaseId())
+                .question(row.getQuestion())
+                .answerPreview(preview(row.getAnswer()))
+                .rating(row.getFeedbackType())
+                .comment(row.getComment())
+                .createdAt(row.getCreatedAt())
+                .build();
+    }
+
     private AdminChatRecordDetailVO toDetailVO(ChatRecord record) {
         return AdminChatRecordDetailVO.builder()
                 .id(record.getId())
@@ -180,5 +231,16 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
             return DEFAULT_PAGE_SIZE;
         }
         return Math.min(size, MAX_PAGE_SIZE);
+    }
+
+    private String normalizeFeedbackType(String rating) {
+        if (rating == null || rating.isBlank()) {
+            return null;
+        }
+        String normalized = rating.trim().toUpperCase();
+        if (!SUPPORTED_FEEDBACK_TYPES.contains(normalized)) {
+            throw new BusinessException(40001, "rating only supports LIKE or DISLIKE");
+        }
+        return normalized;
     }
 }

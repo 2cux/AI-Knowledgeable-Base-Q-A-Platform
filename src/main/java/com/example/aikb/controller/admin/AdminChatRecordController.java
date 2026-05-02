@@ -3,6 +3,7 @@ package com.example.aikb.controller.admin;
 import com.example.aikb.common.PageResult;
 import com.example.aikb.common.Result;
 import com.example.aikb.service.chat.AdminChatRecordQueryService;
+import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
@@ -65,5 +66,21 @@ public class AdminChatRecordController {
             @RequestParam(required = false) Long size) {
         return Result.success(adminChatRecordQueryService.pageMissedQuestions(
                 knowledgeBaseId, startTime, endTime, page, size));
+    }
+
+    @Operation(summary = "Page chat feedback", description = "Admin query for user LIKE/DISLIKE feedback")
+    @GetMapping("/feedback")
+    public Result<PageResult<AdminChatFeedbackVO>> feedback(
+            @RequestParam(required = false)
+            @Positive(message = "knowledgeBaseId must be greater than 0") Long knowledgeBaseId,
+            @RequestParam(required = false) String rating,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @RequestParam(required = false) Long page,
+            @RequestParam(required = false) Long size) {
+        return Result.success(adminChatRecordQueryService.pageFeedback(
+                knowledgeBaseId, rating, startTime, endTime, page, size));
     }
 }

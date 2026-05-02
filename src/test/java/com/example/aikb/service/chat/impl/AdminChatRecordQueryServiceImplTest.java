@@ -10,11 +10,14 @@ import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
+import com.example.aikb.dto.chat.AdminChatFeedbackQueryRow;
 import com.example.aikb.entity.ChatRecord;
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.mapper.ChatFeedbackMapper;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.AnswerStatus;
+import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,13 +37,16 @@ class AdminChatRecordQueryServiceImplTest {
     private ChatRecordMapper chatRecordMapper;
 
     @Mock
+    private ChatFeedbackMapper chatFeedbackMapper;
+
+    @Mock
     private AdminPermissionService adminPermissionService;
 
     private AdminChatRecordQueryServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminChatRecordQueryServiceImpl(chatRecordMapper, adminPermissionService,
+        service = new AdminChatRecordQueryServiceImpl(chatRecordMapper, chatFeedbackMapper, adminPermissionService,
                 new CitationJsonCodec(new ObjectMapper()));
     }
 
@@ -158,6 +164,81 @@ class AdminChatRecordQueryServiceImplTest {
     }
 
     @Test
+    void pageFeedbackReturnsFeedbackWithDefaultPageAndPreview() {
+        AdminChatFeedbackQueryRow row = feedbackRow();
+        row.setAnswer("a".repeat(130));
+        Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 10);
+        mapperPage.setRecords(List.of(row));
+        mapperPage.setTotal(1);
+        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
+
+        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null);
+
+        assertThat(result.getPageNum()).isEqualTo(1);
+        assertThat(result.getPageSize()).isEqualTo(10);
+        assertThat(result.getTotal()).isEqualTo(1);
+        assertThat(result.getList()).hasSize(1);
+        AdminChatFeedbackVO item = result.getList().get(0);
+        assertThat(item.getId()).isEqualTo(21L);
+        assertThat(item.getChatRecordId()).isEqualTo(1L);
+        assertThat(item.getUserId()).isEqualTo(7L);
+        assertThat(item.getKnowledgeBaseId()).isEqualTo(11L);
+        assertThat(item.getQuestion()).isEqualTo("question");
+        assertThat(item.getRating()).isEqualTo("DISLIKE");
+        assertThat(item.getComment()).isEqualTo("not helpful");
+        assertThat(item.getAnswerPreview()).hasSize(123).endsWith("...");
+        verify(adminPermissionService).ensureAdmin();
+    }
+
+    @Test
+    void pageFeedbackLimitsOversizedPageSize() {
+        Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 100);
+        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
+
+        service.pageFeedback(11L, "like", null, null, 2L, 200L);
+
+        ArgumentCaptor<Page<AdminChatFeedbackQueryRow>> pageCaptor = ArgumentCaptor.forClass(Page.class);
+        verify(chatFeedbackMapper).selectAdminFeedbackPage(pageCaptor.capture(), any(), any(), any(), any());
+        assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2);
+        assertThat(pageCaptor.getValue().getSize()).isEqualTo(100);
+    }
+
+    @Test
+    void pageFeedbackThrowsWhenRatingInvalid() {
+        assertThatThrownBy(() -> service.pageFeedback(null, "BAD", null, null, 1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("rating");
+
+        verify(adminPermissionService).ensureAdmin();
+        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void pageFeedbackThrowsWhenStartTimeAfterEndTime() {
+        LocalDateTime startTime = LocalDateTime.of(2026, 5, 3, 10, 0);
+        LocalDateTime endTime = LocalDateTime.of(2026, 5, 2, 10, 0);
+
+        assertThatThrownBy(() -> service.pageFeedback(null, null, startTime, endTime, 1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("startTime");
+
+        verify(adminPermissionService).ensureAdmin();
+        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void pageFeedbackRequiresAdminBeforeQueryingFeedback() {
+        doThrow(new BusinessException(40300, "forbidden"))
+                .when(adminPermissionService).ensureAdmin();
+
+        assertThatThrownBy(() -> service.pageFeedback(null, null, null, null, 1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("forbidden");
+
+        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void getByIdThrowsWhenRecordDoesNotExist() {
         when(chatRecordMapper.selectOne(any())).thenReturn(null);
 
@@ -203,5 +284,19 @@ class AdminChatRecordQueryServiceImplTest {
         record.setTopK(5);
         record.setCreatedAt(LocalDateTime.of(2026, 5, 2, 10, 30));
         return record;
+    }
+
+    private AdminChatFeedbackQueryRow feedbackRow() {
+        AdminChatFeedbackQueryRow row = new AdminChatFeedbackQueryRow();
+        row.setId(21L);
+        row.setChatRecordId(1L);
+        row.setUserId(7L);
+        row.setKnowledgeBaseId(11L);
+        row.setQuestion("question");
+        row.setAnswer("answer");
+        row.setFeedbackType("DISLIKE");
+        row.setComment("not helpful");
+        row.setCreatedAt(LocalDateTime.of(2026, 5, 2, 11, 30));
+        return row;
     }
 }

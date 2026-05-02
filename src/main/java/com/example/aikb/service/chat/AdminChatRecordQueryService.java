@@ -1,6 +1,7 @@
 package com.example.aikb.service.chat;
 
 import com.example.aikb.common.PageResult;
+import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
@@ -20,6 +21,12 @@ public interface AdminChatRecordQueryService {
      * Page missed questions for admin governance.
      */
     PageResult<AdminMissedQuestionVO> pageMissedQuestions(Long knowledgeBaseId, LocalDateTime startTime,
+            LocalDateTime endTime, Long page, Long size);
+
+    /**
+     * Page chat feedback for admin operation.
+     */
+    PageResult<AdminChatFeedbackVO> pageFeedback(Long knowledgeBaseId, String rating, LocalDateTime startTime,
             LocalDateTime endTime, Long page, Long size);
 
     /**
