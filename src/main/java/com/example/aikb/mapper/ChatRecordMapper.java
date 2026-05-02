@@ -66,23 +66,4 @@ public interface ChatRecordMapper extends BaseMapper<ChatRecord> {
             @Param("knowledgeBaseId") Long knowledgeBaseId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
-
-    @Select("""
-            <script>
-            SELECT
-                COUNT(*) AS totalChatCount,
-                COALESCE(SUM(CASE WHEN matched = 1 THEN 1 ELSE 0 END), 0) AS matchedCount,
-                COALESCE(SUM(CASE WHEN matched = 0 THEN 1 ELSE 0 END), 0) AS missedCount
-            FROM chat_record
-            WHERE created_at &gt;= #{todayStart}
-              AND created_at &lt; #{tomorrowStart}
-            <if test="knowledgeBaseId != null">
-                AND knowledge_base_id = #{knowledgeBaseId}
-            </if>
-            </script>
-            """)
-    AdminChatStatsCountRow selectAdminTodayChatStats(
-            @Param("knowledgeBaseId") Long knowledgeBaseId,
-            @Param("todayStart") LocalDateTime todayStart,
-            @Param("tomorrowStart") LocalDateTime tomorrowStart);
 }

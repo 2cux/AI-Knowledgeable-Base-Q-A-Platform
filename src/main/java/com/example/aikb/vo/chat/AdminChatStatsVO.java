@@ -30,10 +30,4 @@ public class AdminChatStatsVO {
 
     @Schema(description = "DISLIKE feedback count", example = "5")
     private Long dislikeCount;
-
-    @Schema(description = "Today chat count", example = "8")
-    private Long todayChatCount;
-
-    @Schema(description = "Today missed chat count", example = "2")
-    private Long todayMissedCount;
 }

@@ -22,7 +22,6 @@ import com.example.aikb.vo.chat.AdminHotQuestionVO;
 import com.example.aikb.vo.chat.AdminMissedQuestionVO;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -155,9 +154,6 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
         AdminChatStatsCountRow chatStats = chatRecordMapper.selectAdminChatStats(knowledgeBaseId, startTime, endTime);
         AdminFeedbackStatsRow feedbackStats = chatFeedbackMapper.selectAdminFeedbackStats(knowledgeBaseId, startTime,
                 endTime);
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        AdminChatStatsCountRow todayStats = chatRecordMapper.selectAdminTodayChatStats(knowledgeBaseId, todayStart,
-                todayStart.plusDays(1));
 
         long totalChatCount = safeLong(chatStats == null ? null : chatStats.getTotalChatCount());
         long matchedCount = safeLong(chatStats == null ? null : chatStats.getMatchedCount());
@@ -171,8 +167,6 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .feedbackCount(safeLong(feedbackStats == null ? null : feedbackStats.getFeedbackCount()))
                 .likeCount(safeLong(feedbackStats == null ? null : feedbackStats.getLikeCount()))
                 .dislikeCount(safeLong(feedbackStats == null ? null : feedbackStats.getDislikeCount()))
-                .todayChatCount(safeLong(todayStats == null ? null : todayStats.getTotalChatCount()))
-                .todayMissedCount(safeLong(todayStats == null ? null : todayStats.getMissedCount()))
                 .build();
     }
 

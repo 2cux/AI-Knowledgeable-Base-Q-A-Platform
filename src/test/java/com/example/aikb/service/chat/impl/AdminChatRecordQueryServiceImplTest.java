@@ -331,12 +331,8 @@ class AdminChatRecordQueryServiceImplTest {
         feedbackStats.setFeedbackCount(5L);
         feedbackStats.setLikeCount(3L);
         feedbackStats.setDislikeCount(2L);
-        AdminChatStatsCountRow todayStats = new AdminChatStatsCountRow();
-        todayStats.setTotalChatCount(4L);
-        todayStats.setMissedCount(1L);
         when(chatRecordMapper.selectAdminChatStats(any(), any(), any())).thenReturn(chatStats);
         when(chatFeedbackMapper.selectAdminFeedbackStats(any(), any(), any())).thenReturn(feedbackStats);
-        when(chatRecordMapper.selectAdminTodayChatStats(any(), any(), any())).thenReturn(todayStats);
 
         AdminChatStatsVO result = service.getStats(11L, null, null);
 
@@ -347,8 +343,6 @@ class AdminChatRecordQueryServiceImplTest {
         assertThat(result.getFeedbackCount()).isEqualTo(5L);
         assertThat(result.getLikeCount()).isEqualTo(3L);
         assertThat(result.getDislikeCount()).isEqualTo(2L);
-        assertThat(result.getTodayChatCount()).isEqualTo(4L);
-        assertThat(result.getTodayMissedCount()).isEqualTo(1L);
         verify(adminPermissionService).ensureAdmin();
     }
 
@@ -360,7 +354,6 @@ class AdminChatRecordQueryServiceImplTest {
         chatStats.setMissedCount(0L);
         when(chatRecordMapper.selectAdminChatStats(any(), any(), any())).thenReturn(chatStats);
         when(chatFeedbackMapper.selectAdminFeedbackStats(any(), any(), any())).thenReturn(null);
-        when(chatRecordMapper.selectAdminTodayChatStats(any(), any(), any())).thenReturn(null);
 
         AdminChatStatsVO result = service.getStats(null, null, null);
 
@@ -369,8 +362,6 @@ class AdminChatRecordQueryServiceImplTest {
         assertThat(result.getFeedbackCount()).isZero();
         assertThat(result.getLikeCount()).isZero();
         assertThat(result.getDislikeCount()).isZero();
-        assertThat(result.getTodayChatCount()).isZero();
-        assertThat(result.getTodayMissedCount()).isZero();
     }
 
     @Test
