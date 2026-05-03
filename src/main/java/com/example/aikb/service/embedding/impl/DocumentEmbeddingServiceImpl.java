@@ -249,6 +249,9 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         if (!force && isEmbeddingSuccess(document, allChunks.size())) {
             return buildNoopResult(document, message.getTaskId(), embeddingModel);
         }
+        if (force) {
+            transactionTemplate.executeWithoutResult(status -> clearDocumentEmbeddingsForRebuild(document.getId()));
+        }
 
         List<DocumentChunk> chunks = force ? allChunks : filterChunksWithoutSuccessfulEmbedding(allChunks);
         if (chunks.isEmpty()) {
@@ -285,10 +288,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
 
     private void persistEmbeddingResults(
             Document document, List<EmbeddedChunkResult> results, boolean force, String embeddingModel) {
-        if (force) {
-            chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
-                    .eq(ChunkEmbedding::getDocumentId, document.getId()));
-        } else {
+        if (!force) {
             List<Long> chunkIds = results.stream().map(result -> result.chunk().getId()).toList();
             if (!chunkIds.isEmpty()) {
                 chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
@@ -309,6 +309,15 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
             embedding.setEmbeddedAt(LocalDateTime.now());
             chunkEmbeddingMapper.insert(embedding);
         }
+    }
+
+    private void clearDocumentEmbeddingsForRebuild(Long documentId) {
+        chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
+                .eq(ChunkEmbedding::getDocumentId, documentId));
+        Document update = new Document();
+        update.setId(documentId);
+        update.setEmbeddedChunkCount(0);
+        documentMapper.updateById(update);
     }
 
     private DocumentEmbeddingVO buildNoopResult(Document document, Long taskId, String embeddingModel) {
@@ -474,6 +483,10 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         if (STATUS_SUCCESS.equals(taskRecord.getStatus())) {
             return taskRecord;
         }
+        TaskRecord latestEmbeddingTask = getLatestEmbeddingTask(document.getId());
+        if (latestEmbeddingTask == null || !message.getTaskId().equals(latestEmbeddingTask.getId())) {
+            throw new BusinessException("Document embedding message is not the latest task");
+        }
         if (STATUS_FAILED.equals(taskRecord.getStatus())
                 && TASK_TYPE_DOCUMENT_EMBEDDING.equals(document.getLatestTaskType())
                 && STATUS_FAILED.equals(document.getLatestTaskStatus())) {
@@ -483,6 +496,16 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
             throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
         return taskRecord;
+    }
+
+    private TaskRecord getLatestEmbeddingTask(Long documentId) {
+        return taskRecordMapper.selectOne(new LambdaQueryWrapper<TaskRecord>()
+                .eq(TaskRecord::getBizType, TASK_BIZ_TYPE_DOCUMENT)
+                .eq(TaskRecord::getBizId, documentId)
+                .eq(TaskRecord::getTaskType, TASK_TYPE_DOCUMENT_EMBEDDING)
+                .orderByDesc(TaskRecord::getCreatedAt)
+                .orderByDesc(TaskRecord::getId)
+                .last("LIMIT 1"));
     }
 
     private String resolveEmbeddingModel(DocumentEmbeddingRequest request) {
