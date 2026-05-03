@@ -76,7 +76,7 @@ public class DocumentController {
         return Result.success(documentService.getById(documentId));
     }
 
-    @Operation(summary = "鍒犻櫎鏂囨。")
+    @Operation(summary = "删除文档")
     @DeleteMapping("/{documentId}")
     public Result<Void> delete(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
