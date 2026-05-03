@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -18,14 +18,14 @@ public class AdminRedisCacheService {
 
     private static final long WARN_INTERVAL_MILLIS = 60_000L;
 
-    private final RedisTemplate<String, String> adminJsonRedisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final AtomicLong lastWarnAt = new AtomicLong(0L);
 
     public <T> Optional<T> get(String key, JavaType valueType, String cacheName) {
         String cacheKey = Objects.requireNonNull(key, "key must not be null");
         try {
-            String json = adminJsonRedisTemplate.opsForValue().get(cacheKey);
+            String json = stringRedisTemplate.opsForValue().get(cacheKey);
             if (json == null) {
                 log.debug("Admin Redis cache miss, cache={}, key={}", cacheName, cacheKey);
                 return Optional.empty();
@@ -50,7 +50,7 @@ public class AdminRedisCacheService {
         try {
             String json = Objects.requireNonNull(objectMapper.writeValueAsString(cacheValue),
                     "serialized cache value must not be null");
-            adminJsonRedisTemplate.opsForValue().set(cacheKey, json, cacheTtl);
+            stringRedisTemplate.opsForValue().set(cacheKey, json, cacheTtl);
         } catch (RuntimeException ex) {
             warnRedisUnavailable("write", cacheName, ex);
         } catch (Exception ex) {

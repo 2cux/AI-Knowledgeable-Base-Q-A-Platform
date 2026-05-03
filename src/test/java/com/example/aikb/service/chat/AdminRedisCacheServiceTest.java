@@ -18,14 +18,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 @ExtendWith(MockitoExtension.class)
 class AdminRedisCacheServiceTest {
 
     @Mock
-    private RedisTemplate<String, String> redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
     @Mock
     private ValueOperations<String, String> valueOperations;
@@ -36,7 +36,7 @@ class AdminRedisCacheServiceTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper().findAndRegisterModules();
-        cacheService = new AdminRedisCacheService(redisTemplate, objectMapper);
+        cacheService = new AdminRedisCacheService(stringRedisTemplate, objectMapper);
     }
 
     @Test
@@ -46,7 +46,7 @@ class AdminRedisCacheServiceTest {
                 .count(3L)
                 .latestAskedAt(LocalDateTime.of(2026, 5, 2, 12, 0))
                 .build());
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("key")).thenReturn(objectMapper.writeValueAsString(hotQuestions));
         JavaType valueType = objectMapper.getTypeFactory()
                 .constructCollectionType(List.class, AdminHotQuestionVO.class);
@@ -60,7 +60,7 @@ class AdminRedisCacheServiceTest {
 
     @Test
     void getReturnsEmptyWhenRedisFails() {
-        when(redisTemplate.opsForValue()).thenThrow(new RedisConnectionFailureException("down"));
+        when(stringRedisTemplate.opsForValue()).thenThrow(new RedisConnectionFailureException("down"));
 
         Optional<String> result = cacheService.get("key", objectMapper.constructType(String.class), "cache");
 
@@ -69,7 +69,7 @@ class AdminRedisCacheServiceTest {
 
     @Test
     void putWritesJsonWithTtl() throws Exception {
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         AdminHotQuestionVO hotQuestion = AdminHotQuestionVO.builder().question("question").count(1L).build();
 
         cacheService.put("key", hotQuestion, Duration.ofMinutes(5), "hotQuestions");
@@ -80,7 +80,7 @@ class AdminRedisCacheServiceTest {
     @Test
     void putSwallowsRedisFailures() {
         AdminHotQuestionVO hotQuestion = AdminHotQuestionVO.builder().question("question").count(1L).build();
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         doThrow(new RedisConnectionFailureException("down"))
                 .when(valueOperations).set("key", "{\"question\":\"question\",\"count\":1,\"latestAskedAt\":null}",
                         Duration.ofMinutes(5));
