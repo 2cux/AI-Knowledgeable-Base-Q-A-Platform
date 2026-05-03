@@ -19,6 +19,7 @@ import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatFeedbackMapper;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.service.admin.AdminPermissionService;
+import com.example.aikb.service.chat.AdminChatStatsCacheService;
 import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
@@ -29,6 +30,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,12 +50,15 @@ class AdminChatRecordQueryServiceImplTest {
     @Mock
     private AdminPermissionService adminPermissionService;
 
+    @Mock
+    private AdminChatStatsCacheService adminChatStatsCacheService;
+
     private AdminChatRecordQueryServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AdminChatRecordQueryServiceImpl(chatRecordMapper, chatFeedbackMapper, adminPermissionService,
-                new CitationJsonCodec(new ObjectMapper()));
+                new CitationJsonCodec(new ObjectMapper()), adminChatStatsCacheService);
     }
 
     @Test
@@ -344,6 +349,7 @@ class AdminChatRecordQueryServiceImplTest {
         assertThat(result.getLikeCount()).isEqualTo(3L);
         assertThat(result.getDislikeCount()).isEqualTo(2L);
         verify(adminPermissionService).ensureAdmin();
+        verify(adminChatStatsCacheService, never()).getBaseStats();
     }
 
     @Test
@@ -352,6 +358,7 @@ class AdminChatRecordQueryServiceImplTest {
         chatStats.setTotalChatCount(0L);
         chatStats.setMatchedCount(0L);
         chatStats.setMissedCount(0L);
+        when(adminChatStatsCacheService.getBaseStats()).thenReturn(Optional.empty());
         when(chatRecordMapper.selectAdminChatStats(any(), any(), any())).thenReturn(chatStats);
         when(chatFeedbackMapper.selectAdminFeedbackStats(any(), any(), any())).thenReturn(null);
 
@@ -362,6 +369,28 @@ class AdminChatRecordQueryServiceImplTest {
         assertThat(result.getFeedbackCount()).isZero();
         assertThat(result.getLikeCount()).isZero();
         assertThat(result.getDislikeCount()).isZero();
+        verify(adminChatStatsCacheService).putBaseStats(result);
+    }
+
+    @Test
+    void getStatsReturnsCachedBaseStatsWhenRedisHits() {
+        AdminChatStatsVO cached = AdminChatStatsVO.builder()
+                .totalChatCount(3L)
+                .matchedCount(2L)
+                .missedCount(1L)
+                .matchRate(new BigDecimal("0.6667"))
+                .feedbackCount(1L)
+                .likeCount(1L)
+                .dislikeCount(0L)
+                .build();
+        when(adminChatStatsCacheService.getBaseStats()).thenReturn(Optional.of(cached));
+
+        AdminChatStatsVO result = service.getStats(null, null, null);
+
+        assertThat(result).isSameAs(cached);
+        verify(chatRecordMapper, never()).selectAdminChatStats(any(), any(), any());
+        verify(chatFeedbackMapper, never()).selectAdminFeedbackStats(any(), any(), any());
+        verify(adminChatStatsCacheService, never()).putBaseStats(any());
     }
 
     @Test

@@ -6,7 +6,7 @@ AI 知识库问答平台后端 MVP。项目基于 Spring Boot 构建，围绕“
 
 本项目用于模拟企业内部知识库问答场景：用户上传 txt / md 文档到自己的知识库，系统将文档切分为 chunk 并生成 embedding，提问时在知识库范围内检索相关 chunk，再调用 LLM 生成带引用来源的答案。第三周收尾阶段的目标是让项目达到简历展示、面试讲解和本地验收可复现的状态。
 
-当前实现是 MVP，不是生产级高并发系统。向量检索采用 MySQL 存储 embedding JSON + Java 侧 cosine similarity 计算；尚未接入 Milvus、pgvector、Qdrant 等生产级向量数据库。Redis / RabbitMQ / 微服务拆分也不是当前已实现能力，简历或面试描述中不要夸大。
+当前实现是 MVP，不是生产级高并发系统。向量检索采用 MySQL 存储 embedding JSON + Java 侧 cosine similarity 计算；尚未接入 Milvus、pgvector、Qdrant 等生产级向量数据库。Redis 仅用于管理端基础统计接口缓存；RabbitMQ / 微服务拆分不是当前已实现能力，简历或面试描述中不要夸大。
 
 ## 技术栈
 
@@ -21,6 +21,7 @@ AI 知识库问答平台后端 MVP。项目基于 Spring Boot 构建，围绕“
 - springdoc-openapi
 - LLM API
 - Embedding API
+- Redis 7 (only for `GET /api/admin/chat/stats` cache)
 - Maven
 
 ## 核心功能
@@ -121,6 +122,35 @@ mvn spring-boot:run
 默认端口：`8080`。
 
 OpenAPI / Swagger UI：`http://localhost:8080/swagger-ui.html`
+
+## Redis Admin Stats Cache
+
+`GET /api/admin/chat/stats` uses Redis as an optional cache for the base, unfiltered admin statistics response. Redis is not required for RAG, `chat/ask`, `retrieval/search`, document `process`, or document `embed`.
+
+Start Redis with Docker:
+
+```bash
+docker run -d --name aikb-redis -p 6379:6379 redis:7
+```
+
+Optional redis-cli verification:
+
+```bash
+docker exec -it aikb-redis redis-cli
+```
+
+Related environment variables:
+
+```env
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DATABASE=0
+REDIS_TIMEOUT=3000ms
+ADMIN_STATS_CACHE_TTL_MINUTES=5
+```
+
+The cache key is `aikb:admin:chat:stats`. The default TTL is 5 minutes. If Redis is unavailable or serialization fails, the endpoint logs a throttled warn and falls back to MySQL.
 
 ## Flyway 自动迁移说明
 
@@ -258,7 +288,7 @@ Authorization: Bearer <token>
 
 - 当前向量检索是 MySQL 存储 `chunk_embedding.vector_json` + Java cosine similarity 的 MVP 实现。
 - 当前没有接入生产级向量数据库。
-- 当前没有实现 Redis 缓存业务能力，虽然依赖中存在 Redis starter。
+- 当前仅为 `GET /api/admin/chat/stats` 实现 Redis 可降级缓存，未把 Redis 接入 RAG、文档处理或消息队列链路。
 - 当前没有接入 RabbitMQ、Kafka 或异步消息队列。
 - 当前不是微服务架构，也未实现分布式任务调度。
 - 当前文件存储为本地目录，不是对象存储。

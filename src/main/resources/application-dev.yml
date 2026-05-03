@@ -8,7 +8,9 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
       database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:3000ms}
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -23,6 +25,9 @@ jwt:
   issuer: ${JWT_ISSUER:aikb-backend}
 
 app:
+  cache:
+    admin:
+      stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}
   llm:
     enabled: true
     base-url: ${APP_LLM_BASE_URL:${OPENAI_LLM_BASE_URL:https://api.xiaocaseai.com/v1/messages}}

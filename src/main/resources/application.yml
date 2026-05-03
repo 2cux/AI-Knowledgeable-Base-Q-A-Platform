@@ -10,6 +10,13 @@ spring:
     locations: classpath:db/migration
   jackson:
     time-zone: Asia/Shanghai
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:3000ms}
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
@@ -40,6 +47,9 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  cache:
+    admin:
+      stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}
   file:
     upload-dir: ${APP_FILE_UPLOAD_DIR:uploads}
     max-size: 20MB

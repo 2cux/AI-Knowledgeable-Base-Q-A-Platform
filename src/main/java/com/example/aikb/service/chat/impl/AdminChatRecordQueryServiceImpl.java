@@ -14,6 +14,7 @@ import com.example.aikb.mapper.ChatFeedbackMapper;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.AdminChatRecordQueryService;
+import com.example.aikb.service.chat.AdminChatStatsCacheService;
 import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
@@ -47,6 +48,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     private final ChatFeedbackMapper chatFeedbackMapper;
     private final AdminPermissionService adminPermissionService;
     private final CitationJsonCodec citationJsonCodec;
+    private final AdminChatStatsCacheService adminChatStatsCacheService;
 
     @Override
     public PageResult<AdminChatRecordListItemVO> page(Long knowledgeBaseId, Boolean matched, long pageNum,
@@ -151,6 +153,20 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
         adminPermissionService.ensureAdmin();
         validateOperationQuery(knowledgeBaseId, startTime, endTime);
 
+        if (isBaseStatsQuery(knowledgeBaseId, startTime, endTime)) {
+            return adminChatStatsCacheService.getBaseStats()
+                    .orElseGet(() -> {
+                        AdminChatStatsVO stats = queryStatsFromDatabase(knowledgeBaseId, startTime, endTime);
+                        adminChatStatsCacheService.putBaseStats(stats);
+                        return stats;
+                    });
+        }
+
+        return queryStatsFromDatabase(knowledgeBaseId, startTime, endTime);
+    }
+
+    private AdminChatStatsVO queryStatsFromDatabase(Long knowledgeBaseId, LocalDateTime startTime,
+            LocalDateTime endTime) {
         AdminChatStatsCountRow chatStats = chatRecordMapper.selectAdminChatStats(knowledgeBaseId, startTime, endTime);
         AdminFeedbackStatsRow feedbackStats = chatFeedbackMapper.selectAdminFeedbackStats(knowledgeBaseId, startTime,
                 endTime);
@@ -168,6 +184,10 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .likeCount(safeLong(feedbackStats == null ? null : feedbackStats.getLikeCount()))
                 .dislikeCount(safeLong(feedbackStats == null ? null : feedbackStats.getDislikeCount()))
                 .build();
+    }
+
+    private boolean isBaseStatsQuery(Long knowledgeBaseId, LocalDateTime startTime, LocalDateTime endTime) {
+        return knowledgeBaseId == null && startTime == null && endTime == null;
     }
 
     @Override

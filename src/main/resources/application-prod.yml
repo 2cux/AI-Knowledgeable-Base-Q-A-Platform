@@ -4,8 +4,18 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:3000ms}
 
 app:
+  cache:
+    admin:
+      stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}
   debug:
     ai-test:
       # Production must keep AI debug endpoints disabled by default.
