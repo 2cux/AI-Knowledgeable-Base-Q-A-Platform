@@ -1,3 +1,10 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
 app:
   debug:
     ai-test:
@@ -7,3 +14,5 @@ app:
 jwt:
   # Production must provide JWT_SECRET explicitly. Do not fall back to local development defaults.
   secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:86400000}
+  issuer: ${JWT_ISSUER:aikb-prod}
