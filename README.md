@@ -21,7 +21,7 @@ AI 知识库问答平台后端 MVP。项目基于 Spring Boot 构建，围绕“
 - springdoc-openapi
 - LLM API
 - Embedding API
-- Redis 7 (only for `GET /api/admin/chat/stats` cache)
+- Redis 7（仅用于 `GET /api/admin/chat/stats` 和热门问题缓存）
 - Maven
 
 ## 核心功能
@@ -123,23 +123,23 @@ mvn spring-boot:run
 
 OpenAPI / Swagger UI：`http://localhost:8080/swagger-ui.html`
 
-## Redis Admin Stats Cache
+## 管理端统计 Redis 缓存
 
-`GET /api/admin/chat/stats` uses Redis as an optional cache for the base, unfiltered admin statistics response. Redis is not required for RAG, `chat/ask`, `retrieval/search`, document `process`, or document `embed`.
+`GET /api/admin/chat/stats` 使用 Redis 作为基础、未筛选管理端统计响应的可选缓存。RAG、`chat/ask`、`retrieval/search`、文档 `process` 和文档 `embed` 不依赖 Redis。
 
-Start Redis with Docker:
+使用 Docker 启动 Redis：
 
 ```bash
 docker run -d --name aikb-redis -p 6379:6379 redis:7
 ```
 
-Optional redis-cli verification:
+可选的 redis-cli 验证：
 
 ```bash
 docker exec -it aikb-redis redis-cli
 ```
 
-Related environment variables:
+相关环境变量：
 
 ```env
 REDIS_HOST=localhost
@@ -151,26 +151,36 @@ ADMIN_STATS_CACHE_TTL_MINUTES=5
 HOT_QUESTIONS_CACHE_TTL_MINUTES=5
 ```
 
-The admin stats cache key is `aikb:admin:chat:stats`. Hot questions use limit-specific keys such as `aikb:admin:chat:hot_questions:10`. The default TTL is 5 minutes, so admin operation statistics can have minute-level eventual consistency. If Redis is unavailable or serialization fails, the endpoint logs a throttled warn and falls back to MySQL.
+管理端统计缓存 key 为 `aikb:admin:chat:stats`。默认 TTL 为 5 分钟，因此管理端运营统计允许分钟级最终一致性。如果 Redis 不可用或序列化失败，接口会记录限流后的 warn 日志，并降级回 MySQL 查询。
 
-## RabbitMQ Document Process Queue
+## 热门问题 Redis 缓存
 
-Document parse/split and embedding generation are asynchronous. `POST /api/documents/{documentId}/process` validates the current user's permission, marks the document/task as `PROCESSING`, sends a RabbitMQ message, and returns immediately. `POST /api/documents/{documentId}/embed` also submits a RabbitMQ task and returns immediately; it does not wait for the external Embedding API to finish. Embedding is still triggered explicitly and is not automatically chained after process.
+热门问题按 limit 使用不同缓存 key，例如 `aikb:admin:chat:hot_questions:10`。默认 TTL 为 5 分钟，过期后会重新查询 MySQL 并写回 Redis。Redis 不可用或序列化失败时，热门问题接口同样会降级回 MySQL 查询。
 
-Start RabbitMQ with Docker:
+## 文档解析 / 切片与 Embedding 生成 RabbitMQ 异步化
+
+### 文档解析 / 切片 RabbitMQ 异步化
+
+`POST /api/documents/{documentId}/process` 会校验当前用户权限，将文档 / 任务标记为 `PROCESSING`，发送 RabbitMQ 消息后立即返回。文档解析 / 切片由消费者异步执行，接口本身不等待解析和切片完成。
+
+### Embedding 生成 RabbitMQ 异步化
+
+`POST /api/documents/{documentId}/embed` 会提交 RabbitMQ 任务并立即返回，不会等待外部 Embedding API 执行完成。Embedding 仍需要显式触发，当前不会在 process 完成后自动串联执行。
+
+使用 Docker 启动 RabbitMQ：
 
 ```bash
 docker run -d --name aikb-rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 ```
 
-Management UI:
+管理控制台：
 
 ```text
 http://localhost:15672
 guest / guest
 ```
 
-Related environment variables:
+相关环境变量：
 
 ```env
 RABBITMQ_HOST=localhost
@@ -180,40 +190,40 @@ RABBITMQ_PASSWORD=guest
 RABBITMQ_VIRTUAL_HOST=/
 ```
 
-Queue design:
+队列设计：
 
-| Item | Value |
+| 项目 | 值 |
 |---|---|
-| Exchange | `aikb.document.exchange` |
-| Queue | `aikb.document.process.queue` |
-| Routing key | `aikb.document.process` |
-| Dead letter exchange | `aikb.document.dlx` |
-| Dead letter queue | `aikb.document.process.dlq` |
-| Dead letter routing key | `aikb.document.process.dlq` |
-| Embedding queue | `aikb.document.embedding.queue` |
-| Embedding routing key | `aikb.document.embedding` |
-| Embedding dead letter queue | `aikb.document.embedding.dlq` |
-| Embedding dead letter routing key | `aikb.document.embedding.dlq` |
+| 交换机 | `aikb.document.exchange` |
+| 文档处理队列 | `aikb.document.process.queue` |
+| 文档处理路由键 | `aikb.document.process` |
+| 死信交换机 | `aikb.document.dlx` |
+| 文档处理死信队列 | `aikb.document.process.dlq` |
+| 文档处理死信路由键 | `aikb.document.process.dlq` |
+| Embedding 队列 | `aikb.document.embedding.queue` |
+| Embedding 路由键 | `aikb.document.embedding` |
+| Embedding 死信队列 | `aikb.document.embedding.dlq` |
+| Embedding 死信路由键 | `aikb.document.embedding.dlq` |
 
-`DocumentProcessMessage` contains `documentId`, `knowledgeBaseId`, `userId`, `force`, `requestId`, `createdAt`, `taskId`, `chunkSize`, and `overlap`. It does not carry JWT, API keys, file paths outside the stored document metadata, or document full text.
+`DocumentProcessMessage` 包含 `documentId`、`knowledgeBaseId`、`userId`、`force`、`requestId`、`createdAt`、`taskId`、`chunkSize` 和 `overlap`。消息中不携带 JWT、API Key、已存储文档元数据之外的文件路径，也不携带文档全文。
 
-`DocumentEmbeddingMessage` contains `documentId`, `knowledgeBaseId`, `userId`, `force`, `requestId`, `createdAt`, `taskId`, and `embeddingModel`. It does not carry JWT, API keys, chunk text, or vector content.
+`DocumentEmbeddingMessage` 包含 `documentId`、`knowledgeBaseId`、`userId`、`force`、`requestId`、`createdAt`、`taskId` 和 `embeddingModel`。消息中不携带 JWT、API Key、chunk 文本或向量内容。
 
-How to verify completion:
+如何验证完成情况：
 
-1. Call `POST /api/documents/{documentId}/process`.
-2. Expect a fast response with `parseStatus=PROCESSING` and `taskStatus=PROCESSING`.
-3. Poll `GET /api/documents/{documentId}` or `GET /api/documents/{documentId}/status` until `parseStatus=SUCCESS`.
-4. Call `GET /api/documents/{documentId}/chunks` and verify chunks exist.
-5. Repeat process with `force=false`; it should not create duplicate chunks when already `SUCCESS`.
-6. Call process with `{ "force": true }`; old chunks are cleared and rebuilt in one transaction.
-7. Call `POST /api/documents/{documentId}/embed`.
-8. Expect a fast response with `taskStatus=PROCESSING`.
-9. Poll `GET /api/documents/{documentId}` or `GET /api/documents/{documentId}/embedding-status` until embedding status is `SUCCESS`.
-10. Run `POST /api/retrieval/search` and `POST /api/chat/ask` after embedding succeeds.
-11. Stop RabbitMQ and call process/embed; the API returns a clear RabbitMQ unavailable error and the document is not left stuck in `PROCESSING`.
+1. 调用 `POST /api/documents/{documentId}/process`。
+2. 预期快速返回，且 `parseStatus=PROCESSING`、`taskStatus=PROCESSING`。
+3. 轮询 `GET /api/documents/{documentId}` 或 `GET /api/documents/{documentId}/status`，直到 `parseStatus=SUCCESS`。
+4. 调用 `GET /api/documents/{documentId}/chunks`，确认 chunk 已生成。
+5. 使用 `force=false` 重复调用 process；当文档已为 `SUCCESS` 时，不应生成重复 chunk。
+6. 使用 `{ "force": true }` 调用 process；旧 chunk 会在同一事务内清理并重建。
+7. 调用 `POST /api/documents/{documentId}/embed`。
+8. 预期快速返回，且 `taskStatus=PROCESSING`。
+9. 轮询 `GET /api/documents/{documentId}` 或 `GET /api/documents/{documentId}/embedding-status`，直到 embedding 状态为 `SUCCESS`。
+10. embedding 成功后，执行 `POST /api/retrieval/search` 和 `POST /api/chat/ask`。
+11. 停止 RabbitMQ 后调用 process / embed；接口应返回明确的 RabbitMQ 不可用错误，且文档不会卡在 `PROCESSING`。
 
-RabbitMQ listener retry is enabled with 3 attempts and manual acknowledgement. Failed messages are rejected after retries and routed to the DLQ through the queue's dead-letter settings. Consumers update document/task failure status and log `documentId` plus `requestId`. Embedding requires `APP_EMBEDDING_API_KEY` or `OPENAI_API_KEY`; a missing or invalid key makes the embedding consumer fail and mark the document embedding status as `FAILED`.
+RabbitMQ 监听器启用了 3 次重试和手动确认。消息在重试后仍失败时会被拒绝，并通过队列死信配置路由到 DLQ。消费者会更新文档 / 任务失败状态，并记录 `documentId` 和 `requestId`。Embedding 需要配置 `APP_EMBEDDING_API_KEY` 或 `OPENAI_API_KEY`；如果 key 缺失或无效，embedding 消费者会失败，并将文档 embedding 状态标记为 `FAILED`。
 
 ## Flyway 自动迁移说明
 
@@ -237,13 +247,13 @@ RabbitMQ listener retry is enabled with 3 attempts and manual acknowledgement. F
 | `JWT_SECRET` | JWT 签名密钥 | dev 有本地默认值；生产必须配置强随机值 |
 | `JWT_EXPIRATION` | JWT 过期时间，毫秒 | 默认 `86400000` |
 | `JWT_ISSUER` | JWT issuer | dev 默认 `aikb-backend` |
-| `REDIS_HOST` | Redis host for admin stats cache | 默认 `localhost` |
-| `REDIS_PORT` | Redis port for admin stats cache | 默认 `6379` |
-| `REDIS_PASSWORD` | Redis password | 默认空，本地 Redis 可不配置 |
-| `REDIS_DATABASE` | Redis database index | 默认 `0` |
-| `REDIS_TIMEOUT` | Redis command timeout | 默认 `3000ms` |
-| `ADMIN_STATS_CACHE_TTL_MINUTES` | `aikb:admin:chat:stats` TTL minutes | 默认 `5` |
-| `HOT_QUESTIONS_CACHE_TTL_MINUTES` | `aikb:admin:chat:hot_questions:{limit}` TTL minutes | 默认 `5` |
+| `REDIS_HOST` | 管理端统计与热门问题缓存使用的 Redis 主机 | 默认 `localhost` |
+| `REDIS_PORT` | 管理端统计与热门问题缓存使用的 Redis 端口 | 默认 `6379` |
+| `REDIS_PASSWORD` | Redis 密码 | 默认空，本地 Redis 可不配置 |
+| `REDIS_DATABASE` | Redis 数据库索引 | 默认 `0` |
+| `REDIS_TIMEOUT` | Redis 命令超时时间 | 默认 `3000ms` |
+| `ADMIN_STATS_CACHE_TTL_MINUTES` | `aikb:admin:chat:stats` 的 TTL，单位分钟 | 默认 `5` |
+| `HOT_QUESTIONS_CACHE_TTL_MINUTES` | `aikb:admin:chat:hot_questions:{limit}` 的 TTL，单位分钟 | 默认 `5` |
 | `APP_LLM_API_KEY` | LLM API Key | 推荐显式配置 |
 | `APP_EMBEDDING_API_KEY` | Embedding API Key | 推荐显式配置 |
 | `OPENAI_API_KEY` | 通用兼容 API Key | 可作为 LLM / Embedding 兜底 |
