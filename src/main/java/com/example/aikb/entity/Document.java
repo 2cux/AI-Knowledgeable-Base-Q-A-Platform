@@ -46,8 +46,8 @@ public class Document {
     @TableField("storage_path")
     private String storagePath;
 
-    /** 解析状态，例如 UPLOADED、PENDING、DONE、FAILED。 */
-    @Schema(description = "解析状态", example = "UPLOADED")
+    /** 解析状态。文件上传成功后初始为 NOT_STARTED，需要调用 process 接口后才会进入解析流程。 */
+    @Schema(description = "解析状态；文件上传成功后初始为 NOT_STARTED，需要调用 process 接口后才会进入解析流程", example = "NOT_STARTED")
     @TableField("parse_status")
     private String parseStatus;
 

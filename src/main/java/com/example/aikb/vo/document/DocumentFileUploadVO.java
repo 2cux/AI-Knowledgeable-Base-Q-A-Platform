@@ -37,8 +37,8 @@ public class DocumentFileUploadVO {
     @Schema(description = "后端生成的真实存储相对路径", example = "1/1/20260420/uuid.md")
     private String storagePath;
 
-    /** 解析状态，上传成功后固定为 UPLOADED。 */
-    @Schema(description = "解析状态", example = "UPLOADED")
+    /** 文件上传成功后，解析状态初始为 NOT_STARTED，需要调用 process 接口后才会进入解析流程。 */
+    @Schema(description = "解析状态；文件上传成功后初始为 NOT_STARTED，需要调用 process 接口后才会进入解析流程", example = "NOT_STARTED")
     private String parseStatus;
 
     /** 上传用户 ID。 */

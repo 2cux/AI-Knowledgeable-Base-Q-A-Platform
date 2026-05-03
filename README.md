@@ -203,7 +203,7 @@ OpenAPI / Swagger UI：`http://localhost:8080/swagger-ui.html`
 - prod profile 下强制拒绝。
 - dev profile 下允许进入调试守卫，但仍要求管理员权限。
 - 非 dev 环境需要显式开启 `app.debug.ai-test.enabled`，且仍要求管理员权限。
-- 响应只返回是否配置了 key、模型名、向量维度或上游响应摘要，不返回真实 API Key。
+- debug 接口仅用于本地联调，可返回上游调试响应内容，但不会返回真实 API Key。
 
 ## 核心接口调用顺序
 
@@ -275,4 +275,3 @@ Authorization: Bearer <token>
 - 增加对象存储、文件病毒扫描、内容安全审计。
 - 完善管理员后台 UI、知识库运营看板和 RAG 评估集。
 - 增加生产监控、限流、审计日志和更细粒度权限。
-

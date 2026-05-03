@@ -31,7 +31,7 @@ public class DocumentListVO {
     @Schema(description = "文件大小，单位字节", example = "204800")
     private Long fileSize;
 
-    @Schema(description = "解析状态", example = "UPLOADED")
+    @Schema(description = "解析状态；文件上传成功后初始为 NOT_STARTED，需要调用 process 接口后才会进入解析流程", example = "NOT_STARTED")
     private String parseStatus;
 
     @Schema(description = "Chunk count", example = "12")
