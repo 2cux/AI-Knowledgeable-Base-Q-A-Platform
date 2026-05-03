@@ -55,8 +55,11 @@ public class AdminRedisCacheService {
         long now = System.currentTimeMillis();
         long previous = lastWarnAt.get();
         if (now - previous >= WARN_INTERVAL_MILLIS && lastWarnAt.compareAndSet(previous, now)) {
-            log.warn("Redis admin cache {} failed, cache={}, falling back to MySQL: {}",
-                    operation, cacheName, ex.getMessage());
+            String fallback = "write".equals(operation) || "serialize".equals(operation)
+                    ? "ignoring cache write failure"
+                    : "falling back to MySQL";
+            log.warn("Redis admin cache {} failed, cache={}, {}: {}", operation, cacheName, fallback,
+                    ex.getMessage());
         }
     }
 }

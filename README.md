@@ -151,7 +151,7 @@ ADMIN_STATS_CACHE_TTL_MINUTES=5
 HOT_QUESTIONS_CACHE_TTL_MINUTES=5
 ```
 
-The admin stats cache key is `aikb:admin:chat:stats`. Hot questions use limit-specific keys such as `aikb:admin:chat:hot_questions:10`. The default TTL is 5 minutes. If Redis is unavailable or serialization fails, the endpoint logs a throttled warn and falls back to MySQL.
+The admin stats cache key is `aikb:admin:chat:stats`. Hot questions use limit-specific keys such as `aikb:admin:chat:hot_questions:10`. The default TTL is 5 minutes, so admin operation statistics can have minute-level eventual consistency. If Redis is unavailable or serialization fails, the endpoint logs a throttled warn and falls back to MySQL.
 
 ## Flyway 自动迁移说明
 
