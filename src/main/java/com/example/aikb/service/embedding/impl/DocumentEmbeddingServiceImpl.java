@@ -50,7 +50,6 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_PROCESSING = "PROCESSING";
-    private static final String STATUS_PARTIAL_SUCCESS = "PARTIAL_SUCCESS";
     private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
     private static final String DOCUMENT_STATUS_NOT_CHUNKED = "NOT_CHUNKED";
     private static final String DOCUMENT_STATUS_PENDING = "PENDING";
@@ -92,7 +91,6 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         }
         String embeddingModel = resolveEmbeddingModel(safeRequest);
         if (!force && isEmbeddingSuccess(document, chunks.size())) {
-            int embeddedCount = countSuccessfulEmbeddings(document.getId());
             return DocumentEmbeddingVO.builder()
                     .documentId(document.getId())
                     .knowledgeBaseId(document.getKnowledgeBaseId())

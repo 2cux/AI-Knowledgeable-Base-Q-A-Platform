@@ -14,6 +14,7 @@ import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.boot.autoconfigure.amqp.SimpleRabbitListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.lang.NonNull;
 
 @Configuration
 @RequiredArgsConstructor
@@ -92,7 +93,8 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, MessageConverter rabbitJsonMessageConverter) {
+    public RabbitTemplate rabbitTemplate(@NonNull ConnectionFactory connectionFactory,
+            @NonNull MessageConverter rabbitJsonMessageConverter) {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
         rabbitTemplate.setMessageConverter(rabbitJsonMessageConverter);
         return rabbitTemplate;
@@ -100,9 +102,9 @@ public class RabbitMqConfig {
 
     @Bean
     public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
-            SimpleRabbitListenerContainerFactoryConfigurer configurer,
-            ConnectionFactory connectionFactory,
-            MessageConverter rabbitJsonMessageConverter) {
+            @NonNull SimpleRabbitListenerContainerFactoryConfigurer configurer,
+            @NonNull ConnectionFactory connectionFactory,
+            @NonNull MessageConverter rabbitJsonMessageConverter) {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         configurer.configure(factory, connectionFactory);
         factory.setMessageConverter(rabbitJsonMessageConverter);
