@@ -174,6 +174,12 @@ The cache key is `aikb:admin:chat:stats`. The default TTL is 5 minutes. If Redis
 | `JWT_SECRET` | JWT 签名密钥 | dev 有本地默认值；生产必须配置强随机值 |
 | `JWT_EXPIRATION` | JWT 过期时间，毫秒 | 默认 `86400000` |
 | `JWT_ISSUER` | JWT issuer | dev 默认 `aikb-backend` |
+| `REDIS_HOST` | Redis host for admin stats cache | 默认 `localhost` |
+| `REDIS_PORT` | Redis port for admin stats cache | 默认 `6379` |
+| `REDIS_PASSWORD` | Redis password | 默认空，本地 Redis 可不配置 |
+| `REDIS_DATABASE` | Redis database index | 默认 `0` |
+| `REDIS_TIMEOUT` | Redis command timeout | 默认 `3000ms` |
+| `ADMIN_STATS_CACHE_TTL_MINUTES` | `aikb:admin:chat:stats` TTL minutes | 默认 `5` |
 | `APP_LLM_API_KEY` | LLM API Key | 推荐显式配置 |
 | `APP_EMBEDDING_API_KEY` | Embedding API Key | 推荐显式配置 |
 | `OPENAI_API_KEY` | 通用兼容 API Key | 可作为 LLM / Embedding 兜底 |

@@ -394,6 +394,20 @@ class AdminChatRecordQueryServiceImplTest {
     }
 
     @Test
+    void getStatsRequiresAdminBeforeReadingCache() {
+        doThrow(new BusinessException(40300, "forbidden"))
+                .when(adminPermissionService).ensureAdmin();
+
+        assertThatThrownBy(() -> service.getStats(null, null, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("forbidden");
+
+        verify(adminChatStatsCacheService, never()).getBaseStats();
+        verify(chatRecordMapper, never()).selectAdminChatStats(any(), any(), any());
+        verify(chatFeedbackMapper, never()).selectAdminFeedbackStats(any(), any(), any());
+    }
+
+    @Test
     void getByIdThrowsWhenRecordDoesNotExist() {
         when(chatRecordMapper.selectOne(any())).thenReturn(null);
 
