@@ -17,6 +17,22 @@ spring:
       password: ${REDIS_PASSWORD:}
       database: ${REDIS_DATABASE:0}
       timeout: ${REDIS_TIMEOUT:3000ms}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 10000ms
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
@@ -47,6 +63,14 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  mq:
+    document-process:
+      exchange: aikb.document.exchange
+      queue: aikb.document.process.queue
+      routing-key: aikb.document.process
+      dead-letter-exchange: aikb.document.dlx
+      dead-letter-queue: aikb.document.process.dlq
+      dead-letter-routing-key: aikb.document.process.dlq
   cache:
     admin:
       stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}

@@ -1,6 +1,7 @@
 package com.example.aikb.service.document;
 
 import com.example.aikb.dto.document.DocumentProcessRequest;
+import com.example.aikb.mq.document.DocumentProcessMessage;
 import com.example.aikb.vo.document.DocumentChunkVO;
 import com.example.aikb.vo.document.DocumentProcessVO;
 import java.util.List;
@@ -18,6 +19,8 @@ public interface DocumentProcessService {
      * @return 文档处理结果
      */
     DocumentProcessVO process(Long documentId, DocumentProcessRequest request);
+
+    DocumentProcessVO processFromMessage(DocumentProcessMessage message);
 
     /**
      * 查询当前用户可访问的指定文档切片列表。

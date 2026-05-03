@@ -9,11 +9,13 @@ import com.example.aikb.entity.DocumentChunk;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.entity.TaskRecord;
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.mapper.ChunkEmbeddingMapper;
 import com.example.aikb.mapper.DocumentChunkMapper;
 import com.example.aikb.mapper.DocumentMapper;
-import com.example.aikb.mapper.ChunkEmbeddingMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.mapper.TaskRecordMapper;
+import com.example.aikb.mq.document.DocumentProcessMessage;
+import com.example.aikb.mq.document.DocumentProcessProducer;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.document.DocumentProcessService;
 import com.example.aikb.service.document.SimpleDocumentParser;
@@ -21,15 +23,17 @@ import com.example.aikb.service.document.TextSplitter;
 import com.example.aikb.service.task.TaskRecordService;
 import com.example.aikb.vo.document.DocumentChunkVO;
 import com.example.aikb.vo.document.DocumentProcessVO;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.AmqpException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
-/**
- * 文档处理服务实现类，负责将文档纯文本切片并写入 document_chunk 表。
- */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DocumentProcessServiceImpl implements DocumentProcessService {
@@ -49,9 +53,9 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private static final String TASK_STATUS_FAILED = "FAILED";
     private static final String TASK_BIZ_TYPE_DOCUMENT = "DOCUMENT";
     private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
-    private static final String MESSAGE_DOCUMENT_NOT_FOUND = "文档不存在或无权限访问";
-    private static final String MESSAGE_DOCUMENT_PROCESSING = "文档正在处理中，请勿重复提交";
-    private static final String MESSAGE_DOCUMENT_ALREADY_PROCESSED = "文档已处理完成，请勿重复处理";
+    private static final String MESSAGE_DOCUMENT_NOT_FOUND = "Document not found or no permission";
+    private static final String MESSAGE_DOCUMENT_PROCESSING = "Document is already processing";
+    private static final String MESSAGE_DOCUMENT_ALREADY_PROCESSED = "Document already processed";
 
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
@@ -62,27 +66,18 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private final TextSplitter textSplitter;
     private final TaskRecordService taskRecordService;
     private final TransactionTemplate transactionTemplate;
+    private final DocumentProcessProducer documentProcessProducer;
 
-    /**
-     * 对当前用户可访问的指定文档执行文本切片入库。
-     *
-     * @param documentId 文档 ID
-     * @param request 文档处理请求参数
-     * @return 文档处理结果
-     */
     @Override
     public DocumentProcessVO process(Long documentId, DocumentProcessRequest request) {
         DocumentProcessRequest safeRequest = normalizeRequest(request);
-        if (safeRequest.getOverlap() >= safeRequest.getChunkSize()) {
-            throw new BusinessException("overlap必须小于chunkSize");
-        }
+        validateChunkOptions(safeRequest);
 
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
         boolean force = Boolean.TRUE.equals(safeRequest.getForce());
         if (!force && isProcessSuccess(document)) {
-            int chunkCount = Math.toIntExact(documentChunkMapper.selectCount(new LambdaQueryWrapper<DocumentChunk>()
-                    .eq(DocumentChunk::getDocumentId, document.getId())));
+            int chunkCount = countChunks(document.getId());
             return DocumentProcessVO.builder()
                     .documentId(document.getId())
                     .knowledgeBaseId(document.getKnowledgeBaseId())
@@ -95,78 +90,75 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
 
         TaskRecord taskRecord = taskRecordService.createDocumentProcessTask(document, userId);
         taskRecordService.markProcessing(taskRecord.getId());
+        String requestId = UUID.randomUUID().toString();
+
+        try {
+            markDocumentProcessSubmitted(document.getId());
+            documentProcessProducer.send(DocumentProcessMessage.builder()
+                    .documentId(document.getId())
+                    .knowledgeBaseId(document.getKnowledgeBaseId())
+                    .userId(userId)
+                    .force(force)
+                    .requestId(requestId)
+                    .createdAt(LocalDateTime.now())
+                    .taskId(taskRecord.getId())
+                    .chunkSize(safeRequest.getChunkSize())
+                    .overlap(safeRequest.getOverlap())
+                    .textContent(safeRequest.getTextContent())
+                    .build());
+            log.info("Document process task submitted, documentId={}, taskId={}, requestId={}",
+                    document.getId(), taskRecord.getId(), requestId);
+            return DocumentProcessVO.builder()
+                    .documentId(document.getId())
+                    .knowledgeBaseId(document.getKnowledgeBaseId())
+                    .chunkCount(document.getChunkCount())
+                    .parseStatus(PARSE_STATUS_PROCESSING)
+                    .taskId(taskRecord.getId())
+                    .taskStatus(TASK_STATUS_PROCESSING)
+                    .build();
+        } catch (AmqpException ex) {
+            String safeError = lifecycleError("RabbitMQ message send failed: " + ex.getMessage());
+            taskRecordService.markFailed(taskRecord.getId(), safeError);
+            markDocumentProcessFailed(document.getId(), safeError);
+            log.warn("Submit document process message failed, documentId={}, taskId={}, requestId={}",
+                    document.getId(), taskRecord.getId(), requestId, ex);
+            throw new BusinessException(50300, "RabbitMQ unavailable, document process task was not submitted", 503);
+        } catch (RuntimeException ex) {
+            String safeError = lifecycleError(ex.getMessage());
+            taskRecordService.markFailed(taskRecord.getId(), safeError);
+            markDocumentProcessFailed(document.getId(), safeError);
+            throw ex;
+        }
+    }
+
+    @Override
+    public DocumentProcessVO processFromMessage(DocumentProcessMessage message) {
+        DocumentProcessRequest safeRequest = normalizeRequest(fromMessage(message));
+        validateChunkOptions(safeRequest);
 
         try {
             DocumentProcessVO result = transactionTemplate.execute(status ->
-                    processInTransaction(document, safeRequest, taskRecord.getId()));
+                    processMessageInTransaction(message, safeRequest));
             if (result == null) {
-                throw new BusinessException("文档处理结果为空");
+                throw new BusinessException("Document process result is empty");
             }
-            taskRecordService.markSuccess(taskRecord.getId());
+            if (message.getTaskId() != null) {
+                taskRecordService.markSuccess(message.getTaskId());
+            }
             result.setTaskStatus(TASK_STATUS_SUCCESS);
             return result;
         } catch (RuntimeException ex) {
             String safeError = lifecycleError(ex.getMessage());
-            taskRecordService.markFailed(taskRecord.getId(), safeError);
-            if (!MESSAGE_DOCUMENT_PROCESSING.equals(safeError)) {
-                markDocumentProcessFailed(document.getId(), safeError);
+            if (message.getTaskId() != null) {
+                taskRecordService.markFailed(message.getTaskId(), safeError);
+            }
+            if (!MESSAGE_DOCUMENT_PROCESSING.equals(safeError) && message.getDocumentId() != null) {
+                markDocumentProcessFailed(message.getDocumentId(), safeError);
             }
             throw ex;
         }
     }
 
-    /**
-     * 在事务内执行文档状态更新、真实解析和切片重建，失败时整体回滚。
-     */
-    private DocumentProcessVO processInTransaction(Document document, DocumentProcessRequest safeRequest, Long taskId) {
-        Document latestDocument = documentMapper.selectById(document.getId());
-        if (latestDocument == null) {
-            throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
-        }
-        validateLatestProcessState(latestDocument, Boolean.TRUE.equals(safeRequest.getForce()));
-
-        markDocumentChunking(latestDocument.getId());
-        String text = simpleDocumentParser.parse(latestDocument, safeRequest.getTextContent());
-        List<String> chunks = textSplitter.split(text, safeRequest.getChunkSize(), safeRequest.getOverlap());
-        if (chunks.isEmpty()) {
-            throw new BusinessException("文档内容为空，无法生成切片");
-        }
-
-        rebuildChunks(latestDocument, chunks);
-        updateDocumentProcessSuccess(latestDocument.getId(), chunks.size());
-
-        return DocumentProcessVO.builder()
-                .documentId(latestDocument.getId())
-                .knowledgeBaseId(latestDocument.getKnowledgeBaseId())
-                .chunkCount(chunks.size())
-                .parseStatus(PARSE_STATUS_SUCCESS)
-                .taskId(taskId)
-                .build();
-    }
-
-    /**
-     * 归一化处理请求，避免客户端显式传 null 时覆盖 DTO 默认值。
-     *
-     * @param request 原始处理请求
-     * @return 带默认值的处理请求
-     */
-    private DocumentProcessRequest normalizeRequest(DocumentProcessRequest request) {
-        DocumentProcessRequest safeRequest = request == null ? new DocumentProcessRequest() : request;
-        if (safeRequest.getChunkSize() == null) {
-            safeRequest.setChunkSize(500);
-        }
-        if (safeRequest.getOverlap() == null) {
-            safeRequest.setOverlap(50);
-        }
-        return safeRequest;
-    }
-
-    /**
-     * 查询当前用户可访问的指定文档切片列表。
-     *
-     * @param documentId 文档 ID
-     * @return 文档切片列表
-     */
     @Override
     public List<DocumentChunkVO> listChunks(Long documentId) {
         Long userId = CurrentUser.getUserId();
@@ -179,12 +171,70 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
                 .toList();
     }
 
-    /**
-     * 删除旧切片并重建新切片，保证重复处理文档时数据不会重复。
-     *
-     * @param document 文档实体
-     * @param chunks 切片文本列表
-     */
+    private DocumentProcessVO processMessageInTransaction(
+            DocumentProcessMessage message, DocumentProcessRequest safeRequest) {
+        Document latestDocument = documentMapper.selectById(message.getDocumentId());
+        if (latestDocument == null) {
+            throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
+        }
+        ensureDocumentStillValid(latestDocument);
+
+        boolean force = Boolean.TRUE.equals(safeRequest.getForce());
+        if (!force && isProcessSuccess(latestDocument)) {
+            return DocumentProcessVO.builder()
+                    .documentId(latestDocument.getId())
+                    .knowledgeBaseId(latestDocument.getKnowledgeBaseId())
+                    .chunkCount(countChunks(latestDocument.getId()))
+                    .parseStatus(PARSE_STATUS_SUCCESS)
+                    .taskId(message.getTaskId())
+                    .build();
+        }
+        validateConsumerProcessState(latestDocument, force, message.getTaskId());
+
+        String text = simpleDocumentParser.parse(latestDocument, safeRequest.getTextContent());
+        List<String> chunks = textSplitter.split(text, safeRequest.getChunkSize(), safeRequest.getOverlap());
+        if (chunks.isEmpty()) {
+            throw new BusinessException("Document content is empty, no chunks generated");
+        }
+
+        rebuildChunks(latestDocument, chunks);
+        updateDocumentProcessSuccess(latestDocument.getId(), chunks.size());
+
+        return DocumentProcessVO.builder()
+                .documentId(latestDocument.getId())
+                .knowledgeBaseId(latestDocument.getKnowledgeBaseId())
+                .chunkCount(chunks.size())
+                .parseStatus(PARSE_STATUS_SUCCESS)
+                .taskId(message.getTaskId())
+                .build();
+    }
+
+    private DocumentProcessRequest fromMessage(DocumentProcessMessage message) {
+        DocumentProcessRequest request = new DocumentProcessRequest();
+        request.setChunkSize(message.getChunkSize());
+        request.setOverlap(message.getOverlap());
+        request.setTextContent(message.getTextContent());
+        request.setForce(message.getForce());
+        return request;
+    }
+
+    private DocumentProcessRequest normalizeRequest(DocumentProcessRequest request) {
+        DocumentProcessRequest safeRequest = request == null ? new DocumentProcessRequest() : request;
+        if (safeRequest.getChunkSize() == null) {
+            safeRequest.setChunkSize(500);
+        }
+        if (safeRequest.getOverlap() == null) {
+            safeRequest.setOverlap(50);
+        }
+        return safeRequest;
+    }
+
+    private void validateChunkOptions(DocumentProcessRequest request) {
+        if (request.getOverlap() >= request.getChunkSize()) {
+            throw new BusinessException("overlap must be less than chunkSize");
+        }
+    }
+
     private void rebuildChunks(Document document, List<String> chunks) {
         chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
                 .eq(ChunkEmbedding::getDocumentId, document.getId()));
@@ -203,13 +253,6 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         }
     }
 
-    /**
-     * 查询并校验文档是否属于当前用户自己的知识库。
-     *
-     * @param documentId 文档 ID
-     * @param userId 当前用户 ID
-     * @return 文档实体
-     */
     private Document getOwnDocument(Long documentId, Long userId) {
         Document document = documentMapper.selectById(documentId);
         if (document == null) {
@@ -227,9 +270,16 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         return document;
     }
 
-    /**
-     * 创建处理任务前，先拦截已在处理或已处理完成的文档，避免重复提交。
-     */
+    private void ensureDocumentStillValid(Document document) {
+        KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
+                .eq(KnowledgeBase::getId, document.getKnowledgeBaseId())
+                .eq(KnowledgeBase::getStatus, 1)
+                .last("LIMIT 1"));
+        if (knowledgeBase == null) {
+            throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
+        }
+    }
+
     private void validateProcessAllowed(Document document, boolean force) {
         validateLatestProcessState(document, force);
         if (hasRunningDocumentTask(document.getId())) {
@@ -244,6 +294,21 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         }
         if (!force && isProcessSuccess(document)) {
             throw new BusinessException(MESSAGE_DOCUMENT_ALREADY_PROCESSED);
+        }
+    }
+
+    private void validateConsumerProcessState(Document document, boolean force, Long taskId) {
+        if (!force && isProcessSuccess(document)) {
+            return;
+        }
+
+        String parseStatus = document.getParseStatus();
+        boolean currentTaskMatches = taskId != null
+                && TASK_TYPE_DOCUMENT_PROCESS.equals(document.getLatestTaskType())
+                && TASK_STATUS_PROCESSING.equals(document.getLatestTaskStatus());
+        if ((PARSE_STATUS_PROCESSING.equals(parseStatus) || LEGACY_PARSE_STATUS_CHUNKING.equals(parseStatus))
+                && !currentTaskMatches) {
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
     }
 
@@ -263,10 +328,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         return count != null && count > 0;
     }
 
-    /**
-     * 原子地将文档状态切换为 CHUNKING，降低并发 process 同时执行的风险。
-     */
-    private void markDocumentChunking(Long documentId) {
+    private void markDocumentProcessSubmitted(Long documentId) {
         int rows = documentMapper.update(null, new LambdaUpdateWrapper<Document>()
                 .eq(Document::getId, documentId)
                 .ne(Document::getParseStatus, PARSE_STATUS_PROCESSING)
@@ -280,12 +342,6 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         }
     }
 
-    /**
-     * 更新文档解析状态。
-     *
-     * @param documentId 文档 ID
-     * @param parseStatus 解析状态
-     */
     private void updateDocumentProcessSuccess(Long documentId, int chunkCount) {
         Document update = new Document();
         update.setId(documentId);
@@ -309,8 +365,13 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         documentMapper.updateById(update);
     }
 
+    private int countChunks(Long documentId) {
+        return Math.toIntExact(documentChunkMapper.selectCount(new LambdaQueryWrapper<DocumentChunk>()
+                .eq(DocumentChunk::getDocumentId, documentId)));
+    }
+
     private String lifecycleError(String errorMessage) {
-        String message = StringUtils.hasText(errorMessage) ? errorMessage.trim() : "文档处理失败";
+        String message = StringUtils.hasText(errorMessage) ? errorMessage.trim() : "Document process failed";
         message = message.replaceAll("(?i)api[_-]?key\\s*[:=]\\s*\\S+", "apiKey=***");
         if (message.length() <= MAX_ERROR_MESSAGE_LENGTH) {
             return message;
@@ -318,12 +379,6 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         return message.substring(0, MAX_ERROR_MESSAGE_LENGTH);
     }
 
-    /**
-     * 将切片实体转换为接口展示对象。
-     *
-     * @param chunk 切片实体
-     * @return 切片展示对象
-     */
     private DocumentChunkVO toVO(DocumentChunk chunk) {
         return DocumentChunkVO.builder()
                 .id(chunk.getId())

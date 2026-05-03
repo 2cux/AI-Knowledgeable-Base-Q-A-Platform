@@ -103,7 +103,7 @@ public class DocumentController {
     public Result<DocumentProcessVO> process(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId,
             @Valid @RequestBody(required = false) DocumentProcessRequest request) {
-        return Result.success(documentProcessService.process(documentId, request), "Document processed successfully");
+        return Result.success(documentProcessService.process(documentId, request), "Document process task submitted");
     }
 
     @Operation(summary = "查询文档切片列表")
