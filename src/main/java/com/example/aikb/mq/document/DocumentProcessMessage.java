@@ -29,6 +29,4 @@ public class DocumentProcessMessage {
     private Integer chunkSize;
 
     private Integer overlap;
-
-    private String textContent;
 }

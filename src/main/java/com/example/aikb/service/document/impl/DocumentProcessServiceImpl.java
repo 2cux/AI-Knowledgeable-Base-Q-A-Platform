@@ -72,6 +72,9 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     public DocumentProcessVO process(Long documentId, DocumentProcessRequest request) {
         DocumentProcessRequest safeRequest = normalizeRequest(request);
         validateChunkOptions(safeRequest);
+        if (StringUtils.hasText(safeRequest.getTextContent())) {
+            throw new BusinessException("Async document process does not support textContent; upload txt/md file first");
+        }
 
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
@@ -104,7 +107,6 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
                     .taskId(taskRecord.getId())
                     .chunkSize(safeRequest.getChunkSize())
                     .overlap(safeRequest.getOverlap())
-                    .textContent(safeRequest.getTextContent())
                     .build());
             log.info("Document process task submitted, documentId={}, taskId={}, requestId={}",
                     document.getId(), taskRecord.getId(), requestId);
@@ -178,6 +180,16 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
             throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
         }
         ensureDocumentStillValid(latestDocument);
+        TaskRecord messageTask = getExecutableMessageTask(message, latestDocument.getId());
+        if (TASK_STATUS_SUCCESS.equals(messageTask.getStatus())) {
+            return DocumentProcessVO.builder()
+                    .documentId(latestDocument.getId())
+                    .knowledgeBaseId(latestDocument.getKnowledgeBaseId())
+                    .chunkCount(countChunks(latestDocument.getId()))
+                    .parseStatus(PARSE_STATUS_SUCCESS)
+                    .taskId(message.getTaskId())
+                    .build();
+        }
 
         boolean force = Boolean.TRUE.equals(safeRequest.getForce());
         if (!force && isProcessSuccess(latestDocument)) {
@@ -213,7 +225,6 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         DocumentProcessRequest request = new DocumentProcessRequest();
         request.setChunkSize(message.getChunkSize());
         request.setOverlap(message.getOverlap());
-        request.setTextContent(message.getTextContent());
         request.setForce(message.getForce());
         return request;
     }
@@ -278,6 +289,26 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         if (knowledgeBase == null) {
             throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
         }
+    }
+
+    private TaskRecord getExecutableMessageTask(DocumentProcessMessage message, Long documentId) {
+        if (message.getTaskId() == null) {
+            throw new BusinessException("Document process message taskId is required");
+        }
+        TaskRecord taskRecord = taskRecordMapper.selectById(message.getTaskId());
+        if (taskRecord == null
+                || !TASK_BIZ_TYPE_DOCUMENT.equals(taskRecord.getBizType())
+                || !documentId.equals(taskRecord.getBizId())
+                || !TASK_TYPE_DOCUMENT_PROCESS.equals(taskRecord.getTaskType())) {
+            throw new BusinessException("Document process message task does not match document");
+        }
+        if (TASK_STATUS_SUCCESS.equals(taskRecord.getStatus())) {
+            return taskRecord;
+        }
+        if (!TASK_STATUS_PROCESSING.equals(taskRecord.getStatus())) {
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
+        }
+        return taskRecord;
     }
 
     private void validateProcessAllowed(Document document, boolean force) {

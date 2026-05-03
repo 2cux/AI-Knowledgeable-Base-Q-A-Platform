@@ -191,7 +191,7 @@ Queue design:
 | Dead letter queue | `aikb.document.process.dlq` |
 | Dead letter routing key | `aikb.document.process.dlq` |
 
-`DocumentProcessMessage` contains `documentId`, `knowledgeBaseId`, `userId`, `force`, `requestId`, `createdAt`, `taskId`, `chunkSize`, `overlap`, and optional `textContent`.
+`DocumentProcessMessage` contains `documentId`, `knowledgeBaseId`, `userId`, `force`, `requestId`, `createdAt`, `taskId`, `chunkSize`, and `overlap`. It does not carry JWT, API keys, file paths outside the stored document metadata, or document full text.
 
 How to verify completion:
 
