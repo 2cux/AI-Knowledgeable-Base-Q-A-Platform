@@ -6,7 +6,7 @@ AI 知识库问答平台后端 MVP。项目基于 Spring Boot 构建，围绕“
 
 本项目用于模拟企业内部知识库问答场景：用户上传 txt / md 文档到自己的知识库，系统将文档切分为 chunk 并生成 embedding，提问时在知识库范围内检索相关 chunk，再调用 LLM 生成带引用来源的答案。第三周收尾阶段的目标是让项目达到简历展示、面试讲解和本地验收可复现的状态。
 
-当前实现是 MVP，不是生产级高并发系统。向量检索采用 MySQL 存储 embedding JSON + Java 侧 cosine similarity 计算；尚未接入 Milvus、pgvector、Qdrant 等生产级向量数据库。Redis 用于管理端基础统计接口缓存；RabbitMQ 已用于文档解析 / 切片异步任务，尚未用于 embedding、RAG 问答或微服务拆分。
+当前实现是 MVP，不是生产级高并发系统。向量检索采用 MySQL 存储 embedding JSON + Java 侧 cosine similarity 计算；尚未接入 Milvus、pgvector、Qdrant 等生产级向量数据库。Redis 用于管理端基础统计接口缓存；RabbitMQ 已用于文档解析 / 切片和 embedding 生成异步任务，尚未用于 RAG 问答或微服务拆分。
 
 ## 技术栈
 
@@ -155,7 +155,7 @@ The admin stats cache key is `aikb:admin:chat:stats`. Hot questions use limit-sp
 
 ## RabbitMQ Document Process Queue
 
-Document parse and split is asynchronous. `POST /api/documents/{documentId}/process` now validates the current user's permission, marks the document/task as `PROCESSING`, sends a RabbitMQ message, and returns immediately. It does not wait for `document_chunk` rows to be generated. Embedding is still triggered separately by `POST /api/documents/{documentId}/embed`.
+Document parse/split and embedding generation are asynchronous. `POST /api/documents/{documentId}/process` validates the current user's permission, marks the document/task as `PROCESSING`, sends a RabbitMQ message, and returns immediately. `POST /api/documents/{documentId}/embed` also submits a RabbitMQ task and returns immediately; it does not wait for the external Embedding API to finish. Embedding is still triggered explicitly and is not automatically chained after process.
 
 Start RabbitMQ with Docker:
 
@@ -190,8 +190,14 @@ Queue design:
 | Dead letter exchange | `aikb.document.dlx` |
 | Dead letter queue | `aikb.document.process.dlq` |
 | Dead letter routing key | `aikb.document.process.dlq` |
+| Embedding queue | `aikb.document.embedding.queue` |
+| Embedding routing key | `aikb.document.embedding` |
+| Embedding dead letter queue | `aikb.document.embedding.dlq` |
+| Embedding dead letter routing key | `aikb.document.embedding.dlq` |
 
 `DocumentProcessMessage` contains `documentId`, `knowledgeBaseId`, `userId`, `force`, `requestId`, `createdAt`, `taskId`, `chunkSize`, and `overlap`. It does not carry JWT, API keys, file paths outside the stored document metadata, or document full text.
+
+`DocumentEmbeddingMessage` contains `documentId`, `knowledgeBaseId`, `userId`, `force`, `requestId`, `createdAt`, `taskId`, and `embeddingModel`. It does not carry JWT, API keys, chunk text, or vector content.
 
 How to verify completion:
 
@@ -201,9 +207,13 @@ How to verify completion:
 4. Call `GET /api/documents/{documentId}/chunks` and verify chunks exist.
 5. Repeat process with `force=false`; it should not create duplicate chunks when already `SUCCESS`.
 6. Call process with `{ "force": true }`; old chunks are cleared and rebuilt in one transaction.
-7. Stop RabbitMQ and call process; the API returns a clear RabbitMQ unavailable error and the document is not left stuck in `PROCESSING`.
+7. Call `POST /api/documents/{documentId}/embed`.
+8. Expect a fast response with `taskStatus=PROCESSING`.
+9. Poll `GET /api/documents/{documentId}` or `GET /api/documents/{documentId}/embedding-status` until embedding status is `SUCCESS`.
+10. Run `POST /api/retrieval/search` and `POST /api/chat/ask` after embedding succeeds.
+11. Stop RabbitMQ and call process/embed; the API returns a clear RabbitMQ unavailable error and the document is not left stuck in `PROCESSING`.
 
-RabbitMQ listener retry is enabled with 3 attempts and manual acknowledgement. Failed messages are rejected after retries and routed to the DLQ through the queue's dead-letter settings. The consumer updates document/task failure status and logs `documentId` plus `requestId`.
+RabbitMQ listener retry is enabled with 3 attempts and manual acknowledgement. Failed messages are rejected after retries and routed to the DLQ through the queue's dead-letter settings. Consumers update document/task failure status and log `documentId` plus `requestId`. Embedding requires `APP_EMBEDDING_API_KEY` or `OPENAI_API_KEY`; a missing or invalid key makes the embedding consumer fail and mark the document embedding status as `FAILED`.
 
 ## Flyway 自动迁移说明
 
@@ -349,7 +359,7 @@ Authorization: Bearer <token>
 - 当前向量检索是 MySQL 存储 `chunk_embedding.vector_json` + Java cosine similarity 的 MVP 实现。
 - 当前没有接入生产级向量数据库。
 - 当前仅为 `GET /api/admin/chat/stats` 实现 Redis 可降级缓存，未把 Redis 接入 RAG 或文档处理链路。
-- 当前已用 RabbitMQ 异步化文档解析 / 切片；embedding、chat/ask、retrieval/search 仍是原有同步链路。
+- 当前已用 RabbitMQ 异步化文档解析 / 切片和 embedding 生成；chat/ask、retrieval/search 仍是原有同步查询链路。
 - 当前不是微服务架构，也未实现分布式任务调度。
 - 当前文件存储为本地目录，不是对象存储。
 - 当前文档解析只覆盖 txt / md 等轻量文本类文件，不是完整 Office / PDF 解析平台。
@@ -361,7 +371,7 @@ Authorization: Bearer <token>
 - 接入 pgvector、Milvus、Qdrant 等向量检索能力，替换 Java 侧全量候选 cosine 计算。
 - 增加混合检索、rerank、查询改写和可配置提示词模板。
 - 引入更完整的文档解析能力，例如 PDF、Word、HTML。
-- 扩展 embedding 异步任务、进度推送和更完整的失败补偿。
+- 扩展进度推送和更完整的失败补偿。
 - 增加对象存储、文件病毒扫描、内容安全审计。
 - 完善管理员后台 UI、知识库运营看板和 RAG 评估集。
 - 增加生产监控、限流、审计日志和更细粒度权限。

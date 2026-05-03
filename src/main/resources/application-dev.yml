@@ -49,6 +49,13 @@ app:
       dead-letter-exchange: aikb.document.dlx
       dead-letter-queue: aikb.document.process.dlq
       dead-letter-routing-key: aikb.document.process.dlq
+    document-embedding:
+      exchange: aikb.document.exchange
+      queue: aikb.document.embedding.queue
+      routing-key: aikb.document.embedding
+      dead-letter-exchange: aikb.document.dlx
+      dead-letter-queue: aikb.document.embedding.dlq
+      dead-letter-routing-key: aikb.document.embedding.dlq
   cache:
     admin:
       stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}

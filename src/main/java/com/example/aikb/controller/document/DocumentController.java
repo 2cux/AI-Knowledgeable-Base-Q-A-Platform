@@ -125,7 +125,7 @@ public class DocumentController {
     public Result<DocumentEmbeddingVO> embed(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId,
             @Valid @RequestBody(required = false) DocumentEmbeddingRequest request) {
-        return Result.success(documentEmbeddingService.embedDocument(documentId, request), "Embedding completed");
+        return Result.success(documentEmbeddingService.embedDocument(documentId, request), "Document embedding task submitted");
     }
 
     @Operation(summary = "查询向量化状态")

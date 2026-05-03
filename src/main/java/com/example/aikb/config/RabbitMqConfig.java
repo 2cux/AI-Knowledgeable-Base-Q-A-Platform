@@ -20,6 +20,7 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMqConfig {
 
     private final AppDocumentProcessMqProperties properties;
+    private final AppDocumentEmbeddingMqProperties embeddingProperties;
 
     @Bean
     public DirectExchange documentProcessExchange() {
@@ -45,6 +46,19 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    public Queue documentEmbeddingQueue() {
+        return QueueBuilder.durable(embeddingProperties.getQueue())
+                .deadLetterExchange(embeddingProperties.getDeadLetterExchange())
+                .deadLetterRoutingKey(embeddingProperties.getDeadLetterRoutingKey())
+                .build();
+    }
+
+    @Bean
+    public Queue documentEmbeddingDeadLetterQueue() {
+        return QueueBuilder.durable(embeddingProperties.getDeadLetterQueue()).build();
+    }
+
+    @Bean
     public Binding documentProcessBinding() {
         return BindingBuilder.bind(documentProcessQueue())
                 .to(documentProcessExchange())
@@ -56,6 +70,20 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(documentProcessDeadLetterQueue())
                 .to(documentProcessDeadLetterExchange())
                 .with(properties.getDeadLetterRoutingKey());
+    }
+
+    @Bean
+    public Binding documentEmbeddingBinding() {
+        return BindingBuilder.bind(documentEmbeddingQueue())
+                .to(documentProcessExchange())
+                .with(embeddingProperties.getRoutingKey());
+    }
+
+    @Bean
+    public Binding documentEmbeddingDeadLetterBinding() {
+        return BindingBuilder.bind(documentEmbeddingDeadLetterQueue())
+                .to(documentProcessDeadLetterExchange())
+                .with(embeddingProperties.getDeadLetterRoutingKey());
     }
 
     @Bean

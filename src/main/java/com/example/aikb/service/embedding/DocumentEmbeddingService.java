@@ -1,6 +1,7 @@
 package com.example.aikb.service.embedding;
 
 import com.example.aikb.dto.document.DocumentEmbeddingRequest;
+import com.example.aikb.mq.document.DocumentEmbeddingMessage;
 import com.example.aikb.vo.document.DocumentEmbeddingStatusVO;
 import com.example.aikb.vo.document.DocumentEmbeddingVO;
 
@@ -17,6 +18,8 @@ public interface DocumentEmbeddingService {
      * @return 文档向量化执行结果
      */
     DocumentEmbeddingVO embedDocument(Long documentId, DocumentEmbeddingRequest request);
+
+    DocumentEmbeddingVO embedDocumentFromMessage(DocumentEmbeddingMessage message);
 
     /**
      * 查询当前用户可访问的指定文档向量化状态。

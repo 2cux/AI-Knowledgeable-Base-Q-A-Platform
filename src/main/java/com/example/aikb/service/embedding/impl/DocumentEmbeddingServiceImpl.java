@@ -15,6 +15,8 @@ import com.example.aikb.mapper.DocumentChunkMapper;
 import com.example.aikb.mapper.DocumentMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.mapper.TaskRecordMapper;
+import com.example.aikb.mq.document.DocumentEmbeddingMessage;
+import com.example.aikb.mq.document.DocumentEmbeddingProducer;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.example.aikb.service.embedding.EmbeddingClient;
@@ -29,17 +31,16 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.AmqpException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
-/**
- * 文档向量化服务实现类，负责将 document_chunk 同步到向量化状态表。
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -63,6 +64,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     private static final String TASK_BIZ_TYPE_DOCUMENT = "DOCUMENT";
     private static final String TASK_TYPE_DOCUMENT_PROCESS = "DOCUMENT_PROCESS";
     private static final String TASK_TYPE_DOCUMENT_EMBEDDING = "DOCUMENT_EMBEDDING";
+    private static final String MESSAGE_DOCUMENT_PROCESSING = "Document is already processing";
 
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
@@ -73,56 +75,24 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     private final TaskRecordService taskRecordService;
     private final ObjectMapper objectMapper;
     private final AppEmbeddingProperties embeddingProperties;
+    private final DocumentEmbeddingProducer documentEmbeddingProducer;
+    private final TransactionTemplate transactionTemplate;
 
-    /**
-     * 对当前用户可访问的指定文档执行向量化。
-     *
-     * @param documentId 文档 ID
-     * @param request 文档向量化请求参数
-     * @return 文档向量化执行结果
-     */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public DocumentEmbeddingVO embedDocument(Long documentId, DocumentEmbeddingRequest request) {
+        DocumentEmbeddingRequest safeRequest = request == null ? new DocumentEmbeddingRequest() : request;
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
         validateEmbeddingAllowed(document);
-        TaskRecord taskRecord = taskRecordService.createDocumentEmbeddingTask(document, userId);
-        taskRecordService.markProcessing(taskRecord.getId());
 
-        try {
-            return doEmbedDocument(document, request, taskRecord.getId());
-        } catch (RuntimeException ex) {
-            String safeError = truncateError(ex.getMessage());
-            taskRecordService.markFailed(taskRecord.getId(), safeError);
-            if (!"文档正在处理中，请勿重复提交".equals(safeError)) {
-                updateDocumentEmbeddingFailed(document.getId(), safeError);
-            }
-            throw ex;
-        }
-    }
-
-    /**
-     * 执行文档向量化主体流程。
-     */
-    private DocumentEmbeddingVO doEmbedDocument(Document document, DocumentEmbeddingRequest request, Long taskId) {
-        boolean force = request != null && Boolean.TRUE.equals(request.getForce());
-        List<DocumentChunk> allChunks = listEmbeddableDocumentChunks(document.getId());
-        if (allChunks.isEmpty()) {
-            throw new BusinessException("文档尚未切片，请先执行文档处理");
-        }
-
-        String embeddingModel = resolveEmbeddingModel(request);
-        if (force) {
-            chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
-                    .eq(ChunkEmbedding::getDocumentId, document.getId()));
-        }
-
-        List<DocumentChunk> chunks = force ? allChunks : filterChunksWithoutSuccessfulEmbedding(allChunks);
+        boolean force = Boolean.TRUE.equals(safeRequest.getForce());
+        List<DocumentChunk> chunks = listEmbeddableDocumentChunks(document.getId());
         if (chunks.isEmpty()) {
+            throw new BusinessException("Document has no chunks, process it first");
+        }
+        String embeddingModel = resolveEmbeddingModel(safeRequest);
+        if (!force && isEmbeddingSuccess(document, chunks.size())) {
             int embeddedCount = countSuccessfulEmbeddings(document.getId());
-            updateDocumentEmbeddingFinished(document.getId(), allChunks.size(), embeddedCount, 0);
-            taskRecordService.markSuccess(taskId);
             return DocumentEmbeddingVO.builder()
                     .documentId(document.getId())
                     .knowledgeBaseId(document.getKnowledgeBaseId())
@@ -130,62 +100,74 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                     .successCount(0)
                     .failedCount(0)
                     .embeddingModel(embeddingModel)
-                    .taskId(taskId)
                     .taskStatus(STATUS_SUCCESS)
                     .build();
         }
 
-        updateDocumentEmbeddingProcessing(document.getId());
-        int successCount = 0;
-        int failedCount = 0;
+        TaskRecord taskRecord = taskRecordService.createDocumentEmbeddingTask(document, userId);
+        taskRecordService.markProcessing(taskRecord.getId());
+        String requestId = UUID.randomUUID().toString();
 
-        for (DocumentChunk chunk : chunks) {
-            ChunkEmbedding embedding = null;
-            try {
-                embedding = findOrCreateEmbedding(document, chunk, embeddingModel);
-                markProcessing(embedding, embeddingModel);
-                EmbeddingResult result = embeddingClient.embed(chunk.getId(), chunk.getContent(), embeddingModel);
-                markSuccess(embedding, result);
-                successCount++;
-            } catch (RuntimeException ex) {
-                log.warn("Embedding failed, documentId={}, chunkId={}, model={}, error={}",
-                        document.getId(), chunk.getId(), embeddingModel, ex.getMessage());
-                if (embedding != null) {
-                    markFailed(embedding, embeddingModel, ex.getMessage());
-                }
-                failedCount++;
-            }
+        try {
+            markDocumentEmbeddingSubmitted(document.getId());
+            documentEmbeddingProducer.send(DocumentEmbeddingMessage.builder()
+                    .documentId(document.getId())
+                    .knowledgeBaseId(document.getKnowledgeBaseId())
+                    .userId(userId)
+                    .force(force)
+                    .requestId(requestId)
+                    .createdAt(LocalDateTime.now())
+                    .taskId(taskRecord.getId())
+                    .embeddingModel(embeddingModel)
+                    .build());
+            log.info("Document embedding task submitted, documentId={}, taskId={}, requestId={}",
+                    document.getId(), taskRecord.getId(), requestId);
+            return DocumentEmbeddingVO.builder()
+                    .documentId(document.getId())
+                    .knowledgeBaseId(document.getKnowledgeBaseId())
+                    .total(chunks.size())
+                    .successCount(0)
+                    .failedCount(0)
+                    .embeddingModel(embeddingModel)
+                    .taskId(taskRecord.getId())
+                    .taskStatus(STATUS_PROCESSING)
+                    .build();
+        } catch (AmqpException ex) {
+            String safeError = truncateError("RabbitMQ message send failed: " + ex.getMessage());
+            taskRecordService.markFailed(taskRecord.getId(), safeError);
+            updateDocumentEmbeddingFailed(document.getId(), safeError);
+            log.warn("Submit document embedding message failed, documentId={}, taskId={}, requestId={}",
+                    document.getId(), taskRecord.getId(), requestId, ex);
+            throw new BusinessException(50300, "RabbitMQ unavailable, document embedding task was not submitted", 503);
+        } catch (RuntimeException ex) {
+            String safeError = truncateError(ex.getMessage());
+            taskRecordService.markFailed(taskRecord.getId(), safeError);
+            updateDocumentEmbeddingFailed(document.getId(), safeError);
+            throw ex;
         }
-
-        int embeddedCount = countSuccessfulEmbeddings(document.getId());
-        String taskStatus = STATUS_SUCCESS;
-        if (failedCount > 0) {
-            taskStatus = successCount > 0 ? STATUS_PARTIAL_SUCCESS : STATUS_FAILED;
-            taskRecordService.markFailed(taskId,
-                    "文档向量化失败chunk数量：" + failedCount + "/" + chunks.size());
-        } else {
-            taskRecordService.markSuccess(taskId);
-        }
-        updateDocumentEmbeddingFinished(document.getId(), allChunks.size(), embeddedCount, failedCount);
-
-        return DocumentEmbeddingVO.builder()
-                .documentId(document.getId())
-                .knowledgeBaseId(document.getKnowledgeBaseId())
-                .total(chunks.size())
-                .successCount(successCount)
-                .failedCount(failedCount)
-                .embeddingModel(embeddingModel)
-                .taskId(taskId)
-                .taskStatus(taskStatus)
-                .build();
     }
 
-    /**
-     * 查询当前用户可访问的指定文档向量化状态。
-     *
-     * @param documentId 文档 ID
-     * @return 文档向量化状态汇总
-     */
+    @Override
+    public DocumentEmbeddingVO embedDocumentFromMessage(DocumentEmbeddingMessage message) {
+        try {
+            DocumentEmbeddingVO result = doEmbedDocumentFromMessage(message);
+            if (message.getTaskId() != null) {
+                taskRecordService.markSuccess(message.getTaskId());
+            }
+            result.setTaskStatus(STATUS_SUCCESS);
+            return result;
+        } catch (RuntimeException ex) {
+            String safeError = truncateError(ex.getMessage());
+            if (message.getTaskId() != null) {
+                taskRecordService.markFailed(message.getTaskId(), safeError);
+            }
+            if (message.getDocumentId() != null) {
+                updateDocumentEmbeddingFailed(message.getDocumentId(), safeError);
+            }
+            throw ex;
+        }
+    }
+
     @Override
     public DocumentEmbeddingStatusVO getEmbeddingStatus(Long documentId) {
         Long userId = CurrentUser.getUserId();
@@ -243,24 +225,111 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .build();
     }
 
-    /**
-     * 查询文档下的所有 chunk，并按 chunkIndex 保持稳定顺序。
-     *
-     * @param documentId 文档 ID
-     * @return 文档切片列表
-     */
+    private DocumentEmbeddingVO doEmbedDocumentFromMessage(DocumentEmbeddingMessage message) {
+        Document document = documentMapper.selectById(message.getDocumentId());
+        if (document == null) {
+            throw new BusinessException(40400, "Document not found");
+        }
+        ensureDocumentStillValid(document);
+        TaskRecord messageTask = getExecutableMessageTask(message, document);
+        if (STATUS_SUCCESS.equals(messageTask.getStatus())) {
+            return buildNoopResult(document, message.getTaskId(), resolveEmbeddingModel(message.getEmbeddingModel()));
+        }
+        if (!isParseSuccess(document)) {
+            throw new BusinessException("Document has not been processed successfully");
+        }
+
+        List<DocumentChunk> allChunks = listEmbeddableDocumentChunks(document.getId());
+        if (allChunks.isEmpty()) {
+            throw new BusinessException("Document has no chunks, process it first");
+        }
+
+        boolean force = Boolean.TRUE.equals(message.getForce());
+        String embeddingModel = resolveEmbeddingModel(message.getEmbeddingModel());
+        if (!force && isEmbeddingSuccess(document, allChunks.size())) {
+            return buildNoopResult(document, message.getTaskId(), embeddingModel);
+        }
+
+        List<DocumentChunk> chunks = force ? allChunks : filterChunksWithoutSuccessfulEmbedding(allChunks);
+        if (chunks.isEmpty()) {
+            transactionTemplate.executeWithoutResult(status ->
+                    updateDocumentEmbeddingFinished(document.getId(), allChunks.size(), countSuccessfulEmbeddings(document.getId()), 0));
+            return buildNoopResult(document, message.getTaskId(), embeddingModel);
+        }
+
+        List<EmbeddedChunkResult> results = new ArrayList<>();
+        for (DocumentChunk chunk : chunks) {
+            EmbeddingResult result = embeddingClient.embed(chunk.getId(), chunk.getContent(), embeddingModel);
+            if (result.getVector() == null || result.getVector().isEmpty()) {
+                throw new BusinessException("embedding vector is empty");
+            }
+            results.add(new EmbeddedChunkResult(chunk, result));
+        }
+
+        transactionTemplate.executeWithoutResult(status -> {
+            persistEmbeddingResults(document, results, force, embeddingModel);
+            updateDocumentEmbeddingFinished(document.getId(), allChunks.size(), allChunks.size(), 0);
+        });
+
+        return DocumentEmbeddingVO.builder()
+                .documentId(document.getId())
+                .knowledgeBaseId(document.getKnowledgeBaseId())
+                .total(chunks.size())
+                .successCount(chunks.size())
+                .failedCount(0)
+                .embeddingModel(embeddingModel)
+                .taskId(message.getTaskId())
+                .taskStatus(STATUS_SUCCESS)
+                .build();
+    }
+
+    private void persistEmbeddingResults(
+            Document document, List<EmbeddedChunkResult> results, boolean force, String embeddingModel) {
+        if (force) {
+            chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
+                    .eq(ChunkEmbedding::getDocumentId, document.getId()));
+        } else {
+            List<Long> chunkIds = results.stream().map(result -> result.chunk().getId()).toList();
+            if (!chunkIds.isEmpty()) {
+                chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
+                        .in(ChunkEmbedding::getChunkId, chunkIds));
+            }
+        }
+
+        for (EmbeddedChunkResult result : results) {
+            ChunkEmbedding embedding = new ChunkEmbedding();
+            embedding.setDocumentId(document.getId());
+            embedding.setKnowledgeBaseId(document.getKnowledgeBaseId());
+            embedding.setChunkId(result.chunk().getId());
+            embedding.setEmbeddingModel(result.result().getEmbeddingModel());
+            embedding.setVectorId(result.result().getVectorId());
+            embedding.setVectorJson(serializeVector(result.result().getVector()));
+            embedding.setStatus(STATUS_SUCCESS);
+            embedding.setEmbeddingError(null);
+            embedding.setEmbeddedAt(LocalDateTime.now());
+            chunkEmbeddingMapper.insert(embedding);
+        }
+    }
+
+    private DocumentEmbeddingVO buildNoopResult(Document document, Long taskId, String embeddingModel) {
+        return DocumentEmbeddingVO.builder()
+                .documentId(document.getId())
+                .knowledgeBaseId(document.getKnowledgeBaseId())
+                .total(0)
+                .successCount(0)
+                .failedCount(0)
+                .embeddingModel(embeddingModel)
+                .taskId(taskId)
+                .taskStatus(STATUS_SUCCESS)
+                .build();
+    }
+
     private List<DocumentChunk> listDocumentChunks(Long documentId) {
         return documentChunkMapper.selectList(new LambdaQueryWrapper<DocumentChunk>()
                 .eq(DocumentChunk::getDocumentId, documentId)
                 .orderByAsc(DocumentChunk::getChunkIndex));
     }
 
-    /**
-     * 查询文档下可向量化的非空 chunk。
-     *
-     * @param documentId 文档 ID
-     * @return 非空切片列表
-     */
     private List<DocumentChunk> listEmbeddableDocumentChunks(Long documentId) {
         return listDocumentChunks(documentId)
                 .stream()
@@ -270,10 +339,10 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
 
     private void validateEmbeddingAllowed(Document document) {
         if (!isParseSuccess(document)) {
-            throw new BusinessException("文档尚未解析切片成功，不能生成 embedding");
+            throw new BusinessException("Document has not been processed successfully");
         }
         if (DOCUMENT_STATUS_PROCESSING.equals(document.getEmbeddingStatus())) {
-            throw new BusinessException("文档正在处理中，请勿重复提交");
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
         Long count = taskRecordMapper.selectCount(new LambdaQueryWrapper<TaskRecord>()
                 .eq(TaskRecord::getBizType, TASK_BIZ_TYPE_DOCUMENT)
@@ -281,7 +350,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .eq(TaskRecord::getStatus, STATUS_PROCESSING)
                 .in(TaskRecord::getTaskType, TASK_TYPE_DOCUMENT_PROCESS, TASK_TYPE_DOCUMENT_EMBEDDING));
         if (count != null && count > 0) {
-            throw new BusinessException("文档正在处理中，请勿重复提交");
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
     }
 
@@ -290,6 +359,11 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         return PARSE_STATUS_SUCCESS.equals(parseStatus)
                 || LEGACY_PARSE_STATUS_CHUNKED.equals(parseStatus)
                 || LEGACY_PARSE_STATUS_DONE.equals(parseStatus);
+    }
+
+    private boolean isEmbeddingSuccess(Document document, int chunkCount) {
+        return DOCUMENT_STATUS_SUCCESS.equals(document.getEmbeddingStatus())
+                && countSuccessfulEmbeddings(document.getId()) >= chunkCount;
     }
 
     private List<DocumentChunk> filterChunksWithoutSuccessfulEmbedding(List<DocumentChunk> chunks) {
@@ -320,7 +394,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .eq(ChunkEmbedding::getStatus, STATUS_FAILED)));
     }
 
-    private void updateDocumentEmbeddingProcessing(Long documentId) {
+    private void markDocumentEmbeddingSubmitted(Long documentId) {
         int rows = documentMapper.update(null, new LambdaUpdateWrapper<Document>()
                 .eq(Document::getId, documentId)
                 .ne(Document::getParseStatus, DOCUMENT_STATUS_PROCESSING)
@@ -330,7 +404,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .set(Document::getLatestTaskStatus, STATUS_PROCESSING)
                 .set(Document::getLatestErrorMessage, null));
         if (rows != 1) {
-            throw new BusinessException("文档正在处理中，请勿重复提交");
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
     }
 
@@ -344,7 +418,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         update.setEmbeddedChunkCount(embeddedCount);
         update.setLatestTaskType(TASK_TYPE_DOCUMENT_EMBEDDING);
         update.setLatestTaskStatus(failedCount > 0 ? STATUS_FAILED : STATUS_SUCCESS);
-        update.setLatestErrorMessage(failedCount > 0 ? "文档向量化失败chunk数量：" + failedCount : null);
+        update.setLatestErrorMessage(failedCount > 0 ? "Document embedding failed chunks: " + failedCount : null);
         documentMapper.updateById(update);
     }
 
@@ -359,17 +433,10 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         documentMapper.updateById(update);
     }
 
-    /**
-     * 查询并校验文档是否属于当前用户自己的知识库。
-     *
-     * @param documentId 文档 ID
-     * @param userId 当前用户 ID
-     * @return 文档实体
-     */
     private Document getOwnDocument(Long documentId, Long userId) {
         Document document = documentMapper.selectById(documentId);
         if (document == null) {
-            throw new BusinessException(40400, "文档不存在");
+            throw new BusinessException(40400, "Document not found");
         }
 
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
@@ -378,17 +445,46 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .eq(KnowledgeBase::getStatus, 1)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
-            throw new BusinessException(40400, "文档不存在");
+            throw new BusinessException(40400, "Document not found");
         }
         return document;
     }
 
-    /**
-     * 解析请求中的模型名称，不传时使用 MVP 默认占位模型。
-     *
-     * @param request 文档向量化请求
-     * @return 向量化模型名称
-     */
+    private void ensureDocumentStillValid(Document document) {
+        KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
+                .eq(KnowledgeBase::getId, document.getKnowledgeBaseId())
+                .eq(KnowledgeBase::getStatus, 1)
+                .last("LIMIT 1"));
+        if (knowledgeBase == null) {
+            throw new BusinessException(40400, "Document not found");
+        }
+    }
+
+    private TaskRecord getExecutableMessageTask(DocumentEmbeddingMessage message, Document document) {
+        if (message.getTaskId() == null) {
+            throw new BusinessException("Document embedding message taskId is required");
+        }
+        TaskRecord taskRecord = taskRecordMapper.selectById(message.getTaskId());
+        if (taskRecord == null
+                || !TASK_BIZ_TYPE_DOCUMENT.equals(taskRecord.getBizType())
+                || !document.getId().equals(taskRecord.getBizId())
+                || !TASK_TYPE_DOCUMENT_EMBEDDING.equals(taskRecord.getTaskType())) {
+            throw new BusinessException("Document embedding message task does not match document");
+        }
+        if (STATUS_SUCCESS.equals(taskRecord.getStatus())) {
+            return taskRecord;
+        }
+        if (STATUS_FAILED.equals(taskRecord.getStatus())
+                && TASK_TYPE_DOCUMENT_EMBEDDING.equals(document.getLatestTaskType())
+                && STATUS_FAILED.equals(document.getLatestTaskStatus())) {
+            return taskRecord;
+        }
+        if (!STATUS_PROCESSING.equals(taskRecord.getStatus())) {
+            throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
+        }
+        return taskRecord;
+    }
+
     private String resolveEmbeddingModel(DocumentEmbeddingRequest request) {
         if (request != null && StringUtils.hasText(request.getEmbeddingModel())) {
             return request.getEmbeddingModel().trim();
@@ -396,133 +492,21 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         return embeddingProperties.getModel();
     }
 
-    /**
-     * 查询已有状态记录；不存在则创建 PENDING 记录。
-     *
-     * @param document 文档实体
-     * @param chunk 文档切片实体
-     * @param embeddingModel 向量化模型名称
-     * @return 切片向量化状态实体
-     */
-    private ChunkEmbedding findOrCreateEmbedding(Document document, DocumentChunk chunk, String embeddingModel) {
-        ChunkEmbedding embedding = chunkEmbeddingMapper.selectOne(new LambdaQueryWrapper<ChunkEmbedding>()
-                .eq(ChunkEmbedding::getChunkId, chunk.getId())
-                .last("LIMIT 1"));
-        if (embedding != null) {
-            embedding.setEmbeddingModel(embeddingModel);
-            embedding.setStatus(STATUS_PENDING);
-            chunkEmbeddingMapper.update(null, new LambdaUpdateWrapper<ChunkEmbedding>()
-                    .eq(ChunkEmbedding::getId, embedding.getId())
-                    .set(ChunkEmbedding::getEmbeddingModel, embeddingModel)
-                    .set(ChunkEmbedding::getStatus, STATUS_PENDING)
-                    .set(ChunkEmbedding::getVectorId, null)
-                    .set(ChunkEmbedding::getVectorJson, null)
-                    .set(ChunkEmbedding::getEmbeddingError, null)
-                    .set(ChunkEmbedding::getEmbeddedAt, null));
-            return embedding;
+    private String resolveEmbeddingModel(String embeddingModel) {
+        if (StringUtils.hasText(embeddingModel)) {
+            return embeddingModel.trim();
         }
-
-        embedding = new ChunkEmbedding();
-        embedding.setDocumentId(document.getId());
-        embedding.setKnowledgeBaseId(document.getKnowledgeBaseId());
-        embedding.setChunkId(chunk.getId());
-        embedding.setEmbeddingModel(embeddingModel);
-        embedding.setStatus(STATUS_PENDING);
-        chunkEmbeddingMapper.insert(embedding);
-        return embedding;
+        return embeddingProperties.getModel();
     }
 
-    /**
-     * 标记单个 chunk 向量化成功。
-     *
-     * @param embedding 切片向量化状态实体
-     * @param result 向量化结果
-     */
-    private void markSuccess(ChunkEmbedding embedding, EmbeddingResult result) {
-        if (result.getVector() == null || result.getVector().isEmpty()) {
-            throw new BusinessException("embedding向量为空");
-        }
-        embedding.setEmbeddingModel(result.getEmbeddingModel());
-        embedding.setVectorId(result.getVectorId());
-        embedding.setVectorJson(serializeVector(result.getVector()));
-        embedding.setStatus(STATUS_SUCCESS);
-        embedding.setEmbeddingError(null);
-        embedding.setEmbeddedAt(LocalDateTime.now());
-        chunkEmbeddingMapper.update(null, new LambdaUpdateWrapper<ChunkEmbedding>()
-                .eq(ChunkEmbedding::getId, embedding.getId())
-                .set(ChunkEmbedding::getEmbeddingModel, result.getEmbeddingModel())
-                .set(ChunkEmbedding::getVectorId, result.getVectorId())
-                .set(ChunkEmbedding::getVectorJson, embedding.getVectorJson())
-                .set(ChunkEmbedding::getStatus, STATUS_SUCCESS)
-                .set(ChunkEmbedding::getEmbeddingError, null)
-                .set(ChunkEmbedding::getEmbeddedAt, embedding.getEmbeddedAt()));
-    }
-
-    /**
-     * 标记单个 chunk 正在向量化。
-     *
-     * @param embedding 切片向量化状态实体
-     * @param embeddingModel 向量化模型名称
-     */
-    private void markProcessing(ChunkEmbedding embedding, String embeddingModel) {
-        embedding.setEmbeddingModel(embeddingModel);
-        embedding.setStatus(STATUS_PROCESSING);
-        embedding.setVectorId(null);
-        embedding.setVectorJson(null);
-        embedding.setEmbeddingError(null);
-        embedding.setEmbeddedAt(null);
-        chunkEmbeddingMapper.update(null, new LambdaUpdateWrapper<ChunkEmbedding>()
-                .eq(ChunkEmbedding::getId, embedding.getId())
-                .set(ChunkEmbedding::getEmbeddingModel, embeddingModel)
-                .set(ChunkEmbedding::getVectorId, null)
-                .set(ChunkEmbedding::getVectorJson, null)
-                .set(ChunkEmbedding::getStatus, STATUS_PROCESSING)
-                .set(ChunkEmbedding::getEmbeddingError, null)
-                .set(ChunkEmbedding::getEmbeddedAt, null));
-    }
-
-    /**
-     * 标记单个 chunk 向量化失败。
-     *
-     * @param embedding 切片向量化状态实体
-     * @param embeddingModel 向量化模型名称
-     * @param errorMessage 失败原因
-     */
-    private void markFailed(ChunkEmbedding embedding, String embeddingModel, String errorMessage) {
-        embedding.setEmbeddingModel(embeddingModel);
-        embedding.setStatus(STATUS_FAILED);
-        embedding.setEmbeddingError(truncateError(errorMessage));
-        chunkEmbeddingMapper.update(null, new LambdaUpdateWrapper<ChunkEmbedding>()
-                .eq(ChunkEmbedding::getId, embedding.getId())
-                .set(ChunkEmbedding::getEmbeddingModel, embeddingModel)
-                .set(ChunkEmbedding::getVectorId, null)
-                .set(ChunkEmbedding::getVectorJson, null)
-                .set(ChunkEmbedding::getStatus, STATUS_FAILED)
-                .set(ChunkEmbedding::getEmbeddingError, embedding.getEmbeddingError())
-                .set(ChunkEmbedding::getEmbeddedAt, null));
-    }
-
-    /**
-     * 序列化向量，供后续真实检索模块使用。
-     */
     private String serializeVector(List<Double> vector) {
         try {
             return objectMapper.writeValueAsString(vector);
         } catch (JsonProcessingException ex) {
-            throw new BusinessException(50000, "embedding向量序列化失败");
+            throw new BusinessException(50000, "embedding vector serialization failed");
         }
     }
 
-    /**
-     * 计算文档整体向量化状态。
-     *
-     * @param total 总 chunk 数
-     * @param successCount 成功数量
-     * @param failedCount 失败数量
-     * @param pendingCount 未处理数量
-     * @param processingCount 处理中数量
-     * @return 文档整体向量化状态
-     */
     private String resolveDocumentEmbeddingStatus(
             int total, int successCount, int failedCount, int pendingCount, int processingCount) {
         if (total == 0) {
@@ -543,14 +527,8 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         return DOCUMENT_STATUS_PARTIAL;
     }
 
-    /**
-     * 截断错误信息，避免超过数据库字段长度导致状态回写失败。
-     *
-     * @param errorMessage 原始错误信息
-     * @return 可安全入库的错误信息
-     */
     private String truncateError(String errorMessage) {
-        String error = StringUtils.hasText(errorMessage) ? errorMessage.trim() : "向量化失败";
+        String error = StringUtils.hasText(errorMessage) ? errorMessage.trim() : "Document embedding failed";
         error = error.replaceAll("(?i)api[_-]?key\\s*[:=]\\s*\\S+", "apiKey=***");
         if (error.length() <= MAX_ERROR_MESSAGE_LENGTH) {
             return error;
@@ -558,14 +536,6 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         return error.substring(0, MAX_ERROR_MESSAGE_LENGTH);
     }
 
-    /**
-     * 将 chunk 和向量化状态转换为展示对象。
-     *
-     * @param chunk 文档切片实体
-     * @param embedding 切片向量化状态实体，可能为空
-     * @param status 当前状态
-     * @return 切片向量化状态展示对象
-     */
     private ChunkEmbeddingStatusVO toStatusVO(DocumentChunk chunk, ChunkEmbedding embedding, String status) {
         return ChunkEmbeddingStatusVO.builder()
                 .chunkId(chunk.getId())
@@ -576,5 +546,8 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .embeddingError(embedding == null ? null : embedding.getEmbeddingError())
                 .embeddedAt(embedding == null ? null : embedding.getEmbeddedAt())
                 .build();
+    }
+
+    private record EmbeddedChunkResult(DocumentChunk chunk, EmbeddingResult result) {
     }
 }
