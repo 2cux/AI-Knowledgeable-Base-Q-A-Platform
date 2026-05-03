@@ -15,6 +15,7 @@ import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.AdminChatRecordQueryService;
 import com.example.aikb.service.chat.AdminChatStatsCacheService;
+import com.example.aikb.service.chat.AdminHotQuestionsCacheService;
 import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
 import com.example.aikb.vo.chat.AdminChatRecordListItemVO;
@@ -49,6 +50,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     private final AdminPermissionService adminPermissionService;
     private final CitationJsonCodec citationJsonCodec;
     private final AdminChatStatsCacheService adminChatStatsCacheService;
+    private final AdminHotQuestionsCacheService adminHotQuestionsCacheService;
 
     @Override
     public PageResult<AdminChatRecordListItemVO> page(Long knowledgeBaseId, Boolean matched, long pageNum,
@@ -144,8 +146,18 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
         adminPermissionService.ensureAdmin();
         validateOperationQuery(knowledgeBaseId, startTime, endTime);
 
-        return chatRecordMapper.selectHotQuestions(knowledgeBaseId, startTime, endTime,
-                normalizeHotQuestionLimit(limit));
+        int normalizedLimit = normalizeHotQuestionLimit(limit);
+        if (isBaseHotQuestionsQuery(knowledgeBaseId, startTime, endTime)) {
+            return adminHotQuestionsCacheService.getHotQuestions(normalizedLimit)
+                    .orElseGet(() -> {
+                        List<AdminHotQuestionVO> hotQuestions = queryHotQuestionsFromDatabase(knowledgeBaseId,
+                                startTime, endTime, normalizedLimit);
+                        adminHotQuestionsCacheService.putHotQuestions(normalizedLimit, hotQuestions);
+                        return hotQuestions;
+                    });
+        }
+
+        return queryHotQuestionsFromDatabase(knowledgeBaseId, startTime, endTime, normalizedLimit);
     }
 
     @Override
@@ -187,6 +199,15 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     }
 
     private boolean isBaseStatsQuery(Long knowledgeBaseId, LocalDateTime startTime, LocalDateTime endTime) {
+        return knowledgeBaseId == null && startTime == null && endTime == null;
+    }
+
+    private List<AdminHotQuestionVO> queryHotQuestionsFromDatabase(Long knowledgeBaseId, LocalDateTime startTime,
+            LocalDateTime endTime, int limit) {
+        return chatRecordMapper.selectHotQuestions(knowledgeBaseId, startTime, endTime, limit);
+    }
+
+    private boolean isBaseHotQuestionsQuery(Long knowledgeBaseId, LocalDateTime startTime, LocalDateTime endTime) {
         return knowledgeBaseId == null && startTime == null && endTime == null;
     }
 

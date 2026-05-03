@@ -20,6 +20,7 @@ import com.example.aikb.mapper.ChatFeedbackMapper;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.chat.AdminChatStatsCacheService;
+import com.example.aikb.service.chat.AdminHotQuestionsCacheService;
 import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.vo.chat.AdminChatFeedbackVO;
 import com.example.aikb.vo.chat.AdminChatRecordDetailVO;
@@ -53,12 +54,15 @@ class AdminChatRecordQueryServiceImplTest {
     @Mock
     private AdminChatStatsCacheService adminChatStatsCacheService;
 
+    @Mock
+    private AdminHotQuestionsCacheService adminHotQuestionsCacheService;
+
     private AdminChatRecordQueryServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AdminChatRecordQueryServiceImpl(chatRecordMapper, chatFeedbackMapper, adminPermissionService,
-                new CitationJsonCodec(new ObjectMapper()), adminChatStatsCacheService);
+                new CitationJsonCodec(new ObjectMapper()), adminChatStatsCacheService, adminHotQuestionsCacheService);
     }
 
     @Test
@@ -303,6 +307,7 @@ class AdminChatRecordQueryServiceImplTest {
 
     @Test
     void listHotQuestionsUsesDefaultLimitWhenLimitIsTooSmall() {
+        when(adminHotQuestionsCacheService.getHotQuestions(10)).thenReturn(Optional.empty());
         when(chatRecordMapper.selectHotQuestions(any(), any(), any(), anyInt()))
                 .thenReturn(List.of());
 
@@ -311,6 +316,51 @@ class AdminChatRecordQueryServiceImplTest {
         ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
         verify(chatRecordMapper).selectHotQuestions(any(), any(), any(), limitCaptor.capture());
         assertThat(limitCaptor.getValue()).isEqualTo(10);
+        verify(adminHotQuestionsCacheService).putHotQuestions(10, List.of());
+    }
+
+    @Test
+    void listHotQuestionsReturnsCachedBaseItemsWhenRedisHits() {
+        AdminHotQuestionVO hotQuestion = AdminHotQuestionVO.builder()
+                .question("cached question")
+                .count(2L)
+                .latestAskedAt(LocalDateTime.of(2026, 5, 2, 12, 0))
+                .build();
+        when(adminHotQuestionsCacheService.getHotQuestions(10)).thenReturn(Optional.of(List.of(hotQuestion)));
+
+        List<AdminHotQuestionVO> result = service.listHotQuestions(null, null, null, 10);
+
+        assertThat(result).containsExactly(hotQuestion);
+        verify(adminPermissionService).ensureAdmin();
+        verify(chatRecordMapper, never()).selectHotQuestions(any(), any(), any(), anyInt());
+        verify(adminHotQuestionsCacheService, never()).putHotQuestions(anyInt(), any());
+    }
+
+    @Test
+    void listHotQuestionsUsesDifferentCacheKeyByNormalizedLimit() {
+        when(adminHotQuestionsCacheService.getHotQuestions(5)).thenReturn(Optional.empty());
+        when(chatRecordMapper.selectHotQuestions(any(), any(), any(), anyInt())).thenReturn(List.of());
+
+        service.listHotQuestions(null, null, null, 5);
+
+        verify(adminHotQuestionsCacheService).getHotQuestions(5);
+        verify(adminHotQuestionsCacheService).putHotQuestions(5, List.of());
+        ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(chatRecordMapper).selectHotQuestions(any(), any(), any(), limitCaptor.capture());
+        assertThat(limitCaptor.getValue()).isEqualTo(5);
+    }
+
+    @Test
+    void listHotQuestionsRequiresAdminBeforeReadingCache() {
+        doThrow(new BusinessException(40300, "forbidden"))
+                .when(adminPermissionService).ensureAdmin();
+
+        assertThatThrownBy(() -> service.listHotQuestions(null, null, null, 10))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("forbidden");
+
+        verify(adminHotQuestionsCacheService, never()).getHotQuestions(anyInt());
+        verify(chatRecordMapper, never()).selectHotQuestions(any(), any(), any(), anyInt());
     }
 
     @Test

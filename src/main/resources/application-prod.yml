@@ -16,6 +16,7 @@ app:
   cache:
     admin:
       stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}
+      hot-questions-ttl-minutes: ${HOT_QUESTIONS_CACHE_TTL_MINUTES:5}
   debug:
     ai-test:
       # Production must keep AI debug endpoints disabled by default.

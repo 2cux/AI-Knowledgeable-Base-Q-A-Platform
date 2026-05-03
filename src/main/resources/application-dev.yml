@@ -28,6 +28,7 @@ app:
   cache:
     admin:
       stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}
+      hot-questions-ttl-minutes: ${HOT_QUESTIONS_CACHE_TTL_MINUTES:5}
   llm:
     enabled: true
     base-url: ${APP_LLM_BASE_URL:${OPENAI_LLM_BASE_URL:https://api.xiaocaseai.com/v1/messages}}

@@ -148,9 +148,10 @@ REDIS_PASSWORD=
 REDIS_DATABASE=0
 REDIS_TIMEOUT=3000ms
 ADMIN_STATS_CACHE_TTL_MINUTES=5
+HOT_QUESTIONS_CACHE_TTL_MINUTES=5
 ```
 
-The cache key is `aikb:admin:chat:stats`. The default TTL is 5 minutes. If Redis is unavailable or serialization fails, the endpoint logs a throttled warn and falls back to MySQL.
+The admin stats cache key is `aikb:admin:chat:stats`. Hot questions use limit-specific keys such as `aikb:admin:chat:hot_questions:10`. The default TTL is 5 minutes. If Redis is unavailable or serialization fails, the endpoint logs a throttled warn and falls back to MySQL.
 
 ## Flyway 自动迁移说明
 
@@ -180,6 +181,7 @@ The cache key is `aikb:admin:chat:stats`. The default TTL is 5 minutes. If Redis
 | `REDIS_DATABASE` | Redis database index | 默认 `0` |
 | `REDIS_TIMEOUT` | Redis command timeout | 默认 `3000ms` |
 | `ADMIN_STATS_CACHE_TTL_MINUTES` | `aikb:admin:chat:stats` TTL minutes | 默认 `5` |
+| `HOT_QUESTIONS_CACHE_TTL_MINUTES` | `aikb:admin:chat:hot_questions:{limit}` TTL minutes | 默认 `5` |
 | `APP_LLM_API_KEY` | LLM API Key | 推荐显式配置 |
 | `APP_EMBEDDING_API_KEY` | Embedding API Key | 推荐显式配置 |
 | `OPENAI_API_KEY` | 通用兼容 API Key | 可作为 LLM / Embedding 兜底 |

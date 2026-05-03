@@ -11,4 +11,9 @@ public class AppAdminCacheProperties {
      * TTL for the base admin chat stats cache.
      */
     private long statsTtlMinutes = 5L;
+
+    /**
+     * TTL for admin hot questions cache.
+     */
+    private long hotQuestionsTtlMinutes = 5L;
 }
