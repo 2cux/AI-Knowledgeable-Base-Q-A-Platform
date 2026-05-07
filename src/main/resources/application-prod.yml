@@ -29,6 +29,9 @@ spring:
           max-interval: 10000ms
 
 app:
+  cors:
+    # Production should explicitly list trusted frontend domains.
+    allowed-origins: []
   mq:
     document-process:
       exchange: aikb.document.exchange
