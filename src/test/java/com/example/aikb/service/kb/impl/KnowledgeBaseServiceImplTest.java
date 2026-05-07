@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.example.aikb.dto.kb.KnowledgeBaseUpdateRequest;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.exception.BusinessException;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -41,6 +44,7 @@ class KnowledgeBaseServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        initMybatisPlusTableInfo();
         knowledgeBaseService = new KnowledgeBaseServiceImpl(knowledgeBaseMapper);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new LoginUser(USER_ID, "tester"), null, Collections.emptyList()));
@@ -70,8 +74,10 @@ class KnowledgeBaseServiceImplTest {
                 ArgumentCaptor.forClass((Class) LambdaUpdateWrapper.class);
         verify(knowledgeBaseMapper).update(isNull(), wrapperCaptor.capture());
         String sqlSet = wrapperCaptor.getValue().getSqlSet();
+        String sqlSegment = wrapperCaptor.getValue().getSqlSegment();
         assertThat(sqlSet).contains("name", "description", "updated_at");
         assertThat(sqlSet).doesNotContain("owner_id", "created_at", "status", "id");
+        assertThat(sqlSegment).contains("id", "owner_id", "status");
     }
 
     @Test
@@ -100,6 +106,13 @@ class KnowledgeBaseServiceImplTest {
         request.setName(name);
         request.setDescription(description);
         return request;
+    }
+
+    private void initMybatisPlusTableInfo() {
+        if (TableInfoHelper.getTableInfo(KnowledgeBase.class) == null) {
+            TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""),
+                    KnowledgeBase.class);
+        }
     }
 
     private KnowledgeBase knowledgeBase(String name, String description) {
