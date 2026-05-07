@@ -7,7 +7,9 @@ import com.example.aikb.dto.auth.RegisterRequest;
 import com.example.aikb.entity.User;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.UserMapper;
+import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.auth.AuthService;
+import com.example.aikb.vo.auth.CurrentUserVO;
 import com.example.aikb.vo.auth.LoginResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,6 +23,8 @@ import org.springframework.util.StringUtils;
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+
+    private static final int USER_STATUS_ENABLED = 1;
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
@@ -81,6 +85,30 @@ public class AuthServiceImpl implements AuthService {
                 .token(token)
                 .userId(user.getId())
                 .username(user.getUsername())
+                .build();
+    }
+
+    /**
+     * 根据安全上下文中的用户 ID 查询当前登录用户基础信息。
+     *
+     * @return 当前登录用户基础信息
+     */
+    @Override
+    public CurrentUserVO getCurrentUser() {
+        Long userId = CurrentUser.getUserId();
+        User user = userMapper.selectById(userId);
+        if (user == null || user.getStatus() == null || user.getStatus() != USER_STATUS_ENABLED) {
+            throw new BusinessException(40300, "当前用户不存在或已被禁用");
+        }
+
+        return CurrentUserVO.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .nickname(user.getNickname())
+                .role(user.getRole())
+                .status(user.getStatus())
+                .createdAt(user.getCreatedAt())
+                .updatedAt(user.getUpdatedAt())
                 .build();
     }
 }

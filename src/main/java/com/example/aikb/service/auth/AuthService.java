@@ -2,6 +2,7 @@ package com.example.aikb.service.auth;
 
 import com.example.aikb.dto.auth.LoginRequest;
 import com.example.aikb.dto.auth.RegisterRequest;
+import com.example.aikb.vo.auth.CurrentUserVO;
 import com.example.aikb.vo.auth.LoginResponse;
 
 /**
@@ -24,4 +25,11 @@ public interface AuthService {
      * @return 登录成功后的令牌和用户信息
      */
     LoginResponse login(LoginRequest request);
+
+    /**
+     * 获取当前登录用户的基础信息。
+     *
+     * @return 当前登录用户基础信息
+     */
+    CurrentUserVO getCurrentUser();
 }
