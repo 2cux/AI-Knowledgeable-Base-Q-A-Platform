@@ -31,6 +31,8 @@ public class RetrievalServiceImpl implements RetrievalService {
 
     private static final int MIN_TOP_K = 1;
     private static final int MAX_TOP_K = 20;
+    private static final int KNOWLEDGE_BASE_ACTIVE_STATUS = 1;
+    private static final int KNOWLEDGE_BASE_NOT_DELETED = 0;
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final QueryEmbeddingService queryEmbeddingService;
@@ -78,7 +80,8 @@ public class RetrievalServiceImpl implements RetrievalService {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, knowledgeBaseId)
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, KNOWLEDGE_BASE_ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, KNOWLEDGE_BASE_NOT_DELETED)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
             throw new BusinessException(40400, "知识库不存在");

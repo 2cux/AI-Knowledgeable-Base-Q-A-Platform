@@ -76,8 +76,8 @@ class KnowledgeBaseServiceImplTest {
         String sqlSet = wrapperCaptor.getValue().getSqlSet();
         String sqlSegment = wrapperCaptor.getValue().getSqlSegment();
         assertThat(sqlSet).contains("name", "description", "updated_at");
-        assertThat(sqlSet).doesNotContain("owner_id", "created_at", "status", "id");
-        assertThat(sqlSegment).contains("id", "owner_id", "status");
+        assertThat(sqlSet).doesNotContain("owner_id", "created_at", "status", "deleted", "id");
+        assertThat(sqlSegment).contains("id", "owner_id", "status", "deleted");
     }
 
     @Test
@@ -86,9 +86,35 @@ class KnowledgeBaseServiceImplTest {
 
         assertThatThrownBy(() -> knowledgeBaseService.update(KNOWLEDGE_BASE_ID, request("New KB", "desc")))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("鐭ヨ瘑搴撲笉瀛樺湪");
+                .hasMessage("知识库不存在");
 
         verify(knowledgeBaseMapper, never()).selectOne(any());
+    }
+
+    @Test
+    void deleteSoftDeletesOwnActiveKnowledgeBaseOnly() {
+        when(knowledgeBaseMapper.update(isNull(), any(Wrapper.class))).thenReturn(1);
+
+        knowledgeBaseService.delete(KNOWLEDGE_BASE_ID);
+
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        ArgumentCaptor<LambdaUpdateWrapper<KnowledgeBase>> wrapperCaptor =
+                ArgumentCaptor.forClass((Class) LambdaUpdateWrapper.class);
+        verify(knowledgeBaseMapper).update(isNull(), wrapperCaptor.capture());
+        String sqlSet = wrapperCaptor.getValue().getSqlSet();
+        String sqlSegment = wrapperCaptor.getValue().getSqlSegment();
+        assertThat(sqlSet).contains("deleted", "updated_at");
+        assertThat(sqlSet).doesNotContain("name", "description", "owner_id", "created_at");
+        assertThat(sqlSegment).contains("id", "owner_id", "status", "deleted");
+    }
+
+    @Test
+    void deleteThrowsBusinessExceptionWhenKnowledgeBaseNotFoundNotOwnedOrDeleted() {
+        when(knowledgeBaseMapper.update(isNull(), any(Wrapper.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> knowledgeBaseService.delete(KNOWLEDGE_BASE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("知识库不存在");
     }
 
     @Test
@@ -122,6 +148,7 @@ class KnowledgeBaseServiceImplTest {
         knowledgeBase.setDescription(description);
         knowledgeBase.setOwnerId(USER_ID);
         knowledgeBase.setStatus(1);
+        knowledgeBase.setDeleted(0);
         knowledgeBase.setCreatedAt(LocalDateTime.now().minusDays(1));
         knowledgeBase.setUpdatedAt(LocalDateTime.now());
         return knowledgeBase;

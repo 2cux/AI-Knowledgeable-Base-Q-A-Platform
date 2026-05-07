@@ -35,6 +35,8 @@ public class TaskRecordServiceImpl implements TaskRecordService {
     private static final String STATUS_FAILED = "FAILED";
     private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
     private static final int RECENT_TASK_LIMIT = 20;
+    private static final int KNOWLEDGE_BASE_ACTIVE_STATUS = 1;
+    private static final int KNOWLEDGE_BASE_NOT_DELETED = 0;
 
     private final TaskRecordMapper taskRecordMapper;
     private final DocumentMapper documentMapper;
@@ -162,7 +164,8 @@ public class TaskRecordServiceImpl implements TaskRecordService {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, document.getKnowledgeBaseId())
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, KNOWLEDGE_BASE_ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, KNOWLEDGE_BASE_NOT_DELETED)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
             throw new BusinessException(40400, "文档不存在");

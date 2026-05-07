@@ -16,6 +16,7 @@ import jakarta.validation.constraints.Positive;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -63,6 +64,14 @@ public class KnowledgeBaseController {
             @PathVariable @Positive(message = "Knowledge base id must be greater than 0") Long id,
             @Valid @RequestBody KnowledgeBaseUpdateRequest request) {
         return Result.success(knowledgeBaseService.update(id, request), "Updated successfully");
+    }
+
+    @Operation(summary = "删除知识库")
+    @DeleteMapping("/{id}")
+    public Result<Void> delete(
+            @PathVariable @Positive(message = "Knowledge base id must be greater than 0") Long id) {
+        knowledgeBaseService.delete(id);
+        return Result.success(null, "Deleted successfully");
     }
 
     @Operation(summary = "查询知识库下文档列表")

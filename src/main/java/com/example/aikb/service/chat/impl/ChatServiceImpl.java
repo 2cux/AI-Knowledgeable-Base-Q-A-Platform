@@ -50,6 +50,8 @@ public class ChatServiceImpl implements ChatService {
             "\u77e5\u8bc6\u5e93\u68c0\u7d22\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c"
                     + "\u65e0\u6cd5\u57fa\u4e8e\u5f53\u524d\u77e5\u8bc6\u5e93"
                     + "\u751f\u6210\u53ef\u9760\u56de\u7b54\u3002\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002";
+    private static final int KNOWLEDGE_BASE_ACTIVE_STATUS = 1;
+    private static final int KNOWLEDGE_BASE_NOT_DELETED = 0;
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final RetrievalService retrievalService;
@@ -155,7 +157,8 @@ public class ChatServiceImpl implements ChatService {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, knowledgeBaseId)
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, KNOWLEDGE_BASE_ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, KNOWLEDGE_BASE_NOT_DELETED)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
             throw new BusinessException(40400, "\u77e5\u8bc6\u5e93\u4e0d\u5b58\u5728");

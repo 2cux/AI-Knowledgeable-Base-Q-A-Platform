@@ -56,6 +56,8 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private static final String MESSAGE_DOCUMENT_NOT_FOUND = "Document not found or no permission";
     private static final String MESSAGE_DOCUMENT_PROCESSING = "Document is already processing";
     private static final String MESSAGE_DOCUMENT_ALREADY_PROCESSED = "Document already processed";
+    private static final int KNOWLEDGE_BASE_ACTIVE_STATUS = 1;
+    private static final int KNOWLEDGE_BASE_NOT_DELETED = 0;
 
     private final DocumentMapper documentMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
@@ -273,7 +275,8 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, document.getKnowledgeBaseId())
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, KNOWLEDGE_BASE_ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, KNOWLEDGE_BASE_NOT_DELETED)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
             throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
@@ -284,7 +287,8 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     private void ensureDocumentStillValid(Document document) {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, document.getKnowledgeBaseId())
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, KNOWLEDGE_BASE_ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, KNOWLEDGE_BASE_NOT_DELETED)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
             throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);

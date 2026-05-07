@@ -43,4 +43,11 @@ public interface KnowledgeBaseService {
      * @return 修改后的知识库信息
      */
     KnowledgeBaseVO update(Long id, KnowledgeBaseUpdateRequest request);
+
+    /**
+     * 逻辑删除当前登录用户自己的知识库。
+     *
+     * @param id 知识库 ID
+     */
+    void delete(Long id);
 }

@@ -27,6 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
+    private static final int ACTIVE_STATUS = 1;
+    private static final int NOT_DELETED = 0;
+    private static final int DELETED = 1;
+
     private final KnowledgeBaseMapper knowledgeBaseMapper;
 
     /**
@@ -44,7 +48,8 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         knowledgeBase.setName(request.getName().trim());
         knowledgeBase.setDescription(request.getDescription() == null ? null : request.getDescription().trim());
         knowledgeBase.setOwnerId(userId);
-        knowledgeBase.setStatus(1);
+        knowledgeBase.setStatus(ACTIVE_STATUS);
+        knowledgeBase.setDeleted(NOT_DELETED);
 
         int rows = knowledgeBaseMapper.insert(knowledgeBase);
         if (rows != 1 || knowledgeBase.getId() == null) {
@@ -68,7 +73,8 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
         IPage<KnowledgeBase> result = knowledgeBaseMapper.selectPage(page, new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, NOT_DELETED)
                 .orderByDesc(KnowledgeBase::getCreatedAt));
 
         List<KnowledgeBaseVO> list = result.getRecords()
@@ -96,7 +102,8 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, id)
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, NOT_DELETED)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
             throw new BusinessException(40400, "知识库不存在");
@@ -124,20 +131,42 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
                 .set(KnowledgeBase::getUpdatedAt, LocalDateTime.now())
                 .eq(KnowledgeBase::getId, id)
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1));
+                .eq(KnowledgeBase::getStatus, ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, NOT_DELETED));
         if (rows != 1) {
-            throw new BusinessException(40400, "鐭ヨ瘑搴撲笉瀛樺湪");
+            throw new BusinessException(40400, "知识库不存在");
         }
 
         KnowledgeBase updated = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, id)
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, NOT_DELETED)
                 .last("LIMIT 1"));
         if (updated == null) {
-            throw new BusinessException(40400, "鐭ヨ瘑搴撲笉瀛樺湪");
+            throw new BusinessException(40400, "知识库不存在");
         }
         return toVO(updated);
+    }
+
+    /**
+     * 当前知识库删除为逻辑删除，仅标记 deleted=1；关联文档、切片、向量、会话和问答记录暂时保留，
+     * 后续可增加归档或物理清理任务。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long id) {
+        Long userId = CurrentUser.getUserId();
+        int rows = knowledgeBaseMapper.update(null, new LambdaUpdateWrapper<KnowledgeBase>()
+                .set(KnowledgeBase::getDeleted, DELETED)
+                .set(KnowledgeBase::getUpdatedAt, LocalDateTime.now())
+                .eq(KnowledgeBase::getId, id)
+                .eq(KnowledgeBase::getOwnerId, userId)
+                .eq(KnowledgeBase::getStatus, ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, NOT_DELETED));
+        if (rows != 1) {
+            throw new BusinessException(40400, "知识库不存在");
+        }
     }
 
     /**

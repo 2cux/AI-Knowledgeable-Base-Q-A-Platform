@@ -57,6 +57,8 @@ public class DocumentServiceImpl implements DocumentService {
     private static final String EMBEDDING_STATUS_FAILED = "FAILED";
     private static final String EMBEDDING_STATUS_NOT_STARTED = "NOT_STARTED";
     private static final String EMBEDDING_STATUS_PROCESSING = "PROCESSING";
+    private static final int KNOWLEDGE_BASE_ACTIVE_STATUS = 1;
+    private static final int KNOWLEDGE_BASE_NOT_DELETED = 0;
     private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
     private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("pdf", "doc", "docx", "txt", "md");
 
@@ -325,13 +327,14 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     /**
-     * 校验知识库是否属于当前用户。
+     * 校验知识库是否属于当前用户且未被逻辑删除，防止删除后的知识库继续上传或新增处理任务。
      */
     private void ensureOwnKnowledgeBase(Long knowledgeBaseId, Long userId) {
         KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getId, knowledgeBaseId)
                 .eq(KnowledgeBase::getOwnerId, userId)
-                .eq(KnowledgeBase::getStatus, 1)
+                .eq(KnowledgeBase::getStatus, KNOWLEDGE_BASE_ACTIVE_STATUS)
+                .eq(KnowledgeBase::getDeleted, KNOWLEDGE_BASE_NOT_DELETED)
                 .last("LIMIT 1"));
         if (knowledgeBase == null) {
             throw new BusinessException(40400, "知识库不存在");

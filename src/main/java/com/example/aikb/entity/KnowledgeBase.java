@@ -38,6 +38,10 @@ public class KnowledgeBase {
     @Schema(description = "知识库状态", example = "1")
     private Integer status;
 
+    /** 逻辑删除标记：0 未删除，1 已删除。 */
+    @Schema(description = "逻辑删除标记：0 未删除，1 已删除", example = "0")
+    private Integer deleted;
+
     /** 创建时间。 */
     @Schema(description = "创建时间")
     private LocalDateTime createdAt;
