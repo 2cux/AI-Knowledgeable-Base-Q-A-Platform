@@ -111,7 +111,7 @@ conversation 1 --- n message
 | id | bigint | 主键 |
 | knowledge_base_id | bigint | 所属知识库 ID |
 | file_name | varchar(255) | 文件名 |
-| file_type | varchar(32) | 文件类型，如 pdf、docx、txt |
+| file_type | varchar(32) | 文件类型，当前仅支持 txt、md |
 | file_size | bigint | 文件大小，单位字节 |
 | storage_path | varchar(500) | 存储路径 |
 | parse_status | varchar(32) | 解析状态，如 `UPLOADED`、`PARSING`、`DONE`、`FAILED` |

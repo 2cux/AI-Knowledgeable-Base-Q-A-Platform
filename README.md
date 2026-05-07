@@ -372,7 +372,7 @@ Authorization: Bearer <token>
 - 当前已用 RabbitMQ 异步化文档解析 / 切片和 embedding 生成；chat/ask、retrieval/search 仍是原有同步查询链路。
 - 当前不是微服务架构，也未实现分布式任务调度。
 - 当前文件存储为本地目录，不是对象存储。
-- 当前文档解析只覆盖 txt / md 等轻量文本类文件，不是完整 Office / PDF 解析平台。
+- 当前文档上传和解析只支持 txt / md；PDF、Word 属于后续优化，不是当前已支持能力。
 - 当前管理端是后端接口能力，没有独立前端管理台。
 - 当前权限模型为用户资源归属 + 管理员角色，未实现复杂 RBAC。
 

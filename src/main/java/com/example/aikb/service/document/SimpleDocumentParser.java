@@ -6,8 +6,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Locale;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -22,7 +20,6 @@ import org.springframework.util.StringUtils;
 public class SimpleDocumentParser {
 
     private static final String METADATA_STORAGE_PREFIX = "metadata/";
-    private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("txt", "md");
 
     private final LocalDocumentStorage localDocumentStorage;
 
@@ -53,14 +50,7 @@ public class SimpleDocumentParser {
         if (document == null) {
             throw new BusinessException(40400, "文档不存在");
         }
-        String fileType = document.getFileType();
-        if (!StringUtils.hasText(fileType)) {
-            throw new BusinessException("文件类型不能为空");
-        }
-        String normalizedFileType = fileType.trim().toLowerCase(Locale.ROOT);
-        if (!SUPPORTED_FILE_TYPES.contains(normalizedFileType)) {
-            throw new BusinessException("当前仅支持解析txt、md文件");
-        }
+        DocumentFileTypeUtils.validateProcessSupported(document.getFileType());
     }
 
     /**

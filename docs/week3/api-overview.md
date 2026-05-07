@@ -11,7 +11,7 @@
 | KnowledgeBase | GET | `/api/kb/{id}` | 查询知识库详情 | Bearer token，限本人 | 是 | 已实现 |
 | KnowledgeBase | GET | `/api/kb/{id}/documents` | 查询知识库下文档 | Bearer token，限本人 | 是 | 已实现 |
 | Document | POST | `/api/documents/upload` | 上传文档元数据 | Bearer token，限本人知识库 | 否 | 已实现 |
-| Document | POST | `/api/documents/upload-file` | 上传 txt / md 等真实文件 | Bearer token，限本人知识库 | 是 | 已实现 |
+| Document | POST | `/api/documents/upload-file` | 上传 txt / md 真实文件 | Bearer token，限本人知识库 | 是 | 已实现 |
 | Document | GET | `/api/documents` | 分页查询文档 | Bearer token | 是 | 已实现 |
 | Document | GET | `/api/documents/{documentId}` | 查询文档详情 | Bearer token，限本人 | 是 | 已实现 |
 | Document | DELETE | `/api/documents/{documentId}` | 删除文档及关联数据 | Bearer token，限本人 | 是 | 已实现 |

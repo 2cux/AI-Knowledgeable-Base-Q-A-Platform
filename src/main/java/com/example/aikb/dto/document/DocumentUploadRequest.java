@@ -22,13 +22,13 @@ public class DocumentUploadRequest {
     private Long knowledgeBaseId;
 
     /** 原始文件名称。 */
-    @Schema(description = "原始文件名称", example = "产品手册.pdf")
+    @Schema(description = "原始文件名称，当前仅支持 txt、md", example = "产品FAQ.md")
     @NotBlank(message = "文件名不能为空")
     @Size(max = 255, message = "文件名不能超过255个字符")
     private String fileName;
 
-    /** 文件类型，例如 pdf、docx、txt。 */
-    @Schema(description = "文件类型", example = "pdf")
+    /** 文件类型，当前仅支持 txt、md。 */
+    @Schema(description = "文件类型，当前仅支持 txt、md", example = "md")
     @NotBlank(message = "文件类型不能为空")
     @Size(max = 32, message = "文件类型不能超过32个字符")
     private String fileType;
@@ -40,7 +40,7 @@ public class DocumentUploadRequest {
     private Long fileSize;
 
     /** 文件存储路径，不传时由服务端生成占位路径。 */
-    @Schema(description = "文件存储路径，不传时由服务端生成占位路径", example = "kb/1/产品手册.pdf")
+    @Schema(description = "文件存储路径，不传时由服务端生成占位路径", example = "metadata/1/产品FAQ.md")
     @Size(max = 500, message = "文件存储路径不能超过500个字符")
     private String storagePath;
 }

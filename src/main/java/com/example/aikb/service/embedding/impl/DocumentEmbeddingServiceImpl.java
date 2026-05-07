@@ -18,6 +18,7 @@ import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.mq.document.DocumentEmbeddingMessage;
 import com.example.aikb.mq.document.DocumentEmbeddingProducer;
 import com.example.aikb.security.CurrentUser;
+import com.example.aikb.service.document.DocumentFileTypeUtils;
 import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.example.aikb.service.embedding.EmbeddingClient;
 import com.example.aikb.service.embedding.EmbeddingResult;
@@ -84,6 +85,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         DocumentEmbeddingRequest safeRequest = request == null ? new DocumentEmbeddingRequest() : request;
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
+        DocumentFileTypeUtils.validateProcessSupported(document.getFileType());
         validateEmbeddingAllowed(document);
 
         boolean force = Boolean.TRUE.equals(safeRequest.getForce());
@@ -231,6 +233,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
             throw new BusinessException(40400, "Document not found");
         }
         ensureDocumentStillValid(document);
+        DocumentFileTypeUtils.validateProcessSupported(document.getFileType());
         TaskRecord messageTask = getExecutableMessageTask(message, document);
         if (STATUS_SUCCESS.equals(messageTask.getStatus())) {
             return buildNoopResult(document, message.getTaskId(), resolveEmbeddingModel(message.getEmbeddingModel()));

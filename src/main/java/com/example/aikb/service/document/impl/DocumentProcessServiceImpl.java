@@ -17,6 +17,7 @@ import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.mq.document.DocumentProcessMessage;
 import com.example.aikb.mq.document.DocumentProcessProducer;
 import com.example.aikb.security.CurrentUser;
+import com.example.aikb.service.document.DocumentFileTypeUtils;
 import com.example.aikb.service.document.DocumentProcessService;
 import com.example.aikb.service.document.SimpleDocumentParser;
 import com.example.aikb.service.document.TextSplitter;
@@ -80,6 +81,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
 
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(documentId, userId);
+        DocumentFileTypeUtils.validateProcessSupported(document.getFileType());
         boolean force = Boolean.TRUE.equals(safeRequest.getForce());
         if (!force && isProcessSuccess(document)) {
             int chunkCount = countChunks(document.getId());
@@ -182,6 +184,7 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
             throw new BusinessException(40400, MESSAGE_DOCUMENT_NOT_FOUND);
         }
         ensureDocumentStillValid(latestDocument);
+        DocumentFileTypeUtils.validateProcessSupported(latestDocument.getFileType());
         TaskRecord messageTask = getExecutableMessageTask(message, latestDocument.getId());
         if (TASK_STATUS_SUCCESS.equals(messageTask.getStatus())) {
             return DocumentProcessVO.builder()

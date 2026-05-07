@@ -27,12 +27,12 @@ public class Document {
     private Long knowledgeBaseId;
 
     /** 原始文件名称。 */
-    @Schema(description = "原始文件名称", example = "产品手册.pdf")
+    @Schema(description = "原始文件名称，当前仅支持 txt、md", example = "产品FAQ.md")
     @TableField("file_name")
     private String fileName;
 
-    /** 文件类型，例如 pdf、docx、txt。 */
-    @Schema(description = "文件类型", example = "pdf")
+    /** 文件类型，当前仅支持 txt、md。 */
+    @Schema(description = "文件类型，当前仅支持 txt、md", example = "md")
     @TableField("file_type")
     private String fileType;
 
@@ -42,7 +42,7 @@ public class Document {
     private Long fileSize;
 
     /** 文件存储路径，MVP 阶段可保存占位路径。 */
-    @Schema(description = "文件存储路径", example = "kb/1/产品手册.pdf")
+    @Schema(description = "文件存储路径", example = "metadata/1/产品FAQ.md")
     @TableField("storage_path")
     private String storagePath;
 

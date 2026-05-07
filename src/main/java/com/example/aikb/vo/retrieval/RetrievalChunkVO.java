@@ -30,6 +30,6 @@ public class RetrievalChunkVO {
     @Schema(description = "相似度分数，越大越相关", example = "0.87")
     private Double score;
 
-    @Schema(description = "文档名称", example = "产品手册.pdf")
+    @Schema(description = "文档名称", example = "产品FAQ.md")
     private String documentName;
 }

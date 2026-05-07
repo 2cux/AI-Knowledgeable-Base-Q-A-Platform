@@ -22,10 +22,10 @@ public class DocumentListVO {
     @Schema(description = "知识库ID", example = "1")
     private Long knowledgeBaseId;
 
-    @Schema(description = "原始文件名", example = "product-manual.pdf")
+    @Schema(description = "原始文件名", example = "product-faq.md")
     private String fileName;
 
-    @Schema(description = "文件类型", example = "pdf")
+    @Schema(description = "文件类型，当前仅支持 txt、md", example = "md")
     private String fileType;
 
     @Schema(description = "文件大小，单位字节", example = "204800")

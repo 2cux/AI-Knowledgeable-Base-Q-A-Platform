@@ -25,7 +25,7 @@ public class CitationVO {
     @Schema(description = "切片在文档内的序号", example = "0")
     private Integer chunkIndex;
 
-    @Schema(description = "文档名称", example = "manual.pdf")
+    @Schema(description = "文档名称", example = "manual.md")
     private String documentName;
 
     @Schema(description = "检索相关性分数", example = "0.87")

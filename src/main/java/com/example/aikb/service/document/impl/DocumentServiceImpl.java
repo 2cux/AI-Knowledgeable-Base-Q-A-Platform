@@ -19,6 +19,7 @@ import com.example.aikb.mapper.DocumentMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.mapper.TaskRecordMapper;
 import com.example.aikb.security.CurrentUser;
+import com.example.aikb.service.document.DocumentFileTypeUtils;
 import com.example.aikb.service.document.DocumentService;
 import com.example.aikb.service.document.LocalDocumentStorage;
 import com.example.aikb.service.document.LocalDocumentStorage.StoredDocumentFile;
@@ -27,8 +28,6 @@ import com.example.aikb.vo.document.DocumentFileUploadVO;
 import com.example.aikb.vo.document.DocumentListVO;
 import com.example.aikb.vo.document.DocumentStatusVO;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,7 +59,6 @@ public class DocumentServiceImpl implements DocumentService {
     private static final int KNOWLEDGE_BASE_ACTIVE_STATUS = 1;
     private static final int KNOWLEDGE_BASE_NOT_DELETED = 0;
     private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
-    private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("pdf", "doc", "docx", "txt", "md");
 
     private final DocumentMapper documentMapper;
     private final DocumentChunkMapper documentChunkMapper;
@@ -78,8 +76,8 @@ public class DocumentServiceImpl implements DocumentService {
         Long userId = CurrentUser.getUserId();
         ensureOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
 
-        String fileName = request.getFileName().trim();
-        String fileType = normalizeAndValidateFile(request.getFileType(), request.getFileSize());
+        String fileName = DocumentFileTypeUtils.validateSafeFileName(request.getFileName());
+        String fileType = normalizeAndValidateFile(fileName, request.getFileType(), request.getFileSize());
 
         Document document = new Document();
         document.setKnowledgeBaseId(request.getKnowledgeBaseId());
@@ -310,6 +308,7 @@ public class DocumentServiceImpl implements DocumentService {
     public Long createParseTask(Long id) {
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(id, userId);
+        DocumentFileTypeUtils.validateProcessSupported(document.getFileType());
 
         TaskRecord pendingTask = taskRecordMapper.selectOne(new LambdaQueryWrapper<TaskRecord>()
                 .eq(TaskRecord::getTaskType, TASK_TYPE_DOCUMENT_PARSE)
@@ -341,11 +340,8 @@ public class DocumentServiceImpl implements DocumentService {
     /**
      * 归一化并校验文件类型和大小。
      */
-    private String normalizeAndValidateFile(String fileType, Long fileSize) {
-        String normalizedFileType = fileType.trim().toLowerCase(Locale.ROOT);
-        if (!SUPPORTED_FILE_TYPES.contains(normalizedFileType)) {
-            throw new BusinessException("暂不支持该文件类型，仅支持 pdf、doc、docx、txt、md");
-        }
+    private String normalizeAndValidateFile(String fileName, String fileType, Long fileSize) {
+        String normalizedFileType = DocumentFileTypeUtils.validateMetadataType(fileName, fileType);
         if (fileSize > MAX_FILE_SIZE) {
             throw new BusinessException("文件大小不能超过20MB");
         }

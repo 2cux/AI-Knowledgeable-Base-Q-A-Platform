@@ -3,16 +3,13 @@ package com.example.aikb.service.document;
 import com.example.aikb.config.AppFileProperties;
 import com.example.aikb.exception.BusinessException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
@@ -30,9 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class LocalDocumentStorage {
 
-    private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("txt", "md");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
-    private static final int BINARY_CHECK_BYTES = 4096;
 
     private final AppFileProperties appFileProperties;
 
@@ -52,7 +47,6 @@ public class LocalDocumentStorage {
 
         String originalFileName = resolveOriginalFileName(multipartFile, customFileName);
         String fileType = resolveAndValidateFileType(originalFileName);
-        validateTextFileContent(multipartFile);
 
         Path uploadRoot = getUploadRoot();
         String date = LocalDate.now().format(DATE_FORMATTER);
@@ -209,51 +203,14 @@ public class LocalDocumentStorage {
         } else {
             sourceFileName = Objects.toString(multipartFile.getOriginalFilename(), "").trim();
         }
-        if (sourceFileName.isBlank()) {
-            throw new BusinessException("文件名不能为空");
-        }
-
-        String cleanedFileName = StringUtils.cleanPath(sourceFileName);
-        if (cleanedFileName.contains("..")
-                || cleanedFileName.contains("/")
-                || cleanedFileName.contains("\\")
-                || cleanedFileName.length() > 255) {
-            throw new BusinessException("文件名非法");
-        }
-        return cleanedFileName;
+        return DocumentFileTypeUtils.validateSafeFileName(sourceFileName);
     }
 
     /**
      * 根据文件扩展名识别类型，当前第二周 P0 仅允许 txt 和 md。
      */
     private String resolveAndValidateFileType(String fileName) {
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
-            throw new BusinessException("文件类型不能为空");
-        }
-        String fileType = fileName.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
-        if (!SUPPORTED_FILE_TYPES.contains(fileType)) {
-            throw new BusinessException("仅支持 txt、md 文件上传");
-        }
-        return fileType;
-    }
-
-    /**
-     * 轻量校验文本文件内容，拒绝明显的二进制文件混入 txt/md 上传链路。
-     */
-    private void validateTextFileContent(MultipartFile multipartFile) {
-        byte[] buffer = new byte[BINARY_CHECK_BYTES];
-        try (InputStream inputStream = multipartFile.getInputStream()) {
-            int length = inputStream.read(buffer);
-            for (int i = 0; i < length; i++) {
-                if (buffer[i] == 0) {
-                    throw new BusinessException("文件内容不是有效的文本文件");
-                }
-            }
-        } catch (IOException ex) {
-            log.warn("Read uploaded document failed, originalFilename={}", multipartFile.getOriginalFilename(), ex);
-            throw new BusinessException(50000, "文件读取失败");
-        }
+        return DocumentFileTypeUtils.resolveAndValidateExtension(fileName);
     }
 
     /**

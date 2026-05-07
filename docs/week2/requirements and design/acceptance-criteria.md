@@ -246,7 +246,7 @@ UPLOADED/PENDING -> CHUNKING -> FAILED
 
 可接受但需后续优化：
 
-- 暂不支持 PDF 或仅支持文本型 PDF。
+- 当前不支持 PDF 解析，仅支持 txt/md。
 - 暂不支持 OCR。
 - 暂未做复杂分段策略，仅按字符长度切片。
 
