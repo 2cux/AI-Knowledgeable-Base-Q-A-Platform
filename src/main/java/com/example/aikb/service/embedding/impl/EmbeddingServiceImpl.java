@@ -9,6 +9,7 @@ import com.example.aikb.exception.BusinessException;
 import com.example.aikb.service.embedding.EmbeddingService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -18,6 +19,7 @@ import org.springframework.util.StringUtils;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @ConditionalOnProperty(prefix = "app.embedding", name = "enabled", havingValue = "true")
 public class EmbeddingServiceImpl implements EmbeddingService {
 
@@ -70,10 +72,10 @@ public class EmbeddingServiceImpl implements EmbeddingService {
                 : properties.getEmbeddingType());
 
         EmbeddingResponse response = embeddingApiClient.embed(request);
-        return extractFirstVector(response);
+        return extractFirstVector(response, request.getModel());
     }
 
-    private List<Float> extractFirstVector(EmbeddingResponse response) {
+    private List<Float> extractFirstVector(EmbeddingResponse response, String requestModel) {
         if (response == null) {
             throw new BusinessException(50000, "Embedding API 响应为空");
         }
@@ -87,10 +89,42 @@ public class EmbeddingServiceImpl implements EmbeddingService {
         }
 
         EmbeddingData first = response.getData().get(0);
-        if (first == null || first.getEmbedding() == null || first.getEmbedding().isEmpty()) {
-            throw new BusinessException(50000, "Embedding API 响应缺少 data[0].embedding");
+        if (first == null) {
+            throw new BusinessException(50000, "Embedding API 响应缺少 data[0]");
         }
-        return first.getEmbedding();
+        List<Float> vector = first.getEmbedding();
+        validateVectorDimension(vector, resolveResponseModel(response, requestModel));
+        return vector;
+    }
+
+    private void validateVectorDimension(List<Float> vector, String model) {
+        int expected = properties.getVectorSize();
+        int actual = vector == null ? 0 : vector.size();
+        if (expected <= 0) {
+            throw new BusinessException(50000, "embedding vector-size 配置必须大于 0");
+        }
+        if (actual == 0) {
+            throw new BusinessException(50000, buildVectorSizeMessage(model, expected, actual));
+        }
+        if (vector.stream().anyMatch(item -> item == null)) {
+            throw new BusinessException(50000, "Embedding API 响应 data[0].embedding 包含空值");
+        }
+        if (actual != expected) {
+            log.warn("Embedding vector dimension mismatch. model={}, expected={}, actual={}",
+                    model, expected, actual);
+            throw new BusinessException(50000, buildVectorSizeMessage(model, expected, actual));
+        }
+    }
+
+    private String resolveResponseModel(EmbeddingResponse response, String requestModel) {
+        if (response != null && StringUtils.hasText(response.getModel())) {
+            return response.getModel().trim();
+        }
+        return resolveModel(requestModel);
+    }
+
+    private String buildVectorSizeMessage(String model, int expected, int actual) {
+        return "Embedding 向量维度不一致，模型：" + model + "，期望维度：" + expected + "，实际维度：" + actual;
     }
 
     private String resolveModel(String model) {
@@ -143,6 +177,9 @@ public class EmbeddingServiceImpl implements EmbeddingService {
         if (!StringUtils.hasText(properties.getModel())
                 || "your-embedding-model".equals(properties.getModel())) {
             throw new BusinessException(50000, "embedding model 未配置");
+        }
+        if (properties.getVectorSize() <= 0) {
+            throw new BusinessException(50000, "embedding vector-size 配置必须大于 0");
         }
     }
 }

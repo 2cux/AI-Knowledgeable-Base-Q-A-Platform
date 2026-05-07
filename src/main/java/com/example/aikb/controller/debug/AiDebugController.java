@@ -76,7 +76,8 @@ public class AiDebugController {
                 .baseUrlConfigured(StringUtils.hasText(embeddingProperties.getBaseUrl()))
                 .apiKeyConfigured(isApiKeyConfigured(embeddingProperties.getApiKey()))
                 .model(embeddingProperties.getModel())
-                .vectorSize(vector.size())
+                .vectorSize(embeddingProperties.getVectorSize())
+                .actualVectorSize(vector.size())
                 .vectorPreview(vector.stream().limit(VECTOR_PREVIEW_SIZE).toList())
                 .build());
     }
@@ -206,6 +207,7 @@ public class AiDebugController {
         private boolean apiKeyConfigured;
         private String model;
         private Integer vectorSize;
+        private Integer actualVectorSize;
         private List<Float> vectorPreview;
     }
 

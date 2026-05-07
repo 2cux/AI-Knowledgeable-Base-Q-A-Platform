@@ -34,6 +34,11 @@ public class AppEmbeddingProperties {
     private String model = "your-embedding-model";
 
     /**
+     * embedding 向量维度，必须与当前模型返回维度一致。
+     */
+    private int vectorSize = 3072;
+
+    /**
      * 是否要求服务提供商返回归一化后的向量。
      */
     private Boolean normalized = true;

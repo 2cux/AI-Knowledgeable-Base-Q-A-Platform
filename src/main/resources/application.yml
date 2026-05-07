@@ -107,6 +107,8 @@ app:
     base-url: ${APP_EMBEDDING_BASE_URL:${OPENAI_EMBEDDING_BASE_URL:https://api.xiaocaseai.com/v1/embeddings}}
     api-key: ${APP_EMBEDDING_API_KEY:${OPENAI_API_KEY:}}
     model: ${APP_EMBEDDING_MODEL:text-embedding-3-large}
+    # Embedding 向量维度，必须与当前模型返回维度一致。
+    vector-size: ${APP_EMBEDDING_VECTOR_SIZE:${EMBEDDING_VECTOR_SIZE:3072}}
     normalized: true
     embedding-type: float
     connect-timeout: 5s
