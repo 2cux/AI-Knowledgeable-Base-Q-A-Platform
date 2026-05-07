@@ -4,6 +4,7 @@ import com.example.aikb.common.PageResult;
 import com.example.aikb.common.Result;
 import com.example.aikb.dto.kb.KnowledgeBaseCreateRequest;
 import com.example.aikb.dto.kb.KnowledgeBasePageRequest;
+import com.example.aikb.dto.kb.KnowledgeBaseUpdateRequest;
 import com.example.aikb.service.document.DocumentService;
 import com.example.aikb.service.kb.KnowledgeBaseService;
 import com.example.aikb.vo.document.DocumentListVO;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -53,6 +55,14 @@ public class KnowledgeBaseController {
     public Result<KnowledgeBaseVO> getById(
             @PathVariable @Positive(message = "Knowledge base id must be greater than 0") Long id) {
         return Result.success(knowledgeBaseService.getById(id));
+    }
+
+    @Operation(summary = "修改知识库基础信息")
+    @PutMapping("/{id}")
+    public Result<KnowledgeBaseVO> update(
+            @PathVariable @Positive(message = "Knowledge base id must be greater than 0") Long id,
+            @Valid @RequestBody KnowledgeBaseUpdateRequest request) {
+        return Result.success(knowledgeBaseService.update(id, request), "Updated successfully");
     }
 
     @Operation(summary = "查询知识库下文档列表")

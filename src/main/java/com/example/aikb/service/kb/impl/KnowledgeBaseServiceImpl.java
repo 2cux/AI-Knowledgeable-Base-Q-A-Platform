@@ -1,17 +1,20 @@
 package com.example.aikb.service.kb.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
 import com.example.aikb.dto.kb.KnowledgeBaseCreateRequest;
 import com.example.aikb.dto.kb.KnowledgeBasePageRequest;
+import com.example.aikb.dto.kb.KnowledgeBaseUpdateRequest;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.kb.KnowledgeBaseService;
 import com.example.aikb.vo.kb.KnowledgeBaseVO;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -99,6 +102,42 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
             throw new BusinessException(40400, "知识库不存在");
         }
         return toVO(knowledgeBase);
+    }
+
+    /**
+     * 只更新当前用户自己的知识库安全字段，避免前端覆盖系统字段。
+     *
+     * @param id 知识库 ID
+     * @param request 知识库修改请求参数
+     * @return 修改后的知识库信息
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public KnowledgeBaseVO update(Long id, KnowledgeBaseUpdateRequest request) {
+        Long userId = CurrentUser.getUserId();
+        String name = request.getName().trim();
+        String description = request.getDescription() == null ? null : request.getDescription().trim();
+
+        int rows = knowledgeBaseMapper.update(null, new LambdaUpdateWrapper<KnowledgeBase>()
+                .set(KnowledgeBase::getName, name)
+                .set(KnowledgeBase::getDescription, description)
+                .set(KnowledgeBase::getUpdatedAt, LocalDateTime.now())
+                .eq(KnowledgeBase::getId, id)
+                .eq(KnowledgeBase::getOwnerId, userId)
+                .eq(KnowledgeBase::getStatus, 1));
+        if (rows != 1) {
+            throw new BusinessException(40400, "鐭ヨ瘑搴撲笉瀛樺湪");
+        }
+
+        KnowledgeBase updated = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
+                .eq(KnowledgeBase::getId, id)
+                .eq(KnowledgeBase::getOwnerId, userId)
+                .eq(KnowledgeBase::getStatus, 1)
+                .last("LIMIT 1"));
+        if (updated == null) {
+            throw new BusinessException(40400, "鐭ヨ瘑搴撲笉瀛樺湪");
+        }
+        return toVO(updated);
     }
 
     /**

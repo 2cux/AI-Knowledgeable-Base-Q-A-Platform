@@ -3,6 +3,7 @@ package com.example.aikb.service.kb;
 import com.example.aikb.common.PageResult;
 import com.example.aikb.dto.kb.KnowledgeBaseCreateRequest;
 import com.example.aikb.dto.kb.KnowledgeBasePageRequest;
+import com.example.aikb.dto.kb.KnowledgeBaseUpdateRequest;
 import com.example.aikb.vo.kb.KnowledgeBaseVO;
 
 /**
@@ -33,4 +34,13 @@ public interface KnowledgeBaseService {
      * @return 知识库详情
      */
     KnowledgeBaseVO getById(Long id);
+
+    /**
+     * 修改当前登录用户自己的知识库基础信息。
+     *
+     * @param id 知识库 ID
+     * @param request 知识库修改请求参数
+     * @return 修改后的知识库信息
+     */
+    KnowledgeBaseVO update(Long id, KnowledgeBaseUpdateRequest request);
 }
