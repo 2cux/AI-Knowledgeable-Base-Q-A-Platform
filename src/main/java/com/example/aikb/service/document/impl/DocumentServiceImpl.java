@@ -176,14 +176,26 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     public PageResult<DocumentListVO> page(DocumentListQuery query) {
         Long userId = CurrentUser.getUserId();
+        List<Long> activeKnowledgeBaseIds = null;
         if (query.getKnowledgeBaseId() != null) {
             ensureOwnKnowledgeBase(query.getKnowledgeBaseId(), userId);
+        } else {
+            activeKnowledgeBaseIds = listActiveKnowledgeBaseIds(userId);
+            if (activeKnowledgeBaseIds.isEmpty()) {
+                return PageResult.<DocumentListVO>builder()
+                        .list(List.of())
+                        .total(0)
+                        .pageNum(query.getPageNum())
+                        .pageSize(query.getPageSize())
+                        .build();
+            }
         }
 
         Page<Document> page = Page.of(query.getPageNum(), query.getPageSize());
         LambdaQueryWrapper<Document> wrapper = new LambdaQueryWrapper<Document>()
                 .eq(Document::getCreatedBy, userId)
                 .eq(query.getKnowledgeBaseId() != null, Document::getKnowledgeBaseId, query.getKnowledgeBaseId())
+                .in(activeKnowledgeBaseIds != null, Document::getKnowledgeBaseId, activeKnowledgeBaseIds)
                 .orderByDesc(Document::getCreatedAt);
 
         IPage<Document> result = documentMapper.selectPage(page, wrapper);
@@ -198,6 +210,20 @@ public class DocumentServiceImpl implements DocumentService {
                 .pageNum(query.getPageNum())
                 .pageSize(query.getPageSize())
                 .build();
+    }
+
+    /**
+     * 查询当前用户未被逻辑删除的知识库 ID，避免文档总列表展示已删除知识库下的历史文档。
+     */
+    private List<Long> listActiveKnowledgeBaseIds(Long userId) {
+        return knowledgeBaseMapper.selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                        .select(KnowledgeBase::getId)
+                        .eq(KnowledgeBase::getOwnerId, userId)
+                        .eq(KnowledgeBase::getStatus, KNOWLEDGE_BASE_ACTIVE_STATUS)
+                        .eq(KnowledgeBase::getDeleted, KNOWLEDGE_BASE_NOT_DELETED))
+                .stream()
+                .map(KnowledgeBase::getId)
+                .toList();
     }
 
     @Override
