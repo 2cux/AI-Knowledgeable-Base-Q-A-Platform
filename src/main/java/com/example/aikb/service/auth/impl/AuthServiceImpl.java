@@ -97,8 +97,11 @@ public class AuthServiceImpl implements AuthService {
     public CurrentUserVO getCurrentUser() {
         Long userId = CurrentUser.getUserId();
         User user = userMapper.selectById(userId);
-        if (user == null || user.getStatus() == null || user.getStatus() != USER_STATUS_ENABLED) {
-            throw new BusinessException(40300, "当前用户不存在或已被禁用");
+        if (user == null) {
+            throw new BusinessException(40400, "当前用户不存在");
+        }
+        if (user.getStatus() == null || user.getStatus() != USER_STATUS_ENABLED) {
+            throw new BusinessException(40300, "当前用户已被禁用");
         }
 
         return CurrentUserVO.builder()
