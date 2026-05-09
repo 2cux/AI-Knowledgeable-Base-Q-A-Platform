@@ -1,6 +1,8 @@
 package com.example.aikb.service.embedding.impl;
 
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.config.AppEmbeddingProperties;
+import com.example.aikb.dto.embedding.request.EmbeddingInputItem;
 import com.example.aikb.dto.embedding.request.EmbeddingRequest;
 import com.example.aikb.dto.embedding.response.EmbeddingResponse;
 import com.example.aikb.exception.BusinessException;
@@ -21,7 +23,7 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * embedding 第三方接口基础客户端，只负责 HTTP 请求发送和响应反序列化。
+ * Base HTTP client for the third-party embedding API.
  */
 @Slf4j
 @Component
@@ -30,6 +32,7 @@ public class EmbeddingApiClient {
 
     private final AppEmbeddingProperties properties;
     private final RestTemplate restTemplate;
+
     public EmbeddingApiClient(
             AppEmbeddingProperties properties,
             @Qualifier("embeddingRestTemplate") RestTemplate restTemplate) {
@@ -37,13 +40,6 @@ public class EmbeddingApiClient {
         this.restTemplate = restTemplate;
     }
 
-    /**
-     * 按指定协议调用 embedding 接口。
-     *
-     * <p>请求头固定为 Authorization: Bearer {API_KEY}，Content-Type 固定为 application/json。</p>
-     *
-     * <p>API Key 必须来自环境变量注入，日志和响应中都不得输出真实密钥。</p>
-     */
     public EmbeddingResponse embed(EmbeddingRequest request) {
         String baseUrl = requireText(properties.getBaseUrl(), "embedding base-url 未配置");
         String apiKey = requireText(properties.getApiKey(),
@@ -54,65 +50,72 @@ public class EmbeddingApiClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<EmbeddingRequest> entity = new HttpEntity<>(request, headers);
+        long start = System.currentTimeMillis();
         try {
-            log.info(
-                    "Embedding API request. enabled={}, baseUrl={}, model={}, normalized={}, embeddingType={}, inputCount={}",
+            log.info("Embedding API request. enabled={}, baseUrlConfigured={}, model={}, normalized={}, embeddingType={}, inputCount={}, inputLength={}",
                     properties.isEnabled(),
-                    baseUrl,
+                    true,
                     request.getModel(),
-                    properties.getNormalized(),
-                    properties.getEmbeddingType(),
-                    resolveInputCount(request.getInput()));
+                    request.getNormalized(),
+                    request.getEmbeddingType(),
+                    resolveInputCount(request.getInput()),
+                    resolveInputLength(request.getInput()));
             ResponseEntity<EmbeddingResponse> response = restTemplate.postForEntity(
                     baseUrl,
                     entity,
                     EmbeddingResponse.class);
-            return response.getBody();
-        } catch (RestClientResponseException ex) {
-            log.error(
-                    "Embedding API HTTP error. enabled={}, baseUrl={}, model={}, normalized={}, embeddingType={}, "
-                            + "statusCode={}, statusText={}",
-                    properties.isEnabled(),
-                    baseUrl,
+            EmbeddingResponse body = response.getBody();
+            log.info("Embedding API response. model={}, statusCode={}, durationMs={}, dataCount={}",
                     request.getModel(),
-                    properties.getNormalized(),
-                    properties.getEmbeddingType(),
+                    response.getStatusCode().value(),
+                    System.currentTimeMillis() - start,
+                    body == null || body.getData() == null ? 0 : body.getData().size());
+            return body;
+        } catch (RestClientResponseException ex) {
+            log.error("Embedding API HTTP error. enabled={}, baseUrlConfigured={}, model={}, normalized={}, embeddingType={}, statusCode={}, statusText={}, durationMs={}, error={}",
+                    properties.isEnabled(),
+                    true,
+                    request.getModel(),
+                    request.getNormalized(),
+                    request.getEmbeddingType(),
                     ex.getStatusCode().value(),
-                    ex.getStatusText());
+                    LogSanitizer.safeMessage(ex.getStatusText()),
+                    System.currentTimeMillis() - start,
+                    LogSanitizer.safeMessage(ex.getMessage()));
             throw new BusinessException(50000,
                     "Embedding API 调用失败: HTTP " + ex.getStatusCode().value() + " " + ex.getStatusText());
         } catch (ResourceAccessException ex) {
-            log.error(
-                    "Embedding API network or timeout error. enabled={}, baseUrl={}, model={}, normalized={}, "
-                            + "embeddingType={}, errorType={}",
+            log.error("Embedding API network or timeout error. enabled={}, baseUrlConfigured={}, model={}, normalized={}, embeddingType={}, durationMs={}, errorType={}, error={}",
                     properties.isEnabled(),
-                    baseUrl,
+                    true,
                     request.getModel(),
-                    properties.getNormalized(),
-                    properties.getEmbeddingType(),
-                    ex.getClass().getSimpleName());
+                    request.getNormalized(),
+                    request.getEmbeddingType(),
+                    System.currentTimeMillis() - start,
+                    ex.getClass().getSimpleName(),
+                    LogSanitizer.safeMessage(ex.getMessage()));
             throw new BusinessException(50000, "Embedding API 调用失败: 网络或超时异常");
         } catch (HttpMessageConversionException ex) {
-            log.error(
-                    "Embedding API JSON conversion error. enabled={}, baseUrl={}, model={}, normalized={}, "
-                            + "embeddingType={}, errorType={}",
+            log.error("Embedding API JSON conversion error. enabled={}, baseUrlConfigured={}, model={}, normalized={}, embeddingType={}, durationMs={}, errorType={}, error={}",
                     properties.isEnabled(),
-                    baseUrl,
+                    true,
                     request.getModel(),
-                    properties.getNormalized(),
-                    properties.getEmbeddingType(),
-                    ex.getClass().getSimpleName());
+                    request.getNormalized(),
+                    request.getEmbeddingType(),
+                    System.currentTimeMillis() - start,
+                    ex.getClass().getSimpleName(),
+                    LogSanitizer.safeMessage(ex.getMessage()));
             throw new BusinessException(50000, "Embedding API 调用失败: JSON 解析失败");
         } catch (RestClientException ex) {
-            log.error(
-                    "Embedding API client error. enabled={}, baseUrl={}, model={}, normalized={}, embeddingType={}, "
-                            + "errorType={}",
+            log.error("Embedding API client error. enabled={}, baseUrlConfigured={}, model={}, normalized={}, embeddingType={}, durationMs={}, errorType={}, error={}",
                     properties.isEnabled(),
-                    baseUrl,
+                    true,
                     request.getModel(),
-                    properties.getNormalized(),
-                    properties.getEmbeddingType(),
-                    ex.getClass().getSimpleName());
+                    request.getNormalized(),
+                    request.getEmbeddingType(),
+                    System.currentTimeMillis() - start,
+                    ex.getClass().getSimpleName(),
+                    LogSanitizer.safeMessage(ex.getMessage()));
             throw new BusinessException(50000, "Embedding API 调用失败");
         }
     }
@@ -134,5 +137,22 @@ public class EmbeddingApiClient {
             return inputList.size();
         }
         return input == null ? 0 : 1;
+    }
+
+    private int resolveInputLength(Object input) {
+        if (input instanceof java.util.List<?> inputList) {
+            return inputList.stream().mapToInt(this::singleInputLength).sum();
+        }
+        return singleInputLength(input);
+    }
+
+    private int singleInputLength(Object input) {
+        if (input instanceof String text) {
+            return text.length();
+        }
+        if (input instanceof EmbeddingInputItem item) {
+            return item.getText() == null ? 0 : item.getText().length();
+        }
+        return 0;
     }
 }

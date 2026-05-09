@@ -1,6 +1,7 @@
 package com.example.aikb.service.retrieval.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.config.AppRagRetrievalProperties;
 import com.example.aikb.dto.retrieval.RetrievalSearchRequest;
 import com.example.aikb.entity.KnowledgeBase;
@@ -45,6 +46,7 @@ public class RetrievalServiceImpl implements RetrievalService {
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
         int topK = resolveTopK(request.getTopK());
         String query = resolveQuery(request);
+        long start = System.currentTimeMillis();
 
         RetrievalQueryEmbedding queryEmbedding = queryEmbeddingService.embed(query);
 
@@ -55,9 +57,22 @@ public class RetrievalServiceImpl implements RetrievalService {
         double minEffectiveScore = retrievalProperties.getMinEffectiveScore();
         List<RetrievalChunkVO> effectiveChunks = filterEffectiveChunks(rawChunks, minEffectiveScore);
 
-        log.info("Retrieval finished, userId={}, knowledgeBaseId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}",
-                userId, knowledgeBase.getId(), query.length(), topK, minEffectiveScore, rawChunks.size(),
-                effectiveChunks.size());
+        log.info("Retrieval finished, userId={}, knowledgeBaseId={}, queryLength={}, queryPreview={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, highestScore={}, durationMs={}",
+                userId,
+                knowledgeBase.getId(),
+                query.length(),
+                LogSanitizer.preview(query, 80),
+                topK,
+                minEffectiveScore,
+                rawChunks.size(),
+                effectiveChunks.size(),
+                !effectiveChunks.isEmpty(),
+                rawChunks.stream()
+                        .map(RetrievalChunkVO::getScore)
+                        .filter(score -> score != null && Double.isFinite(score))
+                        .findFirst()
+                        .orElse(null),
+                System.currentTimeMillis() - start);
 
         return RetrievalSearchVO.builder()
                 .knowledgeBaseId(knowledgeBase.getId())

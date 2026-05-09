@@ -1,6 +1,7 @@
 package com.example.aikb.service.chat.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.config.AppRagRetrievalProperties;
 import com.example.aikb.dto.chat.ChatAskRequest;
 import com.example.aikb.dto.retrieval.RetrievalSearchRequest;
@@ -88,7 +89,8 @@ public class ChatServiceImpl implements ChatService {
                 throw ex;
             }
             log.warn("Chat RAG retrieval unavailable, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, error={}",
-                    userId, knowledgeBase.getId(), conversationId, question.length(), topK, ex.getMessage());
+                    userId, knowledgeBase.getId(), conversationId, question.length(), topK,
+                    LogSanitizer.safeMessage(ex.getMessage()));
             return retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
         } catch (RuntimeException ex) {
             log.warn("Chat RAG retrieval unavailable unexpectedly, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, errorType={}",
@@ -174,7 +176,7 @@ public class ChatServiceImpl implements ChatService {
                 .chunkIndex(chunk.getChunkIndex())
                 .documentName(chunk.getDocumentName())
                 .score(chunk.getScore())
-                .contentSnippet(shorten(chunk.getContent(), 300))
+                .contentSnippet(LogSanitizer.preview(chunk.getContent(), 300))
                 .build();
     }
 
@@ -220,13 +222,6 @@ public class ChatServiceImpl implements ChatService {
                 .minEffectiveScore(minEffectiveScore)
                 .citations(citations)
                 .build();
-    }
-
-    private String shorten(String content, int maxLength) {
-        if (content == null || content.length() <= maxLength) {
-            return content;
-        }
-        return content.substring(0, maxLength) + "...";
     }
 
     private record AnswerResolution(String answer, AnswerStatus answerStatus, boolean matched,

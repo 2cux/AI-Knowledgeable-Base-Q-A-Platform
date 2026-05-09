@@ -1,5 +1,6 @@
 package com.example.aikb.exception;
 
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.common.Result;
 import jakarta.validation.ConstraintViolationException;
 import java.io.FileNotFoundException;
@@ -35,7 +36,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Result<Void>> handleBusinessException(BusinessException ex) {
         log.warn("Business exception, code={}, httpStatus={}, message={}",
-                ex.getCode(), ex.getHttpStatus(), ex.getMessage());
+                ex.getCode(), ex.getHttpStatus(), LogSanitizer.safeMessage(ex.getMessage()));
         return build(ex.getHttpStatus(), ex.getCode(), ex.getMessage());
     }
 
@@ -126,7 +127,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handleException(Exception ex) {
-        log.error("Unhandled exception", ex);
+        log.error("Unhandled exception, errorType={}, message={}",
+                ex.getClass().getSimpleName(), LogSanitizer.safeMessage(ex.getMessage()));
         return build(HttpStatus.INTERNAL_SERVER_ERROR.value(), 50000, "系统异常，请稍后重试");
     }
 

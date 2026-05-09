@@ -2,6 +2,7 @@ package com.example.aikb.service.embedding.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.dto.document.DocumentEmbeddingRequest;
 import com.example.aikb.entity.ChunkEmbedding;
@@ -556,8 +557,9 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     }
 
     private String truncateError(String errorMessage) {
-        String error = StringUtils.hasText(errorMessage) ? errorMessage.trim() : "Document embedding failed";
-        error = error.replaceAll("(?i)api[_-]?key\\s*[:=]\\s*\\S+", "apiKey=***");
+        String error = StringUtils.hasText(errorMessage)
+                ? LogSanitizer.sanitize(errorMessage, MAX_ERROR_MESSAGE_LENGTH).trim()
+                : "Document embedding failed";
         if (error.length() <= MAX_ERROR_MESSAGE_LENGTH) {
             return error;
         }

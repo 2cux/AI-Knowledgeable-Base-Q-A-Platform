@@ -2,6 +2,7 @@ package com.example.aikb.service.document.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.dto.document.DocumentProcessRequest;
 import com.example.aikb.entity.ChunkEmbedding;
 import com.example.aikb.entity.Document;
@@ -409,8 +410,9 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     }
 
     private String lifecycleError(String errorMessage) {
-        String message = StringUtils.hasText(errorMessage) ? errorMessage.trim() : "Document process failed";
-        message = message.replaceAll("(?i)api[_-]?key\\s*[:=]\\s*\\S+", "apiKey=***");
+        String message = StringUtils.hasText(errorMessage)
+                ? LogSanitizer.sanitize(errorMessage, MAX_ERROR_MESSAGE_LENGTH).trim()
+                : "Document process failed";
         if (message.length() <= MAX_ERROR_MESSAGE_LENGTH) {
             return message;
         }

@@ -37,7 +37,8 @@ class EmbeddingApiClientTest {
                 null,
                 "{\"error\":\"bad api key\"}".getBytes(StandardCharsets.UTF_8),
                 StandardCharsets.UTF_8);
-        when(restTemplate.postForEntity(eq("https://example.com/v1/embeddings"), any(), eq(com.example.aikb.dto.embedding.response.EmbeddingResponse.class)))
+        when(restTemplate.postForEntity(eq("https://example.com/v1/embeddings"), any(),
+                eq(com.example.aikb.dto.embedding.response.EmbeddingResponse.class)))
                 .thenThrow(exception);
 
         EmbeddingApiClient client = new EmbeddingApiClient(properties, restTemplate);

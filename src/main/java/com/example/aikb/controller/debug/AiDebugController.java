@@ -1,6 +1,7 @@
 package com.example.aikb.controller.debug;
 
 import com.example.aikb.common.Result;
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.config.AppDebugAiTestProperties;
 import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.config.AppLlmProperties;
@@ -78,7 +79,7 @@ public class AiDebugController {
                 .model(embeddingProperties.getModel())
                 .vectorSize(embeddingProperties.getVectorSize())
                 .actualVectorSize(vector.size())
-                .vectorPreview(vector.stream().limit(VECTOR_PREVIEW_SIZE).toList())
+                .vectorPreview(LogSanitizer.vectorPreview(vector, VECTOR_PREVIEW_SIZE))
                 .build());
     }
 
@@ -107,7 +108,8 @@ public class AiDebugController {
                 .baseUrlConfigured(StringUtils.hasText(llmProperties.getBaseUrl()))
                 .apiKeyConfigured(isApiKeyConfigured(llmProperties.getApiKey()))
                 .model(llmProperties.getModel())
-                .response(rawResponse)
+                .responseReceived(true)
+                .responseLength(rawResponse.length())
                 .build());
     }
 
@@ -208,7 +210,7 @@ public class AiDebugController {
         private String model;
         private Integer vectorSize;
         private Integer actualVectorSize;
-        private List<Float> vectorPreview;
+        private String vectorPreview;
     }
 
     @Data
@@ -230,6 +232,7 @@ public class AiDebugController {
         private boolean baseUrlConfigured;
         private boolean apiKeyConfigured;
         private String model;
-        private String response;
+        private boolean responseReceived;
+        private Integer responseLength;
     }
 }

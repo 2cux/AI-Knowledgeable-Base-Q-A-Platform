@@ -1,5 +1,6 @@
 package com.example.aikb.mq.document;
 
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
@@ -33,7 +34,7 @@ public class DocumentEmbeddingConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException ex) {
             log.warn("Document embedding message failed, documentId={}, requestId={}, message={}",
-                    payload.getDocumentId(), payload.getRequestId(), ex.getMessage());
+                    payload.getDocumentId(), payload.getRequestId(), LogSanitizer.safeMessage(ex.getMessage()));
             throw ex;
         }
     }

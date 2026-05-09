@@ -1,5 +1,6 @@
 package com.example.aikb.mq.document;
 
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.service.document.DocumentProcessService;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
@@ -33,7 +34,7 @@ public class DocumentProcessConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException ex) {
             log.warn("Document process message failed, documentId={}, requestId={}, message={}",
-                    payload.getDocumentId(), payload.getRequestId(), ex.getMessage());
+                    payload.getDocumentId(), payload.getRequestId(), LogSanitizer.safeMessage(ex.getMessage()));
             throw ex;
         }
     }

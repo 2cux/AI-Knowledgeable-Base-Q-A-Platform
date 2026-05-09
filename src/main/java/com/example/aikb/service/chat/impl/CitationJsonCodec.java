@@ -1,5 +1,6 @@
 package com.example.aikb.service.chat.impl;
 
+import com.example.aikb.common.LogSanitizer;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.vo.chat.CitationVO;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -46,7 +47,8 @@ class CitationJsonCodec {
             List<CitationVO> citations = objectMapper.readValue(citationsJson, CITATION_LIST_TYPE);
             return citations == null ? Collections.emptyList() : citations;
         } catch (JsonProcessingException ex) {
-            log.warn("Failed to parse chat record citations, recordId={}, error={}", recordId, ex.getMessage());
+            log.warn("Failed to parse chat record citations, recordId={}, error={}",
+                    recordId, LogSanitizer.safeMessage(ex.getMessage()));
             return Collections.emptyList();
         }
     }
