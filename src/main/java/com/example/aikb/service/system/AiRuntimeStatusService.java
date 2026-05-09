@@ -16,7 +16,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -57,9 +56,6 @@ public class AiRuntimeStatusService {
     }
 
     private boolean resolveDebugAiTestEnabled() {
-        if (environment.acceptsProfiles(Profiles.of("prod"))) {
-            return false;
-        }
         return aiDebugAccessGuard.isDebugEnabled();
     }
 

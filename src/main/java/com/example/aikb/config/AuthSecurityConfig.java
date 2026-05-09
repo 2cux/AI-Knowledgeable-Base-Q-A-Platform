@@ -1,10 +1,12 @@
 package com.example.aikb.config;
 
 import com.example.aikb.common.Result;
+import com.example.aikb.security.DebugApiAccessFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +32,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class AuthSecurityConfig {
 
     private final com.example.aikb.security.JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final DebugApiAccessFilter debugApiAccessFilter;
     private final ObjectMapper objectMapper;
     private final AppCorsProperties appCorsProperties;
 
@@ -55,6 +58,14 @@ public class AuthSecurityConfig {
         return source;
     }
 
+    @Bean
+    public FilterRegistrationBean<DebugApiAccessFilter> debugApiAccessFilterRegistration(
+            DebugApiAccessFilter debugApiAccessFilter) {
+        FilterRegistrationBean<DebugApiAccessFilter> registration = new FilterRegistrationBean<>(debugApiAccessFilter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
     /**
      * 安全过滤链，放行注册和登录接口，其余接口需要认证。
      */
@@ -74,6 +85,7 @@ public class AuthSecurityConfig {
                         .requestMatchers("/auth/register", "/auth/login").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(debugApiAccessFilter, com.example.aikb.security.JwtAuthenticationFilter.class)
                 .build();
     }
 

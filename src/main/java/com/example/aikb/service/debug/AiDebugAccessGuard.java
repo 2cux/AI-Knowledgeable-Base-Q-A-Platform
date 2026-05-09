@@ -1,52 +1,36 @@
 package com.example.aikb.service.debug;
 
-import com.example.aikb.config.AppDebugAiTestProperties;
+import com.example.aikb.config.AppDebugApiProperties;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.service.admin.AdminPermissionService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
 
 /**
- * AI 调试接口访问守卫。
- *
- * <p>该守卫用于统一收口 /debug/ai/** 访问规则：仅用于本地开发/联调，生产环境不应开放。</p>
+ * Central access guard for debug/test/internal endpoints.
  */
 @Service
 @RequiredArgsConstructor
 public class AiDebugAccessGuard {
 
-    private final AppDebugAiTestProperties properties;
+    private final AppDebugApiProperties properties;
     private final AdminPermissionService adminPermissionService;
-    private final Environment environment;
 
     /**
-     * 校验当前请求是否允许访问 AI 调试接口。
+     * Checks whether the current request may access debug/test/internal endpoints.
      */
     public void ensureAccessible() {
-        if (isProdProfile()) {
-            throw new BusinessException(40301, "生产环境禁止访问 AI 调试接口");
-        }
         if (!isDebugEnabled()) {
             throw new BusinessException(40301,
-                    "AI 调试接口未开启，仅允许 dev 环境本地联调，或显式开启 app.debug.ai-test.enabled 后访问");
+                    "debug 接口未开启，请在受控环境显式开启 app.debug-api.enabled 后访问");
         }
-        adminPermissionService.ensureAdmin("仅管理员可访问 AI 调试接口");
+        adminPermissionService.ensureAdmin("仅管理员可访问 debug 接口");
     }
 
     /**
-     * 当前环境是否允许启用 AI 调试接口。
+     * Whether the global debug API switch is enabled.
      */
     public boolean isDebugEnabled() {
-        return properties.isEnabled() || isDevProfile();
-    }
-
-    private boolean isProdProfile() {
-        return environment.acceptsProfiles(Profiles.of("prod"));
-    }
-
-    private boolean isDevProfile() {
-        return environment.acceptsProfiles(Profiles.of("dev"));
+        return properties.isEnabled();
     }
 }

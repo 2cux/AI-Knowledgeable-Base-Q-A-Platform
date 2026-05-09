@@ -85,9 +85,8 @@ app:
   file:
     upload-dir: ${APP_FILE_UPLOAD_DIR:uploads}
     max-size: 20MB
-  debug:
-    ai-test:
-      enabled: false
+  debug-api:
+    enabled: false
   rag:
     retrieval:
       top-k: ${APP_RAG_RETRIEVAL_TOP_K:5}

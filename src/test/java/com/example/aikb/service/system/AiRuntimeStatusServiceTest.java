@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.example.aikb.config.AppDebugAiTestProperties;
+import com.example.aikb.config.AppDebugApiProperties;
 import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.config.AppLlmProperties;
 import com.example.aikb.service.debug.AiDebugAccessGuard;
@@ -26,7 +26,8 @@ class AiRuntimeStatusServiceTest {
         AppLlmProperties llmProperties = new AppLlmProperties();
         llmProperties.setEnabled(false);
 
-        AppDebugAiTestProperties debugAiTestProperties = new AppDebugAiTestProperties();
+        AppDebugApiProperties debugApiProperties = new AppDebugApiProperties();
+        debugApiProperties.setEnabled(true);
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("dev");
 
@@ -36,7 +37,7 @@ class AiRuntimeStatusServiceTest {
         AiRuntimeStatusService service = new AiRuntimeStatusService(
                 embeddingProperties,
                 llmProperties,
-                new AiDebugAccessGuard(debugAiTestProperties, null, environment),
+                new AiDebugAccessGuard(debugApiProperties, null),
                 beanFactory.getBeanProvider(com.example.aikb.service.embedding.EmbeddingClient.class),
                 beanFactory.getBeanProvider(LlmClient.class),
                 environment);
@@ -60,7 +61,7 @@ class AiRuntimeStatusServiceTest {
         llmProperties.setApiKey("");
         llmProperties.setModel("claude-opus-4-6");
 
-        AppDebugAiTestProperties debugAiTestProperties = new AppDebugAiTestProperties();
+        AppDebugApiProperties debugApiProperties = new AppDebugApiProperties();
         MockEnvironment environment = new MockEnvironment();
 
         StaticListableBeanFactory beanFactory = new StaticListableBeanFactory();
@@ -68,7 +69,7 @@ class AiRuntimeStatusServiceTest {
         AiRuntimeStatusService service = new AiRuntimeStatusService(
                 embeddingProperties,
                 llmProperties,
-                new AiDebugAccessGuard(debugAiTestProperties, null, environment),
+                new AiDebugAccessGuard(debugApiProperties, null),
                 beanFactory.getBeanProvider(com.example.aikb.service.embedding.EmbeddingClient.class),
                 beanFactory.getBeanProvider(LlmClient.class),
                 environment);

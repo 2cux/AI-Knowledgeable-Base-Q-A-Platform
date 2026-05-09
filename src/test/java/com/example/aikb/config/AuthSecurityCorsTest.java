@@ -9,7 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.aikb.common.JwtUtil;
 import com.example.aikb.controller.auth.AuthController;
+import com.example.aikb.security.DebugApiAccessFilter;
 import com.example.aikb.security.JwtAuthenticationFilter;
+import com.example.aikb.service.debug.AiDebugAccessGuard;
 import com.example.aikb.service.auth.AuthService;
 import com.example.aikb.vo.auth.CurrentUserVO;
 import com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
@@ -53,6 +55,9 @@ class AuthSecurityCorsTest {
     @MockitoBean
     private JwtUtil jwtUtil;
 
+    @MockitoBean
+    private AiDebugAccessGuard aiDebugAccessGuard;
+
     @SpringBootConfiguration
     @EnableAutoConfiguration(exclude = {
             DataSourceAutoConfiguration.class,
@@ -64,7 +69,7 @@ class AuthSecurityCorsTest {
             RabbitAutoConfiguration.class
     })
     @EnableConfigurationProperties(AppCorsProperties.class)
-    @Import({AuthController.class, AuthSecurityConfig.class, JwtAuthenticationFilter.class})
+    @Import({AuthController.class, AuthSecurityConfig.class, JwtAuthenticationFilter.class, DebugApiAccessFilter.class})
     static class TestApplication {
     }
 

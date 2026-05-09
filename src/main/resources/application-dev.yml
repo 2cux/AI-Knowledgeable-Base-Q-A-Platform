@@ -41,6 +41,8 @@ jwt:
   issuer: ${JWT_ISSUER:aikb-backend}
 
 app:
+  debug-api:
+    enabled: ${APP_DEBUG_API_ENABLED:false}
   cors:
     allowed-origins:
       - http://localhost:3000

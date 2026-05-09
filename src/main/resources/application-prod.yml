@@ -29,6 +29,9 @@ spring:
           max-interval: 10000ms
 
 app:
+  debug-api:
+    # Production must keep debug/test/internal endpoints disabled unless explicitly approved.
+    enabled: false
   cors:
     # Production should explicitly list trusted frontend domains.
     allowed-origins: []
@@ -51,11 +54,6 @@ app:
     admin:
       stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}
       hot-questions-ttl-minutes: ${HOT_QUESTIONS_CACHE_TTL_MINUTES:5}
-  debug:
-    ai-test:
-      # Production must keep AI debug endpoints disabled by default.
-      enabled: false
-
 jwt:
   # Production must provide JWT_SECRET explicitly. Do not fall back to local development defaults.
   secret: ${JWT_SECRET}

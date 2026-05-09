@@ -2,7 +2,7 @@ package com.example.aikb.controller.debug;
 
 import com.example.aikb.common.Result;
 import com.example.aikb.common.LogSanitizer;
-import com.example.aikb.config.AppDebugAiTestProperties;
+import com.example.aikb.config.AppDebugApiProperties;
 import com.example.aikb.config.AppEmbeddingProperties;
 import com.example.aikb.config.AppLlmProperties;
 import com.example.aikb.dto.embedding.request.EmbeddingInputItem;
@@ -38,7 +38,7 @@ public class AiDebugController {
     private static final int VECTOR_PREVIEW_SIZE = 5;
 
     private final AiDebugAccessGuard aiDebugAccessGuard;
-    private final AppDebugAiTestProperties debugAiTestProperties;
+    private final AppDebugApiProperties debugApiProperties;
     private final ObjectProvider<EmbeddingService> embeddingServiceProvider;
     private final LlmService llmService;
     private final AppEmbeddingProperties embeddingProperties;
@@ -72,7 +72,7 @@ public class AiDebugController {
 
         return Result.success(EmbeddingDebugResponse.builder()
                 .debugEnabled(aiDebugAccessGuard.isDebugEnabled())
-                .explicitlyEnabled(debugAiTestProperties.isEnabled())
+                .explicitlyEnabled(debugApiProperties.isEnabled())
                 .enabled(embeddingProperties.isEnabled())
                 .baseUrlConfigured(StringUtils.hasText(embeddingProperties.getBaseUrl()))
                 .apiKeyConfigured(isApiKeyConfigured(embeddingProperties.getApiKey()))
@@ -103,7 +103,7 @@ public class AiDebugController {
 
         return Result.success(LlmDebugResponse.builder()
                 .debugEnabled(aiDebugAccessGuard.isDebugEnabled())
-                .explicitlyEnabled(debugAiTestProperties.isEnabled())
+                .explicitlyEnabled(debugApiProperties.isEnabled())
                 .enabled(llmProperties.isEnabled())
                 .baseUrlConfigured(StringUtils.hasText(llmProperties.getBaseUrl()))
                 .apiKeyConfigured(isApiKeyConfigured(llmProperties.getApiKey()))
