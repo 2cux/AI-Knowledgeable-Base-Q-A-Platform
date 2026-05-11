@@ -15,10 +15,13 @@ uploads/
 
 # Runtime and local environment files
 .env
+*.env
 .env.*
 !.env.example
 application-local.yml
 application-local.yaml
+application-secret.yml
+application-secret.yaml
 application-*.local.yml
 application-*.local.yaml
 

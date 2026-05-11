@@ -3,8 +3,8 @@ spring:
     name: enterprise-ai-knowledge-base-qna-backend
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 20MB
+      max-file-size: ${APP_FILE_MAX_SIZE:20MB}
+      max-request-size: ${APP_FILE_MAX_SIZE:20MB}
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -41,7 +41,7 @@ server:
 
 jwt:
   # Local development default only. Override with JWT_SECRET in real environments.
-  secret: ${JWT_SECRET:dev-only-jwt-secret-please-change-2026-very-long}
+  secret: ${JWT_SECRET:please-change-this-development-jwt-secret}
   expiration: ${JWT_EXPIRATION:86400000}
   issuer: ${JWT_ISSUER:aikb-backend}
 
@@ -84,9 +84,9 @@ app:
       hot-questions-ttl-minutes: ${HOT_QUESTIONS_CACHE_TTL_MINUTES:5}
   file:
     upload-dir: ${APP_FILE_UPLOAD_DIR:uploads}
-    max-size: 20MB
+    max-size: ${APP_FILE_MAX_SIZE:20MB}
   debug-api:
-    enabled: false
+    enabled: ${APP_DEBUG_API_ENABLED:false}
   rag:
     retrieval:
       top-k: ${APP_RAG_RETRIEVAL_TOP_K:5}
@@ -94,16 +94,16 @@ app:
   llm:
     enabled: true
     # AI sensitive config must come from environment variables instead of committed secrets.
-    base-url: ${APP_LLM_BASE_URL:${OPENAI_LLM_BASE_URL:https://api.xiaocaseai.com/v1/messages}}
+    base-url: ${APP_LLM_BASE_URL:${OPENAI_LLM_BASE_URL:https://api.example.com/v1/messages}}
     api-key: ${APP_LLM_API_KEY:${OPENAI_API_KEY:}}
-    model: ${APP_LLM_MODEL:claude-opus-4-6}
+    model: ${APP_LLM_MODEL:your-chat-model}
     max-tokens: 1024
     connect-timeout: 5s
     read-timeout: 60s
   embedding:
     enabled: true
     # Prefer APP_EMBEDDING_* variables when embedding and chat use different vendors or gateways.
-    base-url: ${APP_EMBEDDING_BASE_URL:${OPENAI_EMBEDDING_BASE_URL:https://api.xiaocaseai.com/v1/embeddings}}
+    base-url: ${APP_EMBEDDING_BASE_URL:${OPENAI_EMBEDDING_BASE_URL:https://api.example.com/v1/embeddings}}
     api-key: ${APP_EMBEDDING_API_KEY:${OPENAI_API_KEY:}}
     model: ${APP_EMBEDDING_MODEL:text-embedding-3-large}
     # Embedding 向量维度，必须与当前模型返回维度一致。

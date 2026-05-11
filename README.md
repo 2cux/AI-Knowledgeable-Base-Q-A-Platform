@@ -144,45 +144,29 @@ src/main/resources/db/migration
 
 本地新建空库后，启动应用时会自动执行迁移。当前已包含 `V1__init.sql` 至 `V19__add_knowledge_base_deleted.sql`。
 
-### 4. 配置 application.yml 或环境变量
+### 4. 配置环境变量
 
-建议通过环境变量覆盖本地配置，避免把真实密钥写入仓库。
-
-Windows PowerShell 示例：
-
-```powershell
-$env:DB_URL="jdbc:mysql://localhost:3306/aikb?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
-$env:DB_USERNAME="root"
-$env:DB_PASSWORD="<your-db-password>"
-$env:JWT_SECRET="<replace-with-a-long-random-secret>"
-$env:APP_LLM_BASE_URL="<your-llm-endpoint>"
-$env:APP_LLM_API_KEY="<your-llm-api-key>"
-$env:APP_LLM_MODEL="<your-llm-model>"
-$env:APP_EMBEDDING_BASE_URL="<your-embedding-endpoint>"
-$env:APP_EMBEDDING_API_KEY="<your-embedding-api-key>"
-$env:APP_EMBEDDING_MODEL="<your-embedding-model>"
-$env:APP_EMBEDDING_VECTOR_SIZE="3072"
-```
-
-macOS / Linux 示例：
+建议复制示例文件后在本地填写真实配置，避免把 API Key、数据库密码、JWT 密钥写入仓库：
 
 ```bash
-export DB_URL="jdbc:mysql://localhost:3306/aikb?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
-export DB_USERNAME="root"
-export DB_PASSWORD="<your-db-password>"
-export JWT_SECRET="<replace-with-a-long-random-secret>"
-export APP_LLM_BASE_URL="<your-llm-endpoint>"
-export APP_LLM_API_KEY="<your-llm-api-key>"
-export APP_LLM_MODEL="<your-llm-model>"
-export APP_EMBEDDING_BASE_URL="<your-embedding-endpoint>"
-export APP_EMBEDDING_API_KEY="<your-embedding-api-key>"
-export APP_EMBEDDING_MODEL="<your-embedding-model>"
-export APP_EMBEDDING_VECTOR_SIZE="3072"
+cp .env.example .env
 ```
 
-如果 LLM 和 embedding 使用同一个兼容 OpenAI 协议的服务，也可以使用 `OPENAI_API_KEY` 作为兜底密钥；更推荐分别配置 `APP_LLM_API_KEY` 和 `APP_EMBEDDING_API_KEY`。
+Windows PowerShell 也可以手动复制：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+根据本地环境至少修改 `.env` 中的 MySQL、RabbitMQ、JWT、LLM 和 Embedding 配置。`APP_EMBEDDING_VECTOR_SIZE` 必须与实际 embedding 模型返回维度一致，否则生成或检索 embedding 时会失败。
+
+如果 LLM 和 embedding 使用同一个兼容 OpenAI 协议的服务，可以使用 `OPENAI_API_KEY` 作为兜底密钥；更推荐分别配置 `APP_LLM_API_KEY` 和 `APP_EMBEDDING_API_KEY`。
+
+`APP_DEBUG_API_ENABLED` 默认必须保持 `false`。本地开发如需调试 `/debug/**` 接口，需要显式设置 `APP_DEBUG_API_ENABLED=true`，并使用管理员账号访问。
 
 完整执行文档 process / embed 主链路时，需要保证 RabbitMQ 可访问。Redis 主要用于管理端统计和热门问题缓存，不可用时相关查询会降级回 MySQL。
+
+不要将 `.env`、真实 `application-local.yml`、真实 `application-secret.yml`、真实 API Key 或数据库密码提交到 Git。
 
 ### 5. 编译和启动项目
 
@@ -211,40 +195,56 @@ http://localhost:8080/swagger-ui.html
 Authorization: Bearer <token>
 ```
 
-## 核心配置说明
+## 环境变量配置
 
-| 配置项 / 环境变量 | 说明 |
-|---|---|
-| `DB_URL` | MySQL JDBC 连接地址 |
-| `DB_USERNAME` | MySQL 用户名 |
-| `DB_PASSWORD` | MySQL 密码 |
-| `JWT_SECRET` | JWT 签名密钥，生产环境必须使用强随机值 |
-| `JWT_EXPIRATION` | JWT 过期时间，单位毫秒 |
-| `JWT_ISSUER` | JWT issuer |
-| `APP_LLM_BASE_URL` | LLM 接口完整地址 |
-| `APP_LLM_API_KEY` | LLM API Key |
-| `APP_LLM_MODEL` | LLM 模型名称 |
-| `APP_EMBEDDING_BASE_URL` | Embedding 接口完整地址 |
-| `APP_EMBEDDING_API_KEY` | Embedding API Key |
-| `APP_EMBEDDING_MODEL` | Embedding 模型名称 |
-| `APP_EMBEDDING_VECTOR_SIZE` / `EMBEDDING_VECTOR_SIZE` | Embedding 向量维度，必须与模型实际返回维度一致 |
-| `APP_FILE_UPLOAD_DIR` | 文件上传目录，默认 `uploads` |
-| `APP_DEBUG_API_ENABLED` | debug 接口开关，默认关闭 |
-| `APP_RAG_RETRIEVAL_TOP_K` | RAG 检索 TopK，默认 `5` |
-| `APP_RAG_RETRIEVAL_MIN_EFFECTIVE_SCORE` | 有效命中分数阈值，默认 `0.2` |
-| `REDIS_HOST` / `REDIS_PORT` | Redis 连接配置，用于管理端缓存 |
-| `RABBITMQ_HOST` / `RABBITMQ_PORT` | RabbitMQ 连接配置，用于文档处理和 embedding 异步任务 |
+项目提供 `.env.example` 和 `src/main/resources/application-example.yml` 作为配置模板。真实运行时优先通过环境变量覆盖配置；如果需要维护本地 YAML，请使用 `application-local.yml` 或 `application-secret.yml`，并确保它们不会提交到 Git。
 
-CORS 配置位于 `app.cors.allowed-origins`。`dev` 环境默认允许：
+### 必填配置
+
+| 环境变量 | 对应配置 | 说明 |
+|---|---|---|
+| `DB_HOST` / `DB_PORT` / `DB_NAME` | `spring.datasource.url` | MySQL 地址组件；也可以直接使用 `DB_URL` 覆盖完整 JDBC URL |
+| `DB_USERNAME` | `spring.datasource.username` | MySQL 用户名 |
+| `DB_PASSWORD` | `spring.datasource.password` | MySQL 密码 |
+| `RABBITMQ_HOST` / `RABBITMQ_PORT` | `spring.rabbitmq.host` / `spring.rabbitmq.port` | 文档处理和 embedding 异步任务依赖 RabbitMQ |
+| `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `spring.rabbitmq.username` / `spring.rabbitmq.password` | RabbitMQ 账号 |
+| `JWT_SECRET` | `jwt.secret` | JWT 签名密钥，生产环境必须使用强随机值 |
+| `APP_LLM_BASE_URL` | `app.llm.base-url` | LLM 接口完整地址 |
+| `APP_LLM_API_KEY` | `app.llm.api-key` | LLM API Key |
+| `APP_LLM_MODEL` | `app.llm.model` | LLM 模型名称 |
+| `APP_EMBEDDING_BASE_URL` | `app.embedding.base-url` | Embedding 接口完整地址 |
+| `APP_EMBEDDING_API_KEY` | `app.embedding.api-key` | Embedding API Key |
+| `APP_EMBEDDING_MODEL` | `app.embedding.model` | Embedding 模型名称 |
+| `APP_EMBEDDING_VECTOR_SIZE` | `app.embedding.vector-size` | Embedding 向量维度，必须与模型实际返回维度一致 |
+
+### 可选配置
+
+| 环境变量 | 对应配置 | 说明 |
+|---|---|---|
+| `DB_URL` | `spring.datasource.url` | 完整 MySQL JDBC URL；配置后优先于 `DB_HOST` / `DB_PORT` / `DB_NAME` |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `spring.data.redis.*` | 管理端统计和热门问题缓存；当前不作为主链路强依赖 |
+| `JWT_EXPIRATION` / `JWT_ISSUER` | `jwt.expiration` / `jwt.issuer` | Token 过期时间和签发方 |
+| `APP_FILE_UPLOAD_DIR` | `app.file.upload-dir` | 文件上传目录，默认 `uploads` |
+| `APP_FILE_MAX_SIZE` | `app.file.max-size` 和 multipart 限制 | 单文件上传大小，默认 `20MB` |
+| `APP_DEBUG_API_ENABLED` | `app.debug-api.enabled` | debug 接口开关，默认 `false` |
+| `APP_CORS_ALLOWED_ORIGINS` | `app.cors.allowed-origins` | 逗号分隔的允许跨域来源 |
+| `APP_RAG_RETRIEVAL_TOP_K` | `app.rag.retrieval.top-k` | RAG 检索 TopK，默认 `5` |
+| `APP_RAG_RETRIEVAL_MIN_EFFECTIVE_SCORE` | `app.rag.retrieval.min-effective-score` | 有效命中分数阈值，默认 `0.2` |
+| `OPENAI_API_KEY` | `app.llm.api-key` / `app.embedding.api-key` | LLM 和 Embedding 共用供应商时的兜底密钥 |
+
+本地 `dev` 环境默认允许以下 CORS 来源，也可以通过 `APP_CORS_ALLOWED_ORIGINS` 覆盖：
 
 ```text
-http://localhost:3000
-http://127.0.0.1:3000
-http://localhost:5173
-http://127.0.0.1:5173
+http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173
 ```
 
-注意：README 中所有 API Key 均为占位符，请不要提交真实密钥。
+配置校验建议：
+
+1. `APP_LLM_API_KEY` 为空时，调用问答接口应返回明确错误。
+2. `APP_EMBEDDING_API_KEY` 为空时，调用 embedding 接口应返回明确错误。
+3. `APP_EMBEDDING_VECTOR_SIZE` 应与模型返回向量维度一致。
+4. `APP_DEBUG_API_ENABLED` 默认保持 `false`。
+5. 文件上传目录不存在时，系统应自动创建或返回明确错误。
 
 ## 接口调用顺序
 
