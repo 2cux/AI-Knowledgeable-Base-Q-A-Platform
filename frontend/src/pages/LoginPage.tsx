@@ -1,9 +1,7 @@
 import type { FormEvent } from 'react'
-import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
-import { login } from '../api/auth'
-import { getToken, saveToken } from '../utils/token'
+import { saveToken } from '../utils/token'
 
 type LocationState = {
   from?: {
@@ -11,125 +9,42 @@ type LocationState = {
   }
 }
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response
-    return response?.data?.message || fallback
-  }
-
-  return fallback
-}
-
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as LocationState | null)?.from?.pathname ?? '/knowledge-bases'
+  const from = (location.state as LocationState | null)?.from?.pathname ?? '/kb'
 
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  useEffect(() => {
-    if (getToken()) {
-      navigate('/knowledge-bases', { replace: true })
-    }
-  }, [navigate])
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    const token = String(formData.get('token') ?? '').trim()
 
-    const normalizedUsername = username.trim()
-    const normalizedPassword = password.trim()
-
-    if (!normalizedUsername) {
-      setErrorMessage('请输入用户名或邮箱')
-      return
-    }
-
-    if (!normalizedPassword) {
-      setErrorMessage('请输入密码')
-      return
-    }
-
-    setErrorMessage('')
-    setIsSubmitting(true)
-
-    try {
-      const response = await login({
-        username: normalizedUsername,
-        password: normalizedPassword,
-      })
-
-      if (response.code !== 0 || !response.data?.token) {
-        setErrorMessage(response.message || '登录失败，请稍后重试')
-        return
-      }
-
-      saveToken(response.data.token)
+    if (token) {
+      saveToken(token)
       navigate(from, { replace: true })
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, '登录失败，请检查账号或密码'))
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-5 py-10 text-slate-900">
-      <section className="mx-auto mt-8 w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-        <div>
-          <p className="text-sm font-medium text-slate-500">AI Knowledge Base QA</p>
-          <h1 className="mt-2 text-2xl font-semibold">登录</h1>
-          <p className="mt-2 text-sm text-slate-600">使用账号进入知识库问答平台。</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">用户名 / 邮箱</span>
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-              autoComplete="username"
-              placeholder="alice"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">密码</span>
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-              type="password"
-              autoComplete="current-password"
-              placeholder="请输入密码"
-            />
-          </label>
-
-          {errorMessage ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {errorMessage}
-            </div>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-          >
-            {isSubmitting ? '登录中...' : '登录'}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-slate-600">
-          还没有账号？
-          <Link to="/register" className="font-medium text-slate-900 hover:underline">
-            去注册
-          </Link>
-        </p>
-      </section>
-    </main>
+    <section className="mx-auto max-w-md">
+      <h1 className="text-2xl font-semibold">登录</h1>
+      <p className="mt-2 text-sm text-slate-600">请输入后端登录接口返回的 token。</p>
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <label className="block">
+          <span className="text-sm font-medium text-slate-700">Token</span>
+          <input
+            name="token"
+            className="mt-2 w-full rounded border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-900"
+            placeholder="Bearer token"
+          />
+        </label>
+        <button className="w-full rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
+          进入系统
+        </button>
+      </form>
+      <p className="mt-4 text-sm text-slate-600">
+        还没有账号？<Link to="/register" className="font-medium text-slate-900">去注册</Link>
+      </p>
+    </section>
   )
 }
