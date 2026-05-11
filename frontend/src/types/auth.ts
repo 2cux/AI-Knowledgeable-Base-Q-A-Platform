@@ -1,7 +1,7 @@
 export type ApiResponse<T> = {
   code: number
   message: string
-  data: T
+  data: T | null
 }
 
 export type LoginRequest = {
