@@ -15,12 +15,18 @@ const DEFAULT_PAGE_SIZE = 20
 
 type FormMode = 'create' | 'edit'
 
-type FormState = {
-  mode: FormMode
-  id?: number
-  name: string
-  description: string
-}
+type FormState =
+  | {
+      mode: 'create'
+      name: string
+      description: string
+    }
+  | {
+      mode: 'edit'
+      id: number
+      name: string
+      description: string
+    }
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -147,7 +153,7 @@ export function KnowledgeBaseListPage() {
       const response =
         formState.mode === 'create'
           ? await createKnowledgeBase({ name, description })
-          : await updateKnowledgeBase(formState.id!, { name, description })
+          : await updateKnowledgeBase(formState.id, { name, description })
 
       if (response.code !== 0 || !response.data) {
         setFormErrorMessage(response.message || '保存知识库失败')
@@ -155,6 +161,7 @@ export function KnowledgeBaseListPage() {
       }
 
       setFormState(null)
+      setFormErrorMessage('')
       await loadKnowledgeBases()
     } catch (error) {
       setFormErrorMessage(getErrorMessage(error, '保存知识库失败，请稍后重试'))
@@ -181,6 +188,10 @@ export function KnowledgeBaseListPage() {
         return
       }
 
+      setFormState((current) =>
+        current?.mode === 'edit' && current.id === knowledgeBase.id ? null : current,
+      )
+      setFormErrorMessage('')
       await loadKnowledgeBases()
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '删除知识库失败，请稍后重试'))
