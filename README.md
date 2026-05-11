@@ -1,66 +1,132 @@
-# AI Knowledge Base QA Platform
+# AI 知识库问答平台
 
-AI 知识库问答平台后端 MVP。项目基于 Spring Boot 构建，围绕“知识库创建 -> 文档上传 -> 文档解析切片 -> Embedding -> 检索 -> LLM 生成答案 -> 会话/反馈/管理端追溯”实现一条可本地复现的 RAG 问答主链路。
+## 项目简介
+
+AI 知识库问答平台是一个基于 Spring Boot + RAG 的企业知识库问答系统后端原型。项目围绕“知识统一接入、文档解析切片、embedding 向量化、RAG 检索、LLM 生成回答”构建，当前支持上传 `txt` / `md` 文档，并基于知识库内容进行检索问答。
+
+系统已实现文档解析、切片、embedding 生成、知识库内检索、答案来源引用、统一拒答、多轮会话、问答日志、用户反馈、日志脱敏和敏感输出控制等能力。它适合作为企业内部知识问答、客服知识库、新员工培训问答等场景的后端 MVP 原型。
+
+当前项目核心功能已经开发完成，并通过 Apifox 完整主链路验收。
 
 ## 项目背景
 
-本项目用于模拟企业内部知识库问答场景：用户上传 txt / md 文档到自己的知识库，系统将文档切分为 chunk 并生成 embedding，提问时在知识库范围内检索相关 chunk，再调用 LLM 生成带引用来源的答案。第三周收尾阶段的目标是让项目达到简历展示、面试讲解和本地验收可复现的状态。
+企业内部知识通常分散在文档、制度、FAQ、培训材料和历史问答中，员工查找成本高，客服或运营人员也容易出现答复口径不一致的问题。传统关键词检索只能返回文档列表，仍需要人工阅读和筛选；直接让大模型回答又可能出现无依据生成。
 
-当前实现是 MVP，不是生产级高并发系统。向量检索采用 MySQL 存储 embedding JSON + Java 侧 cosine similarity 计算；尚未接入 Milvus、pgvector、Qdrant 等生产级向量数据库。Redis 用于管理端基础统计接口缓存；RabbitMQ 已用于文档解析 / 切片和 embedding 生成异步任务，尚未用于 RAG 问答或微服务拆分。
+本项目采用 RAG 方式：先从指定知识库中检索相关文档切片，再将检索结果作为上下文交给 LLM 生成回答。这样可以让回答尽量基于知识库内容生成，并在无有效命中时执行统一拒答策略，降低大模型“凭空回答”的风险。
+
+## 核心功能
+
+### 1. 用户与权限
+
+- 用户注册
+- 用户登录
+- 当前用户信息查询
+- JWT 鉴权
+- 管理员接口权限保护
+
+### 2. 知识库管理
+
+- 创建知识库
+- 分页查询知识库
+- 查询知识库详情
+- 更新知识库信息
+- 逻辑删除知识库
+- 删除后业务拦截：已删除知识库不能继续上传文档、执行 process、执行 embed 或发起 chat/ask
+
+### 3. 文档处理
+
+- 上传 `txt` / `md` 文件
+- 查询文档列表、详情和状态
+- 文档解析
+- 文档切片
+- 查询文档 chunk
+- 重复处理时清理旧 chunk 和旧 embedding，保证数据一致性
+
+### 4. Embedding
+
+- 文本向量生成
+- embedding 模型配置化
+- `vectorSize` 配置化
+- 向量维度校验
+- embedding 状态查询和失败信息记录
+
+### 5. RAG 问答
+
+- 基于知识库检索相关 chunk
+- 构建 RAG prompt
+- 调用 LLM 生成回答
+- 返回答案引用来源
+- 无有效命中时统一拒答
+- 支持多轮追问和会话上下文
+
+### 6. 日志与运营
+
+- 问答日志
+- 问答详情查询
+- 用户 LIKE / DISLIKE 反馈
+- 未命中问题收集
+- 管理端查看问答记录、未命中问题、反馈、热门问题和基础统计
+- RAG / LLM 调用日志脱敏
+
+### 7. 安全控制
+
+- 敏感日志脱敏
+- 敏感输出控制
+- debug 接口默认关闭或仅在受控条件下开放
+- 管理端接口权限校验
+- CORS 最小化配置
 
 ## 技术栈
 
 - Java 17
 - Spring Boot 3.5.13
-- Spring Web / Validation
+- Spring Web
 - Spring Security + JWT
+- Spring Validation
 - MyBatis-Plus
 - MySQL 8.x
 - Flyway
-- Lombok
-- springdoc-openapi
-- LLM API
+- OpenAI / 兼容 LLM API
 - Embedding API
-- Redis 7（仅用于 `GET /api/admin/chat/stats` 和热门问题缓存）
+- Redis：用于管理端统计和热门问题缓存，可降级回 MySQL 查询
+- RabbitMQ：用于文档解析 / 切片和 embedding 生成异步任务
+- springdoc-openapi
+- Apifox
 - Maven
 
-## 核心功能
+说明：当前向量检索采用 MySQL 存储 embedding JSON，并在 Java 侧计算相似度；项目尚未接入独立向量数据库。
 
-- 用户注册、登录、JWT 鉴权。
-- 知识库创建、分页查询、详情查询。
-- txt / md 文档上传、本地文件存储、文档列表与详情。
-- 文档解析、切片、重处理、任务记录。
-- 文档 chunk embedding 生成、状态查询、失败信息记录。
-- RAG 检索问答：按知识库检索 chunk，生成答案，返回 citations。
-- 会话列表、会话详情、用户问答记录。
-- LIKE / DISLIKE 反馈。
-- 管理端问答记录、未命中问题、反馈运营、热门问题、基础统计。
-- AI 运行模式只读检查，不返回密钥。
-- 本地 AI debug 接口，受 profile、开关和管理员权限限制。
+## 系统架构 / 核心链路
 
-## 系统主链路
+主链路如下：
 
-1. `POST /auth/register` 注册用户。
-2. `POST /auth/login` 登录并获取 JWT。
-3. `POST /api/kb` 创建知识库。
-4. `POST /api/documents/upload-file` 上传 txt / md 文件。
-5. `POST /api/documents/{documentId}/process` 解析并切片。
-6. `POST /api/documents/{documentId}/embed` 为 chunk 生成 embedding。
-7. `POST /api/chat/ask` 在知识库内发起 RAG 问答。
-8. `GET /api/chat/records/{id}` 查看问答详情和引用。
-9. `POST /api/chat/records/{id}/feedback` 提交反馈。
-10. `GET /api/admin/chat/*` 使用管理员账号查看运营与追溯数据。
+```text
+用户登录
+-> 创建知识库
+-> 上传 txt / md 文档
+-> 文档解析
+-> 文档切片
+-> 生成 embedding
+-> 用户提问
+-> RAG 检索相关 chunk
+-> 构建 prompt
+-> 调用 LLM
+-> 返回答案与引用来源
+-> 记录问答日志
+```
 
-## 本地启动步骤
+从数据流看，文档先被解析成文本切片，切片生成 embedding 后落库；用户提问时，系统为问题生成 query embedding，在指定知识库范围内检索相似 chunk，再将命中的上下文交给 LLM 生成最终回答。如果没有达到有效命中阈值，系统不会调用 LLM 编造答案，而是返回统一拒答结果并记录未命中问题。
 
-### 1. 准备环境
+## 快速启动
 
-- JDK 17
-- Maven 3.9+
-- MySQL 8.x
-- 可用的 LLM / Embedding API Key
+### 1. 克隆项目
 
-### 2. 创建 MySQL 空库
+```bash
+git clone <your-repository-url>
+cd <your-project-directory>
+```
+
+### 2. 创建 MySQL 数据库
 
 ```sql
 CREATE DATABASE aikb
@@ -68,27 +134,34 @@ CREATE DATABASE aikb
   DEFAULT COLLATE utf8mb4_unicode_ci;
 ```
 
-也可以使用单独验收库，例如：
+### 3. 执行 SQL / Flyway 迁移
 
-```sql
-CREATE DATABASE aikb_day2_docs_check
-  DEFAULT CHARACTER SET utf8mb4
-  DEFAULT COLLATE utf8mb4_unicode_ci;
+项目使用 Flyway 管理数据库迁移，迁移脚本位于：
+
+```text
+src/main/resources/db/migration
 ```
 
-### 3. 配置环境变量
+本地新建空库后，启动应用时会自动执行迁移。当前已包含 `V1__init.sql` 至 `V19__add_knowledge_base_deleted.sql`。
+
+### 4. 配置 application.yml 或环境变量
+
+建议通过环境变量覆盖本地配置，避免把真实密钥写入仓库。
 
 Windows PowerShell 示例：
 
 ```powershell
 $env:DB_URL="jdbc:mysql://localhost:3306/aikb?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
 $env:DB_USERNAME="root"
-$env:DB_PASSWORD="your-db-password"
-$env:JWT_SECRET="replace-with-a-long-random-secret-at-least-32-chars"
-$env:JWT_EXPIRATION="86400000"
-$env:JWT_ISSUER="aikb-backend"
-$env:APP_LLM_API_KEY="your-llm-api-key"
-$env:APP_EMBEDDING_API_KEY="your-embedding-api-key"
+$env:DB_PASSWORD="<your-db-password>"
+$env:JWT_SECRET="<replace-with-a-long-random-secret>"
+$env:APP_LLM_BASE_URL="<your-llm-endpoint>"
+$env:APP_LLM_API_KEY="<your-llm-api-key>"
+$env:APP_LLM_MODEL="<your-llm-model>"
+$env:APP_EMBEDDING_BASE_URL="<your-embedding-endpoint>"
+$env:APP_EMBEDDING_API_KEY="<your-embedding-api-key>"
+$env:APP_EMBEDDING_MODEL="<your-embedding-model>"
+$env:APP_EMBEDDING_VECTOR_SIZE="3072"
 ```
 
 macOS / Linux 示例：
@@ -96,292 +169,167 @@ macOS / Linux 示例：
 ```bash
 export DB_URL="jdbc:mysql://localhost:3306/aikb?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
 export DB_USERNAME="root"
-export DB_PASSWORD="your-db-password"
-export JWT_SECRET="replace-with-a-long-random-secret-at-least-32-chars"
-export JWT_EXPIRATION="86400000"
-export JWT_ISSUER="aikb-backend"
-export APP_LLM_API_KEY="your-llm-api-key"
-export APP_EMBEDDING_API_KEY="your-embedding-api-key"
+export DB_PASSWORD="<your-db-password>"
+export JWT_SECRET="<replace-with-a-long-random-secret>"
+export APP_LLM_BASE_URL="<your-llm-endpoint>"
+export APP_LLM_API_KEY="<your-llm-api-key>"
+export APP_LLM_MODEL="<your-llm-model>"
+export APP_EMBEDDING_BASE_URL="<your-embedding-endpoint>"
+export APP_EMBEDDING_API_KEY="<your-embedding-api-key>"
+export APP_EMBEDDING_MODEL="<your-embedding-model>"
+export APP_EMBEDDING_VECTOR_SIZE="3072"
 ```
 
-如果 LLM 和 Embedding 使用同一个供应商密钥，也可以只配置 `OPENAI_API_KEY`，项目会作为兼容兜底读取。推荐显式配置 `APP_LLM_API_KEY` 和 `APP_EMBEDDING_API_KEY`，便于两条链路后续拆分。
+如果 LLM 和 embedding 使用同一个兼容 OpenAI 协议的服务，也可以使用 `OPENAI_API_KEY` 作为兜底密钥；更推荐分别配置 `APP_LLM_API_KEY` 和 `APP_EMBEDDING_API_KEY`。
 
-### 4. 编译和测试
+完整执行文档 process / embed 主链路时，需要保证 RabbitMQ 可访问。Redis 主要用于管理端统计和热门问题缓存，不可用时相关查询会降级回 MySQL。
 
-```bash
-mvn -q clean compile
-mvn -q test
-```
-
-### 5. 启动应用
+### 5. 编译和启动项目
 
 ```bash
+mvn -q -DskipTests compile
 mvn spring-boot:run
 ```
 
-默认端口：`8080`。
-
-OpenAPI / Swagger UI：`http://localhost:8080/swagger-ui.html`
-
-## 管理端统计 Redis 缓存
-
-`GET /api/admin/chat/stats` 使用 Redis 作为基础、未筛选管理端统计响应的可选缓存。RAG、`chat/ask`、`retrieval/search`、文档 `process` 和文档 `embed` 不依赖 Redis。
-
-使用 Docker 启动 Redis：
-
-```bash
-docker run -d --name aikb-redis -p 6379:6379 redis:7
-```
-
-可选的 redis-cli 验证：
-
-```bash
-docker exec -it aikb-redis redis-cli
-```
-
-相关环境变量：
-
-```env
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DATABASE=0
-REDIS_TIMEOUT=3000ms
-ADMIN_STATS_CACHE_TTL_MINUTES=5
-HOT_QUESTIONS_CACHE_TTL_MINUTES=5
-```
-
-管理端统计缓存 key 为 `aikb:admin:chat:stats`。默认 TTL 为 5 分钟，因此管理端运营统计允许分钟级最终一致性。如果 Redis 不可用或序列化失败，接口会记录限流后的 warn 日志，并降级回 MySQL 查询。
-
-## 热门问题 Redis 缓存
-
-热门问题按 limit 使用不同缓存 key，例如 `aikb:admin:chat:hot_questions:10`。默认 TTL 为 5 分钟，过期后会重新查询 MySQL 并写回 Redis。Redis 不可用或序列化失败时，热门问题接口同样会降级回 MySQL 查询。
-
-## 文档解析 / 切片与 Embedding 生成 RabbitMQ 异步化
-
-### 文档解析 / 切片 RabbitMQ 异步化
-
-`POST /api/documents/{documentId}/process` 会校验当前用户权限，将文档 / 任务标记为 `PROCESSING`，发送 RabbitMQ 消息后立即返回。文档解析 / 切片由消费者异步执行，接口本身不等待解析和切片完成。
-
-### Embedding 生成 RabbitMQ 异步化
-
-`POST /api/documents/{documentId}/embed` 会提交 RabbitMQ 任务并立即返回，不会等待外部 Embedding API 执行完成。Embedding 仍需要显式触发，当前不会在 process 完成后自动串联执行。
-
-使用 Docker 启动 RabbitMQ：
-
-```bash
-docker run -d --name aikb-rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
-```
-
-管理控制台：
+默认端口：
 
 ```text
-http://localhost:15672
-guest / guest
+http://localhost:8080
 ```
 
-相关环境变量：
+Swagger UI：
 
-```env
-RABBITMQ_HOST=localhost
-RABBITMQ_PORT=5672
-RABBITMQ_USERNAME=guest
-RABBITMQ_PASSWORD=guest
-RABBITMQ_VIRTUAL_HOST=/
+```text
+http://localhost:8080/swagger-ui.html
 ```
 
-队列设计：
+### 6. 访问接口
 
-| 项目 | 值 |
-|---|---|
-| 交换机 | `aikb.document.exchange` |
-| 文档处理队列 | `aikb.document.process.queue` |
-| 文档处理路由键 | `aikb.document.process` |
-| 死信交换机 | `aikb.document.dlx` |
-| 文档处理死信队列 | `aikb.document.process.dlq` |
-| 文档处理死信路由键 | `aikb.document.process.dlq` |
-| Embedding 队列 | `aikb.document.embedding.queue` |
-| Embedding 路由键 | `aikb.document.embedding` |
-| Embedding 死信队列 | `aikb.document.embedding.dlq` |
-| Embedding 死信路由键 | `aikb.document.embedding.dlq` |
-
-`DocumentProcessMessage` 包含 `documentId`、`knowledgeBaseId`、`userId`、`force`、`requestId`、`createdAt`、`taskId`、`chunkSize` 和 `overlap`。消息中不携带 JWT、API Key、已存储文档元数据之外的文件路径，也不携带文档全文。
-
-`DocumentEmbeddingMessage` 包含 `documentId`、`knowledgeBaseId`、`userId`、`force`、`requestId`、`createdAt`、`taskId` 和 `embeddingModel`。消息中不携带 JWT、API Key、chunk 文本或向量内容。
-
-如何验证完成情况：
-
-1. 调用 `POST /api/documents/{documentId}/process`。
-2. 预期快速返回，且 `parseStatus=PROCESSING`、`taskStatus=PROCESSING`。
-3. 轮询 `GET /api/documents/{documentId}` 或 `GET /api/documents/{documentId}/status`，直到 `parseStatus=SUCCESS`。
-4. 调用 `GET /api/documents/{documentId}/chunks`，确认 chunk 已生成。
-5. 使用 `force=false` 重复调用 process；当文档已为 `SUCCESS` 时，不应生成重复 chunk。
-6. 使用 `{ "force": true }` 调用 process；旧 chunk 会在同一事务内清理并重建。
-7. 调用 `POST /api/documents/{documentId}/embed`。
-8. 预期快速返回，且 `taskStatus=PROCESSING`。
-9. 轮询 `GET /api/documents/{documentId}` 或 `GET /api/documents/{documentId}/embedding-status`，直到 embedding 状态为 `SUCCESS`。
-10. embedding 成功后，执行 `POST /api/retrieval/search` 和 `POST /api/chat/ask`。
-11. 停止 RabbitMQ 后调用 process / embed；接口应返回明确的 RabbitMQ 不可用错误，且文档不会卡在 `PROCESSING`。
-
-RabbitMQ 监听器启用了 3 次重试和手动确认。消息在重试后仍失败时会被拒绝，并通过队列死信配置路由到 DLQ。消费者会更新文档 / 任务失败状态，并记录 `documentId` 和 `requestId`。Embedding 需要配置 `APP_EMBEDDING_API_KEY` 或 `OPENAI_API_KEY`；如果 key 缺失或无效，embedding 消费者会失败，并将文档 embedding 状态标记为 `FAILED`。
-
-## Flyway 自动迁移说明
-
-项目启用了 Flyway：
-
-- migration 目录：`src/main/resources/db/migration`
-- 默认随 Spring Boot 启动自动执行。
-- 空库启动时会从 `V1__init.sql` 顺序执行到当前最新 migration。
-- Day 1 空库验证中已确认可从空库执行 18 个 migration，最终版本为 `V18__add_chat_feedback_admin_query_indexes.sql`。
-
-本地新建空库后无需手工建表，只需保证 `DB_URL` 指向目标空库并启动应用。
-
-## 环境变量说明
-
-| 变量 | 说明 | 本地默认值 / 建议 |
-|---|---|---|
-| `SPRING_PROFILES_ACTIVE` | Spring profile | 默认 `dev` |
-| `DB_URL` | MySQL JDBC 地址 | dev 默认指向 `jdbc:mysql://localhost:3306/aikb...` |
-| `DB_USERNAME` | MySQL 用户名 | dev 默认 `root` |
-| `DB_PASSWORD` | MySQL 密码 | dev 默认 `123456` |
-| `JWT_SECRET` | JWT 签名密钥 | dev 有本地默认值；生产必须配置强随机值 |
-| `JWT_EXPIRATION` | JWT 过期时间，毫秒 | 默认 `86400000` |
-| `JWT_ISSUER` | JWT issuer | dev 默认 `aikb-backend` |
-| `REDIS_HOST` | 管理端统计与热门问题缓存使用的 Redis 主机 | 默认 `localhost` |
-| `REDIS_PORT` | 管理端统计与热门问题缓存使用的 Redis 端口 | 默认 `6379` |
-| `REDIS_PASSWORD` | Redis 密码 | 默认空，本地 Redis 可不配置 |
-| `REDIS_DATABASE` | Redis 数据库索引 | 默认 `0` |
-| `REDIS_TIMEOUT` | Redis 命令超时时间 | 默认 `3000ms` |
-| `ADMIN_STATS_CACHE_TTL_MINUTES` | `aikb:admin:chat:stats` 的 TTL，单位分钟 | 默认 `5` |
-| `HOT_QUESTIONS_CACHE_TTL_MINUTES` | `aikb:admin:chat:hot_questions:{limit}` 的 TTL，单位分钟 | 默认 `5` |
-| `APP_LLM_API_KEY` | LLM API Key | 推荐显式配置 |
-| `APP_EMBEDDING_API_KEY` | Embedding API Key | 推荐显式配置 |
-| `OPENAI_API_KEY` | 通用兼容 API Key | 可作为 LLM / Embedding 兜底 |
-| `APP_LLM_BASE_URL` | LLM 完整接口地址 | 默认配置中为完整 messages 地址 |
-| `APP_EMBEDDING_BASE_URL` | Embedding 完整接口地址 | 默认配置中为完整 embeddings 地址 |
-| `APP_LLM_MODEL` | LLM 模型名 | 默认 `claude-opus-4-6` |
-| `APP_EMBEDDING_MODEL` | Embedding 模型名 | 默认 `text-embedding-3-large` |
-| `APP_FILE_UPLOAD_DIR` | 本地上传目录 | 默认 `uploads` |
-| `APP_RAG_RETRIEVAL_TOP_K` | 默认检索 TopK | 默认 `5` |
-| `APP_RAG_RETRIEVAL_MIN_EFFECTIVE_SCORE` | 有效命中分数阈值 | 默认 `0.2` |
-
-`dev` 中的数据库密码、JWT secret 仅用于本地开发，生产环境必须通过环境变量覆盖，不应使用仓库默认值。
-
-## LLM / Embedding API Key 配置说明
-
-项目不会在仓库中保存真实 API Key，也不应在日志或响应中输出密钥。
-
-优先级：
-
-1. LLM 读取 `APP_LLM_API_KEY`，兜底读取 `OPENAI_API_KEY`。
-2. Embedding 读取 `APP_EMBEDDING_API_KEY`，兜底读取 `OPENAI_API_KEY`。
-3. LLM base url 读取 `APP_LLM_BASE_URL` 或 `OPENAI_LLM_BASE_URL`。
-4. Embedding base url 读取 `APP_EMBEDDING_BASE_URL` 或 `OPENAI_EMBEDDING_BASE_URL`。
-
-注意：当前 `base-url` 需要填写完整接口地址，不是仅填写 `/v1` 根路径。
-
-缺少 Key 时，相关接口会返回业务错误，例如：
-
-- LLM：`LLM api-key 未配置，请通过环境变量 APP_LLM_API_KEY 或 OPENAI_API_KEY 注入`
-- Embedding：`embedding api-key 未配置，请通过环境变量 APP_EMBEDDING_API_KEY 或 OPENAI_API_KEY 注入`
-
-## dev / prod Profile 区别
-
-### dev
-
-- 默认 profile：`dev`。
-- 数据库连接有本地默认值，便于 fresh clone 后启动。
-- JWT secret 有本地开发默认值，只能用于本地。
-- `/debug/ai/**` 在 dev profile 下可被守卫判定为启用，但仍需要登录且当前用户为管理员。
-
-### prod
-
-- 数据库连接必须通过 `DB_URL`、`DB_USERNAME`、`DB_PASSWORD` 注入。
-- `JWT_SECRET` 必须显式配置。
-- `/debug/ai/**` 强制拒绝访问，即使配置开关被打开也不应放行。
-- 不应使用任何 dev 默认密码或默认 JWT secret。
-
-## debug 接口安全说明
-
-调试接口路径：
-
-- `POST /debug/ai/embedding`
-- `POST /debug/ai/llm`
-
-这些接口只用于本地联调外部 AI 能力。访问规则由 `AiDebugAccessGuard` 收口：
-
-- prod profile 下强制拒绝。
-- dev profile 下允许进入调试守卫，但仍要求管理员权限。
-- 非 dev 环境需要显式开启 `app.debug.ai-test.enabled`，且仍要求管理员权限。
-- debug 接口仅用于本地联调，可返回上游调试响应内容，但不会返回真实 API Key。
-
-## 核心接口调用顺序
-
-建议按以下顺序在 Apifox 验收：
-
-1. 注册：`POST /auth/register`
-2. 登录：`POST /auth/login`
-3. 创建知识库：`POST /api/kb`
-4. 上传文件：`POST /api/documents/upload-file`
-5. 查询文档状态：`GET /api/documents/{documentId}/status`
-6. 解析切片：`POST /api/documents/{documentId}/process`
-7. 查询 chunk：`GET /api/documents/{documentId}/chunks`
-8. 执行 embedding：`POST /api/documents/{documentId}/embed`
-9. 查询 embedding 状态：`GET /api/documents/{documentId}/embedding-status`
-10. 可选只检索：`POST /api/retrieval/search`
-11. RAG 提问：`POST /api/chat/ask`
-12. 问答详情：`GET /api/chat/records/{id}`
-13. 会话列表：`GET /api/chat/conversations`
-14. 会话详情：`GET /api/chat/conversations/{conversationId}`
-15. 提交反馈：`POST /api/chat/records/{id}/feedback`
-16. 管理端追溯：`GET /api/admin/chat/records/{id}`
-17. 管理端未命中、反馈、热门问题、统计接口。
-
-除注册、登录外，请在请求头中加入：
+除注册、登录外，业务接口需要在请求头中携带：
 
 ```text
 Authorization: Bearer <token>
 ```
 
-## Apifox 验收建议
+## 核心配置说明
 
-详细验收用例见：
+| 配置项 / 环境变量 | 说明 |
+|---|---|
+| `DB_URL` | MySQL JDBC 连接地址 |
+| `DB_USERNAME` | MySQL 用户名 |
+| `DB_PASSWORD` | MySQL 密码 |
+| `JWT_SECRET` | JWT 签名密钥，生产环境必须使用强随机值 |
+| `JWT_EXPIRATION` | JWT 过期时间，单位毫秒 |
+| `JWT_ISSUER` | JWT issuer |
+| `APP_LLM_BASE_URL` | LLM 接口完整地址 |
+| `APP_LLM_API_KEY` | LLM API Key |
+| `APP_LLM_MODEL` | LLM 模型名称 |
+| `APP_EMBEDDING_BASE_URL` | Embedding 接口完整地址 |
+| `APP_EMBEDDING_API_KEY` | Embedding API Key |
+| `APP_EMBEDDING_MODEL` | Embedding 模型名称 |
+| `APP_EMBEDDING_VECTOR_SIZE` / `EMBEDDING_VECTOR_SIZE` | Embedding 向量维度，必须与模型实际返回维度一致 |
+| `APP_FILE_UPLOAD_DIR` | 文件上传目录，默认 `uploads` |
+| `APP_DEBUG_API_ENABLED` | debug 接口开关，默认关闭 |
+| `APP_RAG_RETRIEVAL_TOP_K` | RAG 检索 TopK，默认 `5` |
+| `APP_RAG_RETRIEVAL_MIN_EFFECTIVE_SCORE` | 有效命中分数阈值，默认 `0.2` |
+| `REDIS_HOST` / `REDIS_PORT` | Redis 连接配置，用于管理端缓存 |
+| `RABBITMQ_HOST` / `RABBITMQ_PORT` | RabbitMQ 连接配置，用于文档处理和 embedding 异步任务 |
 
-- `docs/week3/acceptance-test-plan.md`
-- `docs/week3/api-overview.md`
+CORS 配置位于 `app.cors.allowed-origins`。`dev` 环境默认允许：
 
-建议准备两个账号：
+```text
+http://localhost:3000
+http://127.0.0.1:3000
+http://localhost:5173
+http://127.0.0.1:5173
+```
 
-- 普通用户：用于注册、登录、创建知识库、上传文档、提问、反馈。
-- 管理员用户：用于访问 `/api/admin/chat/**` 和 `/api/system/runtime-mode`。
+注意：README 中所有 API Key 均为占位符，请不要提交真实密钥。
 
-注册接口默认创建普通用户。管理员账号可在本地验收库中手工将 `user.role` 改为 `ADMIN`，或使用已有管理员数据。验收时所有 ID 都应使用前置接口返回的真实值，不要写死示例 ID。
+## 接口调用顺序
 
-建议重点覆盖：
+建议按以下顺序在 Apifox 中执行主链路验收：
 
-- 正常链路：上传 -> process -> embed -> ask -> feedback -> admin query。
-- 权限链路：未登录、访问他人资源、普通用户访问管理端。
-- 失败链路：缺少 API Key、文档未处理、文档未 embedding、知识库外问题导致未命中。
-- 生命周期链路：`force=true` 重新 process / embed、删除文档后关联数据清理。
+1. 注册：`POST /auth/register`
+2. 登录：`POST /auth/login`
+3. 获取当前用户：`GET /auth/me`
+4. 创建知识库：`POST /api/kb`
+5. 查询知识库：`GET /api/kb`、`GET /api/kb/{id}`
+6. 上传 `txt` / `md` 文件：`POST /api/documents/upload-file`
+7. 查询文档状态：`GET /api/documents/{documentId}/status`
+8. 解析 / 切片：`POST /api/documents/{documentId}/process`
+9. 查询文档切片：`GET /api/documents/{documentId}/chunks`
+10. 生成 embedding：`POST /api/documents/{documentId}/embed`
+11. 查询 embedding 状态：`GET /api/documents/{documentId}/embedding-status`
+12. 可选检索验证：`POST /api/retrieval/search`
+13. 发起 RAG 问答：`POST /api/chat/ask`
+14. 多轮追问：继续调用 `POST /api/chat/ask`，并携带同一 `conversationId`
+15. 查询会话：`GET /api/chat/conversations`、`GET /api/chat/conversations/{conversationId}`
+16. 查询问答记录：`GET /api/chat/records`、`GET /api/chat/records/{id}`
+17. 提交反馈：`POST /api/chat/records/{id}/feedback`
+18. 管理端查询：`GET /api/admin/chat/records`、`GET /api/admin/chat/missed-questions`、`GET /api/admin/chat/feedback`、`GET /api/admin/chat/hot-questions`、`GET /api/admin/chat/stats`
+19. 删除知识库：`DELETE /api/kb/{id}`
+20. 删除知识库后的拦截验证：再次尝试上传、process、embed、chat/ask，预期被业务拦截
 
-## 当前 MVP 边界
+debug 接口仅用于受控联调：
 
-- 当前向量检索是 MySQL 存储 `chunk_embedding.vector_json` + Java cosine similarity 的 MVP 实现。
-- 当前没有接入生产级向量数据库。
-- 当前仅为 `GET /api/admin/chat/stats` 实现 Redis 可降级缓存，未把 Redis 接入 RAG 或文档处理链路。
-- 当前已用 RabbitMQ 异步化文档解析 / 切片和 embedding 生成；chat/ask、retrieval/search 仍是原有同步查询链路。
-- 当前不是微服务架构，也未实现分布式任务调度。
-- 当前文件存储为本地目录，不是对象存储。
-- 当前文档上传和解析只支持 txt / md；PDF、Word 属于后续优化，不是当前已支持能力。
-- 当前管理端是后端接口能力，没有独立前端管理台。
-- 当前权限模型为用户资源归属 + 管理员角色，未实现复杂 RBAC。
+```text
+POST /debug/ai/embedding
+POST /debug/ai/llm
+```
 
-## 后续优化方向
+## Apifox 验收说明
 
-- 接入 pgvector、Milvus、Qdrant 等向量检索能力，替换 Java 侧全量候选 cosine 计算。
-- 增加混合检索、rerank、查询改写和可配置提示词模板。
-- 引入更完整的文档解析能力，例如 PDF、Word、HTML。
-- 扩展进度推送和更完整的失败补偿。
-- 增加对象存储、文件病毒扫描、内容安全审计。
-- 完善管理员后台 UI、知识库运营看板和 RAG 评估集。
-- 增加生产监控、限流、审计日志和更细粒度权限。
+项目已通过 Apifox 完整主链路测试。验收重点覆盖：
+
+- 注册 / 登录
+- 当前用户信息查询
+- 知识库创建、查询、更新、逻辑删除
+- `txt` / `md` 上传
+- 非法文件拒绝
+- 文档 process
+- embedding 生成
+- RAG 命中问答
+- RAG 无命中拒答
+- 答案引用来源
+- 多轮追问
+- 问答日志
+- 用户反馈
+- 未命中问题收集
+- 管理员接口权限保护
+- 敏感输出控制
+- debug 接口关闭验证
+- 删除知识库后的业务拦截
+
+## 当前限制
+
+1. 当前只支持 `txt` / `md` 文件。
+2. 暂未支持 PDF / Word 解析。
+3. 当前是后端项目，没有完整前端页面。
+4. 当前权限控制属于 MVP 级别，主要包括登录用户资源归属校验和管理员接口校验，不是复杂企业级 RBAC。
+5. 当前知识库删除采用逻辑删除，关联文档、chunk、embedding、日志会保留。
+6. 当前向量检索仍基于 MySQL 存储向量 JSON 和 Java 侧相似度计算，尚未接入独立向量数据库。
+7. 当前多来源接入、复杂审核流、BI 报表等属于后续规划。
+
+## 后续规划
+
+- 支持 PDF / Word 解析
+- 接入向量数据库，例如 pgvector、Milvus 或 Qdrant
+- 增加前端管理页面
+- 增加知识库质量评分
+- 增加多知识库路由
+- 增加更细粒度权限控制
+- 增加管理端数据看板
+- 接入企业内部系统或工单系统
+- 优化检索策略，例如混合检索、rerank、query rewrite
+
+## 项目亮点
+
+1. 实现从文档上传、解析切片、embedding 到 RAG 问答的完整闭环。
+2. 通过统一拒答策略降低大模型无依据回答风险。
+3. 支持答案引用来源，提高回答可追溯性。
+4. 支持多轮会话，让追问可以复用上下文。
+5. 对 LLM / RAG 日志进行脱敏，降低敏感信息泄露风险。
+6. 通过 debug 接口安全收口和管理员权限校验增强系统安全性。
+7. 支持知识库逻辑删除后的业务拦截，避免删除资源继续参与上传、处理、向量化和问答。
+8. 使用 Apifox 完成完整主链路验收，覆盖正常流、异常流和安全流。
