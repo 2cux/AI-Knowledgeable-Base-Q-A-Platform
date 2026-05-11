@@ -1,12 +1,20 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
-import { getToken } from '../utils/token'
+import { useAuth } from '../context/AuthContext'
 
 export function ProtectedRoute() {
   const location = useLocation()
-  const token = getToken()
+  const { isAuthenticated, loading } = useAuth()
 
-  if (!token) {
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-600">
+        加载中...
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 

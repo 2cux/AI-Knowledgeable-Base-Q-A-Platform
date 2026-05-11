@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { register } from '../api/auth'
-import { getToken } from '../utils/token'
+import { useAuth } from '../context/AuthContext'
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -16,6 +16,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 export function RegisterPage() {
   const navigate = useNavigate()
+  const { isAuthenticated, loading } = useAuth()
 
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -25,10 +26,10 @@ export function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (getToken()) {
+    if (!loading && isAuthenticated) {
       navigate('/knowledge-bases', { replace: true })
     }
-  }, [navigate])
+  }, [isAuthenticated, loading, navigate])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

@@ -2,6 +2,8 @@ import axios from 'axios'
 
 import { getToken, removeToken } from '../utils/token'
 
+export const UNAUTHORIZED_EVENT = 'aikb:unauthorized'
+
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 30000,
@@ -22,10 +24,7 @@ request.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       removeToken()
-
-      if (window.location.pathname !== '/login') {
-        window.location.assign('/login')
-      }
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
     }
 
     return Promise.reject(error)
