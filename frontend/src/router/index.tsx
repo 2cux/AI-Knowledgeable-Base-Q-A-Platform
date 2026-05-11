@@ -12,7 +12,7 @@ import { RegisterPage } from '../pages/RegisterPage'
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Navigate to="/kb" replace />,
+    element: <Navigate to="/knowledge-bases" replace />,
   },
   {
     path: '/login',
@@ -29,11 +29,11 @@ export const router = createBrowserRouter([
         element: <Layout />,
         children: [
           {
-            path: '/kb',
+            path: '/knowledge-bases',
             element: <KnowledgeBaseListPage />,
           },
           {
-            path: '/kb/:id',
+            path: '/knowledge-bases/:id',
             element: <KnowledgeBaseDetailPage />,
           },
           {
@@ -50,6 +50,6 @@ export const router = createBrowserRouter([
   },
   {
     path: '*',
-    element: <Navigate to="/kb" replace />,
+    element: <Navigate to="/knowledge-bases" replace />,
   },
 ])
