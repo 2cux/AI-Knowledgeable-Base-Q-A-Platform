@@ -7,3 +7,11 @@ export type {
   RegisterRequest,
   RegisterResponse,
 } from './auth'
+export type {
+  CreateKnowledgeBaseRequest,
+  KnowledgeBase,
+  KnowledgeBaseListResponse,
+  KnowledgeBasePageParams,
+  PageResult,
+  UpdateKnowledgeBaseRequest,
+} from './knowledgeBase'
