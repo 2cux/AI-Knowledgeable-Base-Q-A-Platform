@@ -59,6 +59,8 @@ http://localhost:5173
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
+修改前端环境变量后需要重启 Vite dev server。
+
 ## 联调要点
 
 1. 先启动后端，确认 `http://localhost:8080/swagger-ui.html` 可访问。

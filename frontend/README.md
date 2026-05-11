@@ -29,6 +29,8 @@ npm run build
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
+可以从 `.env.example` 复制一份本地配置。修改环境变量后需要重启 Vite dev server 才会生效。
+
 ## 目录
 
 ```text

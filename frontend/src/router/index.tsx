@@ -12,45 +12,44 @@ import { RegisterPage } from '../pages/RegisterPage'
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
+    element: <Navigate to="/kb" replace />,
+  },
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/register',
+    element: <RegisterPage />,
+  },
+  {
+    element: <ProtectedRoute />,
     children: [
       {
-        index: true,
-        element: <Navigate to="/kb" replace />,
-      },
-      {
-        path: 'login',
-        element: <LoginPage />,
-      },
-      {
-        path: 'register',
-        element: <RegisterPage />,
-      },
-      {
-        element: <ProtectedRoute />,
+        element: <Layout />,
         children: [
           {
-            path: 'kb',
+            path: '/kb',
             element: <KnowledgeBaseListPage />,
           },
           {
-            path: 'kb/:id',
+            path: '/kb/:id',
             element: <KnowledgeBaseDetailPage />,
           },
           {
-            path: 'chat',
+            path: '/chat',
             element: <ChatPage />,
           },
           {
-            path: 'admin',
+            path: '/admin',
             element: <AdminDashboardPage />,
           },
         ],
       },
-      {
-        path: '*',
-        element: <Navigate to="/kb" replace />,
-      },
     ],
+  },
+  {
+    path: '*',
+    element: <Navigate to="/kb" replace />,
   },
 ])
