@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import {
@@ -63,6 +63,8 @@ function createEmptyForm(): FormState {
 
 export function KnowledgeBaseListPage() {
   const navigate = useNavigate()
+  const savingRef = useRef(false)
+  const deletingRef = useRef(false)
 
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
   const [total, setTotal] = useState(0)
@@ -137,7 +139,7 @@ export function KnowledgeBaseListPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (!formState) {
+    if (!formState || savingRef.current) {
       return
     }
 
@@ -149,6 +151,7 @@ export function KnowledgeBaseListPage() {
       return
     }
 
+    savingRef.current = true
     setIsSaving(true)
     setErrorMessage('')
     setSuccessMessage('')
@@ -173,11 +176,16 @@ export function KnowledgeBaseListPage() {
     } catch (error) {
       setFormErrorMessage(getErrorMessage(error, '保存知识库失败，请稍后重试'))
     } finally {
+      savingRef.current = false
       setIsSaving(false)
     }
   }
 
   async function handleDelete(knowledgeBase: KnowledgeBase) {
+    if (deletingRef.current) {
+      return
+    }
+
     // 删除前做二次确认，避免误删；后端负责逻辑删除。
     const confirmed = window.confirm(`确认删除知识库“${knowledgeBase.name}”吗？`)
 
@@ -185,6 +193,7 @@ export function KnowledgeBaseListPage() {
       return
     }
 
+    deletingRef.current = true
     setDeletingId(knowledgeBase.id)
     setErrorMessage('')
     setSuccessMessage('')
@@ -206,6 +215,7 @@ export function KnowledgeBaseListPage() {
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '删除知识库失败，请稍后重试'))
     } finally {
+      deletingRef.current = false
       setDeletingId(null)
     }
   }
@@ -371,7 +381,7 @@ export function KnowledgeBaseListPage() {
                   <button
                     type="button"
                     onClick={() => void handleDelete(knowledgeBase)}
-                    disabled={deletingId === knowledgeBase.id}
+                    disabled={deletingId !== null}
                     className="rounded border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
                   >
                     {deletingId === knowledgeBase.id ? '删除中...' : '删除'}
