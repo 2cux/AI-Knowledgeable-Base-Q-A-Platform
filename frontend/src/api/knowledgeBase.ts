@@ -17,6 +17,12 @@ export function getKnowledgeBases(params: KnowledgeBasePageParams = {}) {
   )
 }
 
+export function getKnowledgeBaseById(id: number) {
+  return request.get<ApiResponse<KnowledgeBase>, ApiResponse<KnowledgeBase>>(
+    `${KNOWLEDGE_BASE_PATH}/${id}`,
+  )
+}
+
 // 创建知识库，统一走 request 封装以自动携带鉴权 token。
 export function createKnowledgeBase(data: CreateKnowledgeBaseRequest) {
   return request.post<ApiResponse<KnowledgeBase>, ApiResponse<KnowledgeBase>>(

@@ -15,3 +15,12 @@ export type {
   PageResult,
   UpdateKnowledgeBaseRequest,
 } from './knowledgeBase'
+
+export type {
+  DocumentEmbeddingResponse,
+  DocumentEmbeddingStatus,
+  DocumentParseStatus,
+  DocumentProcessResponse,
+  DocumentUploadResponse,
+  KnowledgeDocument,
+} from './document'

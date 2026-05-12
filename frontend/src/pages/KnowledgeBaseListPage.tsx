@@ -346,9 +346,13 @@ export function KnowledgeBaseListPage() {
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="truncate text-base font-semibold text-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/knowledge-bases/${knowledgeBase.id}`)}
+                      className="truncate text-left text-base font-semibold text-slate-900 hover:text-slate-600"
+                    >
                       {knowledgeBase.name}
-                    </h3>
+                    </button>
                     {knowledgeBase.status ? (
                       <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                         状态 {knowledgeBase.status}
