@@ -17,6 +17,7 @@ export function getKnowledgeBases(params: KnowledgeBasePageParams = {}) {
   )
 }
 
+// 创建知识库，统一走 request 封装以自动携带鉴权 token。
 export function createKnowledgeBase(data: CreateKnowledgeBaseRequest) {
   return request.post<ApiResponse<KnowledgeBase>, ApiResponse<KnowledgeBase>>(
     KNOWLEDGE_BASE_PATH,
@@ -24,6 +25,7 @@ export function createKnowledgeBase(data: CreateKnowledgeBaseRequest) {
   )
 }
 
+// 更新知识库基础信息，路径与后端 /api/kb/{id} 保持一致。
 export function updateKnowledgeBase(id: number, data: UpdateKnowledgeBaseRequest) {
   return request.put<ApiResponse<KnowledgeBase>, ApiResponse<KnowledgeBase>>(
     `${KNOWLEDGE_BASE_PATH}/${id}`,
@@ -31,6 +33,7 @@ export function updateKnowledgeBase(id: number, data: UpdateKnowledgeBaseRequest
   )
 }
 
+// 删除知识库，后端执行逻辑删除，前端成功后刷新列表即可。
 export function deleteKnowledgeBase(id: number) {
   return request.delete<ApiResponse<void>, ApiResponse<void>>(`${KNOWLEDGE_BASE_PATH}/${id}`)
 }

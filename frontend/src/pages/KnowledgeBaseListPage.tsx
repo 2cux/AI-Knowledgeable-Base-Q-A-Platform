@@ -13,8 +13,6 @@ import type { KnowledgeBase } from '../types/knowledgeBase'
 const DEFAULT_PAGE_NUM = 1
 const DEFAULT_PAGE_SIZE = 20
 
-type FormMode = 'create' | 'edit'
-
 type FormState =
   | {
       mode: 'create'
@@ -72,6 +70,7 @@ export function KnowledgeBaseListPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [formErrorMessage, setFormErrorMessage] = useState('')
   const [formState, setFormState] = useState<FormState | null>(null)
 
@@ -108,11 +107,15 @@ export function KnowledgeBaseListPage() {
   }, [])
 
   function openCreateForm() {
+    setErrorMessage('')
+    setSuccessMessage('')
     setFormErrorMessage('')
     setFormState(createEmptyForm())
   }
 
   function openEditForm(knowledgeBase: KnowledgeBase) {
+    setErrorMessage('')
+    setSuccessMessage('')
     setFormErrorMessage('')
     setFormState({
       mode: 'edit',
@@ -147,9 +150,12 @@ export function KnowledgeBaseListPage() {
     }
 
     setIsSaving(true)
+    setErrorMessage('')
+    setSuccessMessage('')
     setFormErrorMessage('')
 
     try {
+      // 统一在提交前 trim，并按当前表单模式调用创建或更新接口。
       const response =
         formState.mode === 'create'
           ? await createKnowledgeBase({ name, description })
@@ -162,6 +168,7 @@ export function KnowledgeBaseListPage() {
 
       setFormState(null)
       setFormErrorMessage('')
+      setSuccessMessage(formState.mode === 'create' ? '知识库创建成功' : '知识库更新成功')
       await loadKnowledgeBases()
     } catch (error) {
       setFormErrorMessage(getErrorMessage(error, '保存知识库失败，请稍后重试'))
@@ -171,6 +178,7 @@ export function KnowledgeBaseListPage() {
   }
 
   async function handleDelete(knowledgeBase: KnowledgeBase) {
+    // 删除前做二次确认，避免误删；后端负责逻辑删除。
     const confirmed = window.confirm(`确认删除知识库“${knowledgeBase.name}”吗？`)
 
     if (!confirmed) {
@@ -179,6 +187,7 @@ export function KnowledgeBaseListPage() {
 
     setDeletingId(knowledgeBase.id)
     setErrorMessage('')
+    setSuccessMessage('')
 
     try {
       const response = await deleteKnowledgeBase(knowledgeBase.id)
@@ -192,6 +201,7 @@ export function KnowledgeBaseListPage() {
         current?.mode === 'edit' && current.id === knowledgeBase.id ? null : current,
       )
       setFormErrorMessage('')
+      setSuccessMessage('知识库删除成功')
       await loadKnowledgeBases()
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '删除知识库失败，请稍后重试'))
@@ -219,6 +229,12 @@ export function KnowledgeBaseListPage() {
       {errorMessage ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
+        </div>
+      ) : null}
+
+      {successMessage ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {successMessage}
         </div>
       ) : null}
 
