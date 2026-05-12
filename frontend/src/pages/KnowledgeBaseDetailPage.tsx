@@ -107,6 +107,10 @@ function isParsed(document: KnowledgeDocument) {
   return document.parseStatus === 'SUCCESS'
 }
 
+function isEmbedded(document: KnowledgeDocument) {
+  return document.embeddingStatus === 'SUCCESS'
+}
+
 function resolveDocumentId(document: KnowledgeDocument) {
   return document.documentId ?? document.id
 }
@@ -128,6 +132,7 @@ export function KnowledgeBaseDetailPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [uploadErrorMessage, setUploadErrorMessage] = useState('')
+  const canUseKnowledgeBase = hasValidId && knowledgeBase !== null
 
   async function loadDetail() {
     if (!hasValidId) {
@@ -186,6 +191,7 @@ export function KnowledgeBaseDetailPage() {
         return
       }
 
+      setErrorMessage('')
       setDocuments(response.data)
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '文档列表刷新失败，请稍后重试'))
@@ -222,6 +228,11 @@ export function KnowledgeBaseDetailPage() {
 
   async function handleUpload() {
     if (!hasValidId || isUploading) {
+      return
+    }
+
+    if (!knowledgeBase) {
+      setUploadErrorMessage('知识库不存在或不可用，不能上传文档')
       return
     }
 
@@ -371,14 +382,14 @@ export function KnowledgeBaseDetailPage() {
               ref={fileInputRef}
               type="file"
               accept=".txt,.md"
-              disabled={isUploading}
+              disabled={!canUseKnowledgeBase || isUploading}
               onChange={handleFileChange}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 sm:w-80"
             />
             <button
               type="button"
               onClick={() => void handleUpload()}
-              disabled={isUploading || !selectedFile}
+              disabled={!canUseKnowledgeBase || isUploading || !selectedFile}
               className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               {isUploading ? '上传中...' : '上传'}
@@ -435,7 +446,8 @@ export function KnowledgeBaseDetailPage() {
                   const documentId = resolveDocumentId(document)
                   const processBusy = processingId === documentId || isBusyStatus(document.parseStatus)
                   const embedBusy = embeddingId === documentId || isBusyStatus(document.embeddingStatus)
-                  const canEmbed = isParsed(document)
+                  const alreadyEmbedded = isEmbedded(document)
+                  const canEmbed = isParsed(document) && !alreadyEmbedded
 
                   return (
                     <tr key={documentId} className="align-top">
@@ -480,10 +492,10 @@ export function KnowledgeBaseDetailPage() {
                             type="button"
                             onClick={() => void handleEmbed(document)}
                             disabled={!canEmbed || embedBusy || processingId !== null || embeddingId !== null}
-                            title={canEmbed ? undefined : '请先解析文档'}
+                            title={alreadyEmbedded ? '向量已生成' : canEmbed ? undefined : '请先解析文档'}
                             className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
                           >
-                            {embedBusy ? '生成中...' : '生成向量'}
+                            {alreadyEmbedded ? '已生成' : embedBusy ? '生成中...' : '生成向量'}
                           </button>
                         </div>
                       </td>
