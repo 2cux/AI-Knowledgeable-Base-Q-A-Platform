@@ -23,9 +23,11 @@ public class AiRuntimeStartupLogger {
         log.info(
                 "AI runtime summary: activeProfiles={}, debugAiTestEnabled={}, "
                         + "embeddingMode={}, embeddingProvider={}, embeddingModel={}, embeddingEnabled={}, "
-                        + "embeddingBaseUrlConfigured={}, embeddingApiKeyConfigured={}, "
+                        + "embeddingBaseUrlConfigured={}, embeddingBaseUrlHost={}, embeddingBaseUrlPath={}, "
+                        + "embeddingApiKeyConfigured={}, "
                         + "llmMode={}, llmProvider={}, llmModel={}, llmEnabled={}, "
-                        + "llmBaseUrlConfigured={}, llmApiKeyConfigured={}",
+                        + "llmBaseUrlConfigured={}, llmBaseUrlHost={}, llmBaseUrlPath={}, "
+                        + "llmApiKeyConfigured={}",
                 runtimeMode.getActiveProfiles(),
                 runtimeMode.isDebugAiTestEnabled(),
                 runtimeMode.getEmbedding().getMode(),
@@ -33,12 +35,16 @@ public class AiRuntimeStartupLogger {
                 runtimeMode.getEmbedding().getModel(),
                 runtimeMode.getEmbedding().isEnabled(),
                 runtimeMode.getEmbedding().isBaseUrlConfigured(),
+                runtimeMode.getEmbedding().getBaseUrlHost(),
+                runtimeMode.getEmbedding().getBaseUrlPath(),
                 runtimeMode.getEmbedding().isApiKeyConfigured(),
                 runtimeMode.getLlm().getMode(),
                 runtimeMode.getLlm().getProvider(),
                 runtimeMode.getLlm().getModel(),
                 runtimeMode.getLlm().isEnabled(),
                 runtimeMode.getLlm().isBaseUrlConfigured(),
+                runtimeMode.getLlm().getBaseUrlHost(),
+                runtimeMode.getLlm().getBaseUrlPath(),
                 runtimeMode.getLlm().isApiKeyConfigured());
     }
 }

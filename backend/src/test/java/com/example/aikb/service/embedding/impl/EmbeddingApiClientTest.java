@@ -23,7 +23,7 @@ class EmbeddingApiClientTest {
     @Test
     void shouldNotLeakRequestOrResponseBodyWhenHttpCallFails() {
         AppEmbeddingProperties properties = new AppEmbeddingProperties();
-        properties.setBaseUrl("https://example.com/v1/embeddings");
+        properties.setBaseUrl("https://embedding.vendor.test/v1/embeddings");
         properties.setApiKey("test-key");
         properties.setModel("text-embedding-3-large");
         properties.setNormalized(true);
@@ -37,7 +37,7 @@ class EmbeddingApiClientTest {
                 null,
                 "{\"error\":\"bad api key\"}".getBytes(StandardCharsets.UTF_8),
                 StandardCharsets.UTF_8);
-        when(restTemplate.postForEntity(eq("https://example.com/v1/embeddings"), any(),
+        when(restTemplate.postForEntity(eq("https://embedding.vendor.test/v1/embeddings"), any(),
                 eq(com.example.aikb.dto.embedding.response.EmbeddingResponse.class)))
                 .thenThrow(exception);
 

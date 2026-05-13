@@ -9,10 +9,12 @@ import {
   uploadDocument,
 } from '../api/document'
 import { getKnowledgeBaseById } from '../api/knowledgeBase'
-import type { KnowledgeDocument } from '../types/document'
+import type { DocumentEmbeddingResponse, KnowledgeDocument } from '../types/document'
 import type { KnowledgeBase } from '../types/knowledgeBase'
 
 const SUPPORTED_EXTENSIONS = ['txt', 'md'] as const
+const EMBEDDING_POLL_INTERVAL_MS = 2000
+const EMBEDDING_POLL_TIMEOUT_MS = 60000
 
 type ResponseError = {
   response?: {
@@ -111,6 +113,43 @@ function isEmbedded(document: KnowledgeDocument) {
   return document.embeddingStatus === 'SUCCESS'
 }
 
+function shouldShowDocumentError(document: KnowledgeDocument) {
+  return Boolean(
+    document.latestErrorMessage &&
+      (document.latestTaskStatus === 'FAILED' ||
+        document.parseStatus === 'FAILED' ||
+        document.embeddingStatus === 'FAILED'),
+  )
+}
+
+function getEmbeddingSuccessMessage(result?: DocumentEmbeddingResponse | null) {
+  const total = result?.total ?? 0
+  const successCount = result?.successCount ?? 0
+  const failedCount = result?.failedCount ?? 0
+
+  if (total === 0) {
+    return '未找到可向量化的文档切片，请先确认文档已完成解析。'
+  }
+
+  if (failedCount > 0) {
+    return `Embedding 部分完成，成功 ${successCount} 个，失败 ${failedCount} 个。`
+  }
+
+  if (successCount > 0) {
+    return `Embedding 完成，成功处理 ${successCount} 个切片。`
+  }
+
+  if (result?.taskStatus === 'SUCCESS') {
+    return 'Embedding 任务执行成功。'
+  }
+
+  if (isBusyStatus(result?.taskStatus)) {
+    return '向量生成中。'
+  }
+
+  return 'Embedding 任务已提交。'
+}
+
 function resolveDocumentId(document: KnowledgeDocument) {
   return document.documentId ?? document.id
 }
@@ -129,9 +168,13 @@ export function KnowledgeBaseDetailPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [processingId, setProcessingId] = useState<number | null>(null)
   const [embeddingId, setEmbeddingId] = useState<number | null>(null)
+  const [embeddingProcessingIds, setEmbeddingProcessingIds] = useState<Set<number>>(() => new Set())
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [uploadErrorMessage, setUploadErrorMessage] = useState('')
+  const embeddingPollTimersRef = useRef<Map<number, number>>(new Map())
+  const embeddingPollStartedAtRef = useRef<Map<number, number>>(new Map())
+  const embeddingObservedRunningRef = useRef<Set<number>>(new Set())
   const canUseKnowledgeBase = hasValidId && knowledgeBase !== null
 
   async function loadDetail() {
@@ -175,12 +218,14 @@ export function KnowledgeBaseDetailPage() {
     }
   }
 
-  async function loadDocuments() {
+  async function loadDocuments(options: { silent?: boolean; clearError?: boolean } = {}) {
     if (!hasValidId) {
-      return
+      return null
     }
 
-    setIsDocumentLoading(true)
+    if (!options.silent) {
+      setIsDocumentLoading(true)
+    }
 
     try {
       const response = await getDocumentsByKnowledgeBaseId(knowledgeBaseId)
@@ -188,22 +233,131 @@ export function KnowledgeBaseDetailPage() {
       if (response.code !== 0 || !response.data) {
         setErrorMessage(response.message || '文档列表刷新失败')
         setDocuments([])
-        return
+        return null
       }
 
-      setErrorMessage('')
+      if (options.clearError !== false) {
+        setErrorMessage('')
+      }
       setDocuments(response.data)
+      return response.data
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '文档列表刷新失败，请稍后重试'))
       setDocuments([])
+      return null
     } finally {
-      setIsDocumentLoading(false)
+      if (!options.silent) {
+        setIsDocumentLoading(false)
+      }
     }
   }
 
   useEffect(() => {
     void loadDetail()
   }, [hasValidId, knowledgeBaseId])
+
+  useEffect(() => {
+    return () => {
+      embeddingPollTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+      embeddingPollTimersRef.current.clear()
+      embeddingPollStartedAtRef.current.clear()
+      embeddingObservedRunningRef.current.clear()
+    }
+  }, [])
+
+  function setDocumentEmbeddingProcessing(documentId: number, isProcessing: boolean) {
+    setEmbeddingProcessingIds((current) => {
+      const next = new Set(current)
+
+      if (isProcessing) {
+        next.add(documentId)
+      } else {
+        next.delete(documentId)
+      }
+
+      return next
+    })
+  }
+
+  function stopEmbeddingPolling(documentId: number) {
+    const timerId = embeddingPollTimersRef.current.get(documentId)
+
+    if (timerId !== undefined) {
+      window.clearTimeout(timerId)
+      embeddingPollTimersRef.current.delete(documentId)
+    }
+
+    embeddingPollStartedAtRef.current.delete(documentId)
+    embeddingObservedRunningRef.current.delete(documentId)
+    setDocumentEmbeddingProcessing(documentId, false)
+  }
+
+  function startEmbeddingPolling(documentId: number) {
+    stopEmbeddingPolling(documentId)
+    setDocumentEmbeddingProcessing(documentId, true)
+    embeddingPollStartedAtRef.current.set(documentId, Date.now())
+
+    const pollOnce = async () => {
+      const latestDocuments = await loadDocuments({ silent: true, clearError: false })
+      const targetDocument = latestDocuments?.find((item) => resolveDocumentId(item) === documentId)
+
+      if (!targetDocument) {
+        scheduleNextPoll()
+        return
+      }
+
+      const elapsed = Date.now() - (embeddingPollStartedAtRef.current.get(documentId) ?? Date.now())
+      const taskStillRunning =
+        isBusyStatus(targetDocument.embeddingStatus) || isBusyStatus(targetDocument.latestTaskStatus)
+
+      if (taskStillRunning) {
+        embeddingObservedRunningRef.current.add(documentId)
+        scheduleNextPoll()
+        return
+      }
+
+      if (targetDocument.embeddingStatus === 'SUCCESS' || targetDocument.latestTaskStatus === 'SUCCESS') {
+        stopEmbeddingPolling(documentId)
+        setSuccessMessage(
+          targetDocument.embeddedChunkCount && targetDocument.embeddedChunkCount > 0
+            ? `向量化完成，成功处理 ${targetDocument.embeddedChunkCount} 个切片。`
+            : 'Embedding 任务执行成功。',
+        )
+        return
+      }
+
+      if (targetDocument.latestTaskStatus === 'FAILED' || targetDocument.embeddingStatus === 'FAILED') {
+        stopEmbeddingPolling(documentId)
+        setErrorMessage(targetDocument.latestErrorMessage || 'Embedding 任务失败')
+        return
+      }
+
+      if (elapsed >= EMBEDDING_POLL_TIMEOUT_MS) {
+        stopEmbeddingPolling(documentId)
+        setSuccessMessage('向量生成仍在处理中，请稍后刷新查看结果。')
+        return
+      }
+
+      scheduleNextPoll()
+    }
+
+    const scheduleNextPoll = () => {
+      if (!embeddingPollStartedAtRef.current.has(documentId)) {
+        return
+      }
+
+      const timerId = window.setTimeout(() => {
+        void pollOnce()
+      }, EMBEDDING_POLL_INTERVAL_MS)
+
+      embeddingPollTimersRef.current.set(documentId, timerId)
+    }
+
+    const timerId = window.setTimeout(() => {
+      void pollOnce()
+    }, EMBEDDING_POLL_INTERVAL_MS)
+    embeddingPollTimersRef.current.set(documentId, timerId)
+  }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null
@@ -276,7 +430,7 @@ export function KnowledgeBaseDetailPage() {
   async function handleProcess(document: KnowledgeDocument) {
     const documentId = resolveDocumentId(document)
 
-    if (processingId !== null || embeddingId !== null) {
+    if (processingId !== null || embeddingId !== null || embeddingProcessingIds.size > 0) {
       return
     }
 
@@ -305,12 +459,17 @@ export function KnowledgeBaseDetailPage() {
   async function handleEmbed(document: KnowledgeDocument) {
     const documentId = resolveDocumentId(document)
 
-    if (processingId !== null || embeddingId !== null) {
+    if (processingId !== null || embeddingId !== null || embeddingProcessingIds.has(documentId)) {
       return
     }
 
     if (!isParsed(document)) {
       setErrorMessage('请先解析文档')
+      return
+    }
+
+    if ((document.chunkCount ?? 0) <= 0) {
+      setErrorMessage('未找到可向量化的切片，请先解析文档')
       return
     }
 
@@ -323,14 +482,17 @@ export function KnowledgeBaseDetailPage() {
       const response = await embedDocument(documentId)
 
       if (response.code !== 0) {
-        setErrorMessage(response.message || '向量生成任务提交失败')
+        setErrorMessage(response.message || 'Embedding 失败')
         return
       }
 
-      setSuccessMessage('向量生成任务已提交')
-      await loadDocuments()
+      setSuccessMessage(getEmbeddingSuccessMessage(response.data))
+      if (isBusyStatus(response.data?.taskStatus)) {
+        startEmbeddingPolling(documentId)
+      }
+      await loadDocuments({ clearError: false })
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, '向量生成任务提交失败，请稍后重试'))
+      setErrorMessage(getErrorMessage(error, 'Embedding 请求失败，请检查网络或后端服务。'))
     } finally {
       setEmbeddingId(null)
     }
@@ -414,7 +576,13 @@ export function KnowledgeBaseDetailPage() {
           <button
             type="button"
             onClick={() => void loadDocuments()}
-            disabled={isDocumentLoading || processingId !== null || embeddingId !== null || isUploading}
+            disabled={
+              isDocumentLoading ||
+              processingId !== null ||
+              embeddingId !== null ||
+              embeddingProcessingIds.size > 0 ||
+              isUploading
+            }
             className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
           >
             {isDocumentLoading ? '刷新中...' : '刷新'}
@@ -445,15 +613,23 @@ export function KnowledgeBaseDetailPage() {
                 {documents.map((document) => {
                   const documentId = resolveDocumentId(document)
                   const processBusy = processingId === documentId || isBusyStatus(document.parseStatus)
-                  const embedBusy = embeddingId === documentId || isBusyStatus(document.embeddingStatus)
-                  const alreadyEmbedded = isEmbedded(document)
-                  const canEmbed = isParsed(document) && !alreadyEmbedded
+                  const localEmbeddingProcessing = embeddingProcessingIds.has(documentId)
+                  const embedBusy =
+                    embeddingId === documentId ||
+                    localEmbeddingProcessing ||
+                    isBusyStatus(document.embeddingStatus)
+                  const embeddingStatus = localEmbeddingProcessing ? 'PROCESSING' : document.embeddingStatus
+                  const canEmbed = isParsed(document) && (document.chunkCount ?? 0) > 0 && !localEmbeddingProcessing
 
                   return (
                     <tr key={documentId} className="align-top">
                       <td className="max-w-xs px-5 py-4">
                         <div className="break-words font-medium text-slate-900">{document.fileName}</div>
-                        {document.latestErrorMessage ? (
+                        {localEmbeddingProcessing ? (
+                          <div className="mt-1 break-words text-xs text-slate-500">
+                            正在生成向量，请稍候
+                          </div>
+                        ) : shouldShowDocumentError(document) ? (
                           <div className="mt-1 break-words text-xs text-red-600">
                             {document.latestErrorMessage}
                           </div>
@@ -471,7 +647,7 @@ export function KnowledgeBaseDetailPage() {
                       </td>
                       <td className="px-5 py-4">
                         <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                          {statusLabel(document.embeddingStatus)}
+                          {localEmbeddingProcessing ? '生成中' : statusLabel(embeddingStatus)}
                         </span>
                         <div className="mt-1 text-xs text-slate-500">
                           已生成：{document.embeddedChunkCount ?? 0}
@@ -483,7 +659,12 @@ export function KnowledgeBaseDetailPage() {
                           <button
                             type="button"
                             onClick={() => void handleProcess(document)}
-                            disabled={processBusy || processingId !== null || embeddingId !== null}
+                            disabled={
+                              processBusy ||
+                              processingId !== null ||
+                              embeddingId !== null ||
+                              embeddingProcessingIds.size > 0
+                            }
                             className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                           >
                             {processBusy ? '解析中...' : '解析'}
@@ -492,10 +673,18 @@ export function KnowledgeBaseDetailPage() {
                             type="button"
                             onClick={() => void handleEmbed(document)}
                             disabled={!canEmbed || embedBusy || processingId !== null || embeddingId !== null}
-                            title={alreadyEmbedded ? '向量已生成' : canEmbed ? undefined : '请先解析文档'}
+                            title={
+                              localEmbeddingProcessing
+                                ? '正在生成向量，请稍候'
+                                : !isParsed(document)
+                                  ? '请先解析文档'
+                                  : (document.chunkCount ?? 0) <= 0
+                                    ? '未找到可向量化的切片，请先解析文档'
+                                    : undefined
+                            }
                             className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
                           >
-                            {alreadyEmbedded ? '已生成' : embedBusy ? '生成中...' : '生成向量'}
+                            {embedBusy ? '生成中...' : isEmbedded(document) ? '重新生成' : '生成向量'}
                           </button>
                         </div>
                       </td>

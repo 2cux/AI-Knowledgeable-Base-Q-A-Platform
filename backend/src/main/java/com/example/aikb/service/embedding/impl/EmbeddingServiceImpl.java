@@ -23,6 +23,8 @@ import org.springframework.util.StringUtils;
 @ConditionalOnProperty(prefix = "app.embedding", name = "enabled", havingValue = "true")
 public class EmbeddingServiceImpl implements EmbeddingService {
 
+    private static final String EXAMPLE_HOST_MARKER = "example.com";
+
     private final AppEmbeddingProperties properties;
     private final EmbeddingApiClient embeddingApiClient;
 
@@ -169,6 +171,9 @@ public class EmbeddingServiceImpl implements EmbeddingService {
     private void validateConfig() {
         if (!StringUtils.hasText(properties.getBaseUrl())) {
             throw new BusinessException(50000, "embedding base-url 未配置");
+        }
+        if (properties.getBaseUrl().toLowerCase().contains(EXAMPLE_HOST_MARKER)) {
+            throw new BusinessException(50000, "Embedding baseUrl 未配置或仍为占位值，请设置 APP_EMBEDDING_BASE_URL");
         }
         if (!StringUtils.hasText(properties.getApiKey())) {
             throw new BusinessException(50000,

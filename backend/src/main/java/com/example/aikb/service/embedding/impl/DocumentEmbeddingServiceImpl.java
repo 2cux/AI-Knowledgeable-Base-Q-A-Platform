@@ -108,11 +108,9 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         }
 
         TaskRecord taskRecord = taskRecordService.createDocumentEmbeddingTask(document, userId);
-        taskRecordService.markProcessing(taskRecord.getId());
         String requestId = UUID.randomUUID().toString();
 
         try {
-            markDocumentEmbeddingSubmitted(document.getId());
             documentEmbeddingProducer.send(DocumentEmbeddingMessage.builder()
                     .documentId(document.getId())
                     .knowledgeBaseId(document.getKnowledgeBaseId())
@@ -133,7 +131,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                     .failedCount(0)
                     .embeddingModel(embeddingModel)
                     .taskId(taskRecord.getId())
-                    .taskStatus(STATUS_PROCESSING)
+                    .taskStatus(STATUS_PENDING)
                     .build();
         } catch (AmqpException ex) {
             String safeError = truncateError("RabbitMQ message send failed: " + ex.getMessage());
@@ -153,18 +151,39 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
     @Override
     public DocumentEmbeddingVO embedDocumentFromMessage(DocumentEmbeddingMessage message) {
         try {
+            log.info("Start async document embedding, documentId={}, knowledgeBaseId={}, taskId={}, requestId={}",
+                    message.getDocumentId(), message.getKnowledgeBaseId(), message.getTaskId(), message.getRequestId());
             DocumentEmbeddingVO result = doEmbedDocumentFromMessage(message);
             if (message.getTaskId() != null) {
                 taskRecordService.markSuccess(message.getTaskId());
             }
+            log.info("Async document embedding finished, documentId={}, knowledgeBaseId={}, taskId={}, total={}, successCount={}, failedCount={}",
+                    message.getDocumentId(),
+                    message.getKnowledgeBaseId(),
+                    message.getTaskId(),
+                    result.getTotal(),
+                    result.getSuccessCount(),
+                    result.getFailedCount());
             result.setTaskStatus(STATUS_SUCCESS);
             return result;
         } catch (RuntimeException ex) {
             String safeError = truncateError(ex.getMessage());
-            if (message.getTaskId() != null) {
+            Throwable rootCause = rootCause(ex);
+            log.error("Async document embedding failed, documentId={}, knowledgeBaseId={}, taskId={}, errorType={}, error={}, rootCauseType={}, rootCause={}",
+                    message == null ? null : message.getDocumentId(),
+                    message == null ? null : message.getKnowledgeBaseId(),
+                    message == null ? null : message.getTaskId(),
+                    ex.getClass().getName(),
+                    LogSanitizer.safeMessage(ex.getMessage()),
+                    rootCause == null ? null : rootCause.getClass().getName(),
+                    safeRootCauseMessage(rootCause),
+                    ex);
+            if (message != null && message.getTaskId() != null) {
                 taskRecordService.markFailed(message.getTaskId(), safeError);
             }
-            if (message.getDocumentId() != null) {
+            if (message != null
+                    && message.getDocumentId() != null
+                    && isLatestEmbeddingTask(message.getDocumentId(), message.getTaskId())) {
                 updateDocumentEmbeddingFailed(message.getDocumentId(), safeError);
             }
             throw ex;
@@ -239,6 +258,13 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         if (STATUS_SUCCESS.equals(messageTask.getStatus())) {
             return buildNoopResult(document, message.getTaskId(), resolveEmbeddingModel(message.getEmbeddingModel()));
         }
+        if (STATUS_FAILED.equals(messageTask.getStatus())) {
+            throw new BusinessException("Document embedding task already failed");
+        }
+        if (STATUS_PENDING.equals(messageTask.getStatus())) {
+            taskRecordService.markProcessing(messageTask.getId());
+        }
+        markDocumentEmbeddingSubmitted(document.getId());
         if (!isParseSuccess(document)) {
             throw new BusinessException("Document has not been processed successfully");
         }
@@ -263,13 +289,36 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                     updateDocumentEmbeddingFinished(document.getId(), allChunks.size(), countSuccessfulEmbeddings(document.getId()), 0));
             return buildNoopResult(document, message.getTaskId(), embeddingModel);
         }
+        log.info("Async document embedding chunks ready, documentId={}, knowledgeBaseId={}, taskId={}, totalChunkCount={}, embeddableChunkCount={}, model={}",
+                document.getId(),
+                document.getKnowledgeBaseId(),
+                message.getTaskId(),
+                allChunks.size(),
+                chunks.size(),
+                embeddingModel);
 
         List<EmbeddedChunkResult> results = new ArrayList<>();
         for (DocumentChunk chunk : chunks) {
+            long chunkStart = System.currentTimeMillis();
+            int contentLength = chunk.getContent() == null ? 0 : chunk.getContent().length();
+            log.info("Embedding chunk started, documentId={}, knowledgeBaseId={}, taskId={}, chunkId={}, contentLength={}",
+                    document.getId(),
+                    document.getKnowledgeBaseId(),
+                    message.getTaskId(),
+                    chunk.getId(),
+                    contentLength);
             EmbeddingResult result = embeddingClient.embed(chunk.getId(), chunk.getContent(), embeddingModel);
             if (result.getVector() == null || result.getVector().isEmpty()) {
                 throw new BusinessException("embedding vector is empty");
             }
+            log.info("Embedding chunk finished, documentId={}, knowledgeBaseId={}, taskId={}, chunkId={}, contentLength={}, durationMs={}, vectorDimension={}",
+                    document.getId(),
+                    document.getKnowledgeBaseId(),
+                    message.getTaskId(),
+                    chunk.getId(),
+                    contentLength,
+                    System.currentTimeMillis() - chunkStart,
+                    result.getVector().size());
             results.add(new EmbeddedChunkResult(chunk, result));
         }
 
@@ -360,7 +409,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         Long count = taskRecordMapper.selectCount(new LambdaQueryWrapper<TaskRecord>()
                 .eq(TaskRecord::getBizType, TASK_BIZ_TYPE_DOCUMENT)
                 .eq(TaskRecord::getBizId, document.getId())
-                .eq(TaskRecord::getStatus, STATUS_PROCESSING)
+                .in(TaskRecord::getStatus, STATUS_PENDING, STATUS_PROCESSING)
                 .in(TaskRecord::getTaskType, TASK_TYPE_DOCUMENT_PROCESS, TASK_TYPE_DOCUMENT_EMBEDDING));
         if (count != null && count > 0) {
             throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
@@ -493,12 +542,7 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         if (latestEmbeddingTask == null || !message.getTaskId().equals(latestEmbeddingTask.getId())) {
             throw new BusinessException("Document embedding message is not the latest task");
         }
-        if (STATUS_FAILED.equals(taskRecord.getStatus())
-                && TASK_TYPE_DOCUMENT_EMBEDDING.equals(document.getLatestTaskType())
-                && STATUS_FAILED.equals(document.getLatestTaskStatus())) {
-            return taskRecord;
-        }
-        if (!STATUS_PROCESSING.equals(taskRecord.getStatus())) {
+        if (!STATUS_PENDING.equals(taskRecord.getStatus()) && !STATUS_PROCESSING.equals(taskRecord.getStatus())) {
             throw new BusinessException(MESSAGE_DOCUMENT_PROCESSING);
         }
         return taskRecord;
@@ -512,6 +556,14 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .orderByDesc(TaskRecord::getCreatedAt)
                 .orderByDesc(TaskRecord::getId)
                 .last("LIMIT 1"));
+    }
+
+    private boolean isLatestEmbeddingTask(Long documentId, Long taskId) {
+        if (documentId == null || taskId == null) {
+            return false;
+        }
+        TaskRecord latestTask = getLatestEmbeddingTask(documentId);
+        return latestTask != null && taskId.equals(latestTask.getId());
     }
 
     private String resolveEmbeddingModel(DocumentEmbeddingRequest request) {
@@ -564,6 +616,25 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
             return error;
         }
         return error.substring(0, MAX_ERROR_MESSAGE_LENGTH);
+    }
+
+    private Throwable rootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null && current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private String safeRootCauseMessage(Throwable throwable) {
+        if (throwable == null) {
+            return "unknown";
+        }
+        String message = throwable.getMessage();
+        if (!StringUtils.hasText(message)) {
+            return throwable.getClass().getName();
+        }
+        return LogSanitizer.safeMessage(message);
     }
 
     private ChunkEmbeddingStatusVO toStatusVO(DocumentChunk chunk, ChunkEmbedding embedding, String status) {

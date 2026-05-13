@@ -19,7 +19,7 @@ class EmbeddingServiceImplTest {
     @Test
     void shouldFailWithClearMessageWhenApiKeyMissing() {
         AppEmbeddingProperties properties = new AppEmbeddingProperties();
-        properties.setBaseUrl("https://example.com/v1/embeddings");
+        properties.setBaseUrl("https://embedding.vendor.test/v1/embeddings");
         properties.setApiKey("");
         properties.setModel("text-embedding-3-large");
         properties.setNormalized(true);
@@ -82,7 +82,7 @@ class EmbeddingServiceImplTest {
 
     private AppEmbeddingProperties validProperties() {
         AppEmbeddingProperties properties = new AppEmbeddingProperties();
-        properties.setBaseUrl("https://example.com/v1/embeddings");
+        properties.setBaseUrl("https://embedding.vendor.test/v1/embeddings");
         properties.setApiKey("test-key");
         properties.setModel("text-embedding-3-large");
         properties.setNormalized(true);

@@ -29,8 +29,18 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    public DirectExchange documentEmbeddingExchange() {
+        return new DirectExchange(embeddingProperties.getExchange(), true, false);
+    }
+
+    @Bean
     public DirectExchange documentProcessDeadLetterExchange() {
         return new DirectExchange(properties.getDeadLetterExchange(), true, false);
+    }
+
+    @Bean
+    public DirectExchange documentEmbeddingDeadLetterExchange() {
+        return new DirectExchange(embeddingProperties.getDeadLetterExchange(), true, false);
     }
 
     @Bean
@@ -76,14 +86,14 @@ public class RabbitMqConfig {
     @Bean
     public Binding documentEmbeddingBinding() {
         return BindingBuilder.bind(documentEmbeddingQueue())
-                .to(documentProcessExchange())
+                .to(documentEmbeddingExchange())
                 .with(embeddingProperties.getRoutingKey());
     }
 
     @Bean
     public Binding documentEmbeddingDeadLetterBinding() {
         return BindingBuilder.bind(documentEmbeddingDeadLetterQueue())
-                .to(documentProcessDeadLetterExchange())
+                .to(documentEmbeddingDeadLetterExchange())
                 .with(embeddingProperties.getDeadLetterRoutingKey());
     }
 
@@ -97,6 +107,7 @@ public class RabbitMqConfig {
             @NonNull MessageConverter rabbitJsonMessageConverter) {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
         rabbitTemplate.setMessageConverter(rabbitJsonMessageConverter);
+        rabbitTemplate.setMandatory(true);
         return rabbitTemplate;
     }
 
@@ -108,6 +119,7 @@ public class RabbitMqConfig {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         configurer.configure(factory, connectionFactory);
         factory.setMessageConverter(rabbitJsonMessageConverter);
+        factory.setPrefetchCount(1);
         return factory;
     }
 }

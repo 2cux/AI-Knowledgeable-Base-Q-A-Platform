@@ -18,6 +18,9 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class LlmServiceImpl implements LlmService {
 
+    private static final String EXAMPLE_HOST_MARKER = "example.com";
+    private static final String LLM_PLACEHOLDER_MODEL = "your-chat-model";
+
     private final AppLlmProperties properties;
     private final LlmApiClient llmApiClient;
 
@@ -55,12 +58,18 @@ public class LlmServiceImpl implements LlmService {
         if (!StringUtils.hasText(properties.getBaseUrl())) {
             throw new BusinessException(50000, "LLM base-url 未配置");
         }
+        if (properties.getBaseUrl().toLowerCase().contains(EXAMPLE_HOST_MARKER)) {
+            throw new BusinessException(50000, "LLM baseUrl 未配置或仍为占位值，请设置 APP_LLM_BASE_URL");
+        }
         if (!StringUtils.hasText(properties.getApiKey())) {
             throw new BusinessException(50000,
                     "LLM api-key 未配置，请通过环境变量 APP_LLM_API_KEY 或 OPENAI_API_KEY 注入");
         }
         if (!StringUtils.hasText(properties.getModel())) {
             throw new BusinessException(50000, "LLM model 未配置");
+        }
+        if (LLM_PLACEHOLDER_MODEL.equalsIgnoreCase(properties.getModel().trim())) {
+            throw new BusinessException(50000, "LLM model 仍为占位值，请设置 APP_LLM_MODEL");
         }
     }
 }

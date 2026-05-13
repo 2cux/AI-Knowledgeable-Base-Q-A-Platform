@@ -52,7 +52,11 @@ export type DocumentProcessResponse = {
 export type DocumentEmbeddingResponse = {
   documentId?: number | null
   knowledgeBaseId?: number | null
+  total?: number | null
+  successCount?: number | null
+  failedCount?: number | null
   embeddingStatus?: string | null
   embeddingModel?: string | null
   taskId?: number | string | null
+  taskStatus?: string | null
 }

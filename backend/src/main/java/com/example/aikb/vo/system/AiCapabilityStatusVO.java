@@ -20,5 +20,7 @@ public class AiCapabilityStatusVO {
     private String model;
     private boolean enabled;
     private boolean baseUrlConfigured;
+    private String baseUrlHost;
+    private String baseUrlPath;
     private boolean apiKeyConfigured;
 }

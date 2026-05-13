@@ -27,6 +27,8 @@ import org.springframework.web.client.RestTemplate;
 @Component
 public class LlmApiClient {
 
+    private static final String EXAMPLE_HOST_MARKER = "example.com";
+
     private final AppLlmProperties properties;
     private final RestTemplate restTemplate;
 
@@ -39,6 +41,7 @@ public class LlmApiClient {
 
     public JsonNode chat(LlmRequest request) {
         String baseUrl = requireText(properties.getBaseUrl(), "LLM base-url 未配置");
+        rejectPlaceholderBaseUrl(baseUrl);
         String apiKey = requireText(properties.getApiKey(),
                 "LLM api-key 未配置，请通过环境变量 APP_LLM_API_KEY 或 OPENAI_API_KEY 注入");
 
@@ -91,6 +94,12 @@ public class LlmApiClient {
         return request.getMessages().stream()
                 .mapToInt(message -> messageTextLength(message.getContent()))
                 .sum();
+    }
+
+    private void rejectPlaceholderBaseUrl(String baseUrl) {
+        if (baseUrl.toLowerCase().contains(EXAMPLE_HOST_MARKER)) {
+            throw new BusinessException(50000, "LLM baseUrl 未配置或仍为占位值，请设置 APP_LLM_BASE_URL");
+        }
     }
 
     private String resolveQuestionPreview(LlmRequest request) {

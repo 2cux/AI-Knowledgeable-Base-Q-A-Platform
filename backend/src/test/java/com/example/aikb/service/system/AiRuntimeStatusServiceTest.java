@@ -57,7 +57,7 @@ class AiRuntimeStatusServiceTest {
 
         AppLlmProperties llmProperties = new AppLlmProperties();
         llmProperties.setEnabled(true);
-        llmProperties.setBaseUrl("https://example.com/v1/messages");
+        llmProperties.setBaseUrl("https://llm.vendor.test/v1/messages");
         llmProperties.setApiKey("");
         llmProperties.setModel("claude-opus-4-6");
 

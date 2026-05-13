@@ -24,18 +24,33 @@ public class DocumentEmbeddingConsumer {
             log.warn("Reject invalid document embedding message, requestId={}",
                     payload == null ? null : payload.getRequestId());
             channel.basicReject(deliveryTag, false);
+            log.info("Rejected invalid document embedding message, deliveryTag={}, requeue=false", deliveryTag);
             return;
         }
 
         try {
-            log.info("Consume document embedding message, documentId={}, requestId={}",
-                    payload.getDocumentId(), payload.getRequestId());
+            log.info("Consume document embedding message, documentId={}, knowledgeBaseId={}, taskId={}, requestId={}, threadName={}, deliveryTag={}",
+                    payload.getDocumentId(),
+                    payload.getKnowledgeBaseId(),
+                    payload.getTaskId(),
+                    payload.getRequestId(),
+                    Thread.currentThread().getName(),
+                    deliveryTag);
             documentEmbeddingService.embedDocumentFromMessage(payload);
             channel.basicAck(deliveryTag, false);
+            log.info("Ack document embedding message after success, documentId={}, taskId={}, requestId={}, deliveryTag={}",
+                    payload.getDocumentId(), payload.getTaskId(), payload.getRequestId(), deliveryTag);
         } catch (RuntimeException ex) {
-            log.warn("Document embedding message failed, documentId={}, requestId={}, message={}",
-                    payload.getDocumentId(), payload.getRequestId(), LogSanitizer.safeMessage(ex.getMessage()));
-            throw ex;
+            log.error("Document embedding message failed, documentId={}, taskId={}, requestId={}, message={}",
+                    payload.getDocumentId(),
+                    payload.getTaskId(),
+                    payload.getRequestId(),
+                    LogSanitizer.safeMessage(ex.getMessage()),
+                    ex);
+            // 业务失败已由 DocumentEmbeddingService 落库为 FAILED；MVP 阶段失败后 ack，避免消息长期 unacked 或无限重试外部 API。
+            channel.basicAck(deliveryTag, false);
+            log.info("Ack document embedding message after persisted failure, documentId={}, taskId={}, requestId={}, deliveryTag={}",
+                    payload.getDocumentId(), payload.getTaskId(), payload.getRequestId(), deliveryTag);
         }
     }
 }

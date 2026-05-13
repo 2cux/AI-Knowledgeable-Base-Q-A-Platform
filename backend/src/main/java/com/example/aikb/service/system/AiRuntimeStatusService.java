@@ -11,6 +11,8 @@ import com.example.aikb.service.llm.LlmClient;
 import com.example.aikb.service.llm.impl.VendorLlmClientAdapter;
 import com.example.aikb.vo.system.AiCapabilityStatusVO;
 import com.example.aikb.vo.system.RuntimeModeVO;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,9 @@ public class AiRuntimeStatusService {
 
     private static final String DEFAULT_EMBEDDING_PLACEHOLDER_MODEL = "your-embedding-model";
     private static final String LOCAL_HASH_MODEL = "local-hash-embedding-v1";
+    private static final String UNKNOWN_URL_PART = "invalid-url";
+    private static final String EXAMPLE_HOST_MARKER = "example.com";
+    private static final String LLM_PLACEHOLDER_MODEL = "your-chat-model";
 
     private final AppEmbeddingProperties embeddingProperties;
     private final AppLlmProperties llmProperties;
@@ -74,7 +79,8 @@ public class AiRuntimeStatusService {
             model = StringUtils.hasText(configuredModel) && !DEFAULT_EMBEDDING_PLACEHOLDER_MODEL.equals(configuredModel)
                     ? configuredModel
                     : LOCAL_HASH_MODEL;
-        } else if (!baseUrlConfigured || !apiKeyConfigured || !StringUtils.hasText(configuredModel)
+        } else if (!baseUrlConfigured || isPlaceholderBaseUrl(embeddingProperties.getBaseUrl())
+                || !apiKeyConfigured || !StringUtils.hasText(configuredModel)
                 || DEFAULT_EMBEDDING_PLACEHOLDER_MODEL.equals(configuredModel)) {
             mode = AiRuntimeMode.MISCONFIGURED;
             model = configuredModel;
@@ -95,6 +101,8 @@ public class AiRuntimeStatusService {
                 .model(model)
                 .enabled(enabled)
                 .baseUrlConfigured(baseUrlConfigured)
+                .baseUrlHost(resolveUrlHost(embeddingProperties.getBaseUrl()))
+                .baseUrlPath(resolveUrlPath(embeddingProperties.getBaseUrl()))
                 .apiKeyConfigured(apiKeyConfigured)
                 .build();
     }
@@ -109,7 +117,9 @@ public class AiRuntimeStatusService {
         AiRuntimeMode mode;
         if (!enabled) {
             mode = AiRuntimeMode.DISABLED;
-        } else if (!baseUrlConfigured || !apiKeyConfigured || !StringUtils.hasText(model) || llmClient == null) {
+        } else if (!baseUrlConfigured || isPlaceholderBaseUrl(llmProperties.getBaseUrl())
+                || !apiKeyConfigured || !StringUtils.hasText(model) || LLM_PLACEHOLDER_MODEL.equalsIgnoreCase(model)
+                || llmClient == null) {
             mode = AiRuntimeMode.MISCONFIGURED;
         } else {
             mode = AiRuntimeMode.REAL;
@@ -121,11 +131,16 @@ public class AiRuntimeStatusService {
                 .model(model)
                 .enabled(enabled)
                 .baseUrlConfigured(baseUrlConfigured)
+                .baseUrlHost(resolveUrlHost(llmProperties.getBaseUrl()))
+                .baseUrlPath(resolveUrlPath(llmProperties.getBaseUrl()))
                 .apiKeyConfigured(apiKeyConfigured)
                 .build();
     }
 
     private String resolveEmbeddingProvider(EmbeddingClient embeddingClient) {
+        if (embeddingProperties.isEnabled() && StringUtils.hasText(embeddingProperties.getProvider())) {
+            return embeddingProperties.getProvider().trim();
+        }
         if (embeddingClient instanceof ExternalEmbeddingClient) {
             return "external-http";
         }
@@ -139,9 +154,40 @@ public class AiRuntimeStatusService {
     }
 
     private String resolveLlmProvider(LlmClient llmClient) {
+        if (StringUtils.hasText(llmProperties.getProvider())) {
+            return llmProperties.getProvider().trim();
+        }
         if (llmClient instanceof VendorLlmClientAdapter) {
             return "vendor-http";
         }
         return llmClient == null ? "unavailable" : llmClient.getClass().getSimpleName();
+    }
+
+    private String resolveUrlHost(String baseUrl) {
+        if (!StringUtils.hasText(baseUrl)) {
+            return "";
+        }
+        try {
+            String host = new URI(baseUrl.trim()).getHost();
+            return host == null ? UNKNOWN_URL_PART : host;
+        } catch (URISyntaxException ex) {
+            return UNKNOWN_URL_PART;
+        }
+    }
+
+    private String resolveUrlPath(String baseUrl) {
+        if (!StringUtils.hasText(baseUrl)) {
+            return "";
+        }
+        try {
+            String path = new URI(baseUrl.trim()).getPath();
+            return path == null ? "" : path;
+        } catch (URISyntaxException ex) {
+            return UNKNOWN_URL_PART;
+        }
+    }
+
+    private boolean isPlaceholderBaseUrl(String baseUrl) {
+        return baseUrl != null && baseUrl.toLowerCase().contains(EXAMPLE_HOST_MARKER);
     }
 }

@@ -58,3 +58,6 @@ desktop.ini
 *.swp
 *.swo
 *~
+backend/start-backend.ps1
+backend/backend-dev.out
+backend/backend-dev.err

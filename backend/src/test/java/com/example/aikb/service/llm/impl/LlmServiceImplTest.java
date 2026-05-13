@@ -14,7 +14,7 @@ class LlmServiceImplTest {
     void shouldFailWithClearMessageWhenApiKeyMissing() {
         AppLlmProperties properties = new AppLlmProperties();
         properties.setEnabled(true);
-        properties.setBaseUrl("https://example.com/v1/messages");
+        properties.setBaseUrl("https://llm.vendor.test/v1/messages");
         properties.setApiKey("");
         properties.setModel("claude-opus-4-6");
 
