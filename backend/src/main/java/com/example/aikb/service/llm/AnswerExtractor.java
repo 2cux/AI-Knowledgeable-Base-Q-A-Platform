@@ -119,7 +119,11 @@ public class AnswerExtractor {
         if (!root.has(FIELD_CONTENT)) {
             return null;
         }
-        return answerResult(textFromContent(root.path(FIELD_CONTENT)));
+        String text = textFromContent(root.path(FIELD_CONTENT));
+        if (!StringUtils.hasText(text)) {
+            return AnswerExtractResult.failure(AnswerExtractFailureReason.MISSING_CONTENT);
+        }
+        return answerResult(text);
     }
 
     private AnswerExtractResult extractChatCompletionContent(JsonNode root) {

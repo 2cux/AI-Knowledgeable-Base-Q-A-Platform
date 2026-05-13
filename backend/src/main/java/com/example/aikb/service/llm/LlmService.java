@@ -1,27 +1,26 @@
 package com.example.aikb.service.llm;
 
 import com.example.aikb.dto.llm.request.LlmMessageRequest;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 
 /**
- * 最小 LLM 服务示例，面向业务代码暴露文本问答入口。
+ * Minimal text QA entry point for the external LLM service.
  */
 public interface LlmService {
 
     /**
-     * 使用配置中的默认模型发送纯文本问题。
+     * Sends a plain text question with the configured default model.
      *
-     * @param userQuestion 用户问题
-     * @return 原始 JSON 响应
+     * @param userQuestion user question
+     * @return raw JSON response body
      */
-    JsonNode chatText(String userQuestion);
+    String chatText(String userQuestion);
 
     /**
-     * 使用指定 messages 调用 LLM。
+     * Sends messages to the configured LLM.
      *
-     * @param messages 符合第三方协议的消息数组
-     * @return 原始 JSON 响应
+     * @param messages messages compatible with the project LLM boundary
+     * @return raw JSON response body
      */
-    JsonNode chat(List<LlmMessageRequest> messages);
+    String chat(List<LlmMessageRequest> messages);
 }

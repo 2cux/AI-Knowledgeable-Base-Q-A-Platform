@@ -40,6 +40,22 @@ class AnswerExtractorTest {
     }
 
     @Test
+    void shouldExtractTopLevelStringContent() {
+        AnswerExtractResult result = answerExtractor.extract("{\"content\":\"xxx\"}");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAnswer()).isEqualTo("xxx");
+    }
+
+    @Test
+    void shouldReturnMissingContentWhenClaudeContentHasNoText() {
+        AnswerExtractResult result = answerExtractor.extract("{\"content\":[{\"type\":\"image\"}]}");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getFailureReason()).isEqualTo(AnswerExtractFailureReason.MISSING_CONTENT);
+    }
+
+    @Test
     void shouldExtractChatCompletionMessageContent() {
         AnswerExtractResult result = answerExtractor.extract("{\"choices\":[{\"message\":{\"content\":\"xxx\"}}]}");
 

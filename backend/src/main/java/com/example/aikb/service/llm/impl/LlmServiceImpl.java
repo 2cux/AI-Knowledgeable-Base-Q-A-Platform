@@ -5,19 +5,20 @@ import com.example.aikb.dto.llm.request.LlmMessageRequest;
 import com.example.aikb.dto.llm.request.LlmRequest;
 import com.example.aikb.exception.BusinessException;
 import com.example.aikb.service.llm.LlmService;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 /**
- * 最小 LLM 服务实现，负责组装请求体并保留返回原始 JSON。
+ * Minimal LLM service that builds Claude Messages requests and returns raw JSON.
  */
 @Service
 @RequiredArgsConstructor
 public class LlmServiceImpl implements LlmService {
 
+    private static final String DEFAULT_SYSTEM_PROMPT =
+            "你是企业知识库问答助手。请严格基于知识库片段回答；如果知识库中没有依据，请说明无法从知识库确认。";
     private static final String EXAMPLE_HOST_MARKER = "example.com";
     private static final String LLM_PLACEHOLDER_MODEL = "your-chat-model";
 
@@ -25,22 +26,35 @@ public class LlmServiceImpl implements LlmService {
     private final LlmApiClient llmApiClient;
 
     @Override
-    public JsonNode chatText(String userQuestion) {
+    public String chatText(String userQuestion) {
         validateQuestion(userQuestion);
         return chat(List.of(LlmMessageRequest.userText(userQuestion.trim())));
     }
 
     @Override
-    public JsonNode chat(List<LlmMessageRequest> messages) {
+    public String chat(List<LlmMessageRequest> messages) {
         validateConfig();
         if (messages == null || messages.isEmpty()) {
+            throw new BusinessException("LLM messages 不能为空");
+        }
+
+        String systemPrompt = resolveSystemPrompt(messages);
+        List<LlmMessageRequest> claudeMessages = messages.stream()
+                .filter(message -> message != null && !"system".equalsIgnoreCase(message.getRole()))
+                .map(message -> LlmMessageRequest.builder()
+                        .role(resolveMessageRole(message.getRole()))
+                        .content(message.getContent())
+                        .build())
+                .toList();
+        if (claudeMessages.isEmpty()) {
             throw new BusinessException("LLM messages 不能为空");
         }
 
         LlmRequest request = LlmRequest.builder()
                 .model(properties.getModel())
                 .maxTokens(properties.getMaxTokens())
-                .messages(messages)
+                .system(systemPrompt)
+                .messages(claudeMessages)
                 .build();
         return llmApiClient.chat(request);
     }
@@ -62,8 +76,7 @@ public class LlmServiceImpl implements LlmService {
             throw new BusinessException(50000, "LLM baseUrl 未配置或仍为占位值，请设置 APP_LLM_BASE_URL");
         }
         if (!StringUtils.hasText(properties.getApiKey())) {
-            throw new BusinessException(50000,
-                    "LLM api-key 未配置，请通过环境变量 APP_LLM_API_KEY 或 OPENAI_API_KEY 注入");
+            throw new BusinessException(50000, "LLM api-key 未配置，请通过环境变量 APP_LLM_API_KEY 注入");
         }
         if (!StringUtils.hasText(properties.getModel())) {
             throw new BusinessException(50000, "LLM model 未配置");
@@ -71,5 +84,23 @@ public class LlmServiceImpl implements LlmService {
         if (LLM_PLACEHOLDER_MODEL.equalsIgnoreCase(properties.getModel().trim())) {
             throw new BusinessException(50000, "LLM model 仍为占位值，请设置 APP_LLM_MODEL");
         }
+    }
+
+    private String resolveSystemPrompt(List<LlmMessageRequest> messages) {
+        String systemPrompt = messages.stream()
+                .filter(message -> message != null && "system".equalsIgnoreCase(message.getRole()))
+                .map(LlmMessageRequest::getContent)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .findFirst()
+                .orElse(DEFAULT_SYSTEM_PROMPT);
+        return systemPrompt;
+    }
+
+    private String resolveMessageRole(String role) {
+        if (!StringUtils.hasText(role) || "system".equalsIgnoreCase(role)) {
+            return "user";
+        }
+        return role.trim();
     }
 }

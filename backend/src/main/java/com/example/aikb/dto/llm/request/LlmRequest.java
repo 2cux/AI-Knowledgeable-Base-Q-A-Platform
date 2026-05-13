@@ -8,7 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 第三方 LLM API 请求体。
+ * Claude Messages request body for the third-party LLM API.
  */
 @Data
 @Builder
@@ -16,13 +16,16 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class LlmRequest {
 
-    /** 模型名称。 */
+    /** Model name. */
     private String model;
 
-    /** 最大输出 token 数，对应 JSON 字段 max_tokens。 */
+    /** Maximum output tokens, serialized as max_tokens. */
     @JsonProperty("max_tokens")
     private Integer maxTokens;
 
-    /** 消息数组。 */
+    /** Claude top-level system prompt. */
+    private String system;
+
+    /** Messages sent to Claude. */
     private List<LlmMessageRequest> messages;
 }

@@ -15,6 +15,7 @@ public class AppLlmProperties {
 
     private String provider = "vendor-http";
 
+    /** Full LLM endpoint URL, for example https://api.xiaocaseai.com/messages. */
     private String baseUrl = "";
 
     private String apiKey = "";

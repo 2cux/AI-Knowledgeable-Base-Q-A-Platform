@@ -1,13 +1,12 @@
 package com.example.aikb.dto.llm.request;
 
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * LLM 请求中的单条 message。
+ * Claude Messages API message item.
  */
 @Data
 @Builder
@@ -15,16 +14,16 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class LlmMessageRequest {
 
-    /** 消息角色，例如 user、assistant、system。 */
+    /** Message role, for example user or assistant. */
     private String role;
 
-    /** 内容数组。纯文本场景也必须使用数组结构。 */
-    private List<LlmContentItem> content;
+    /** Text content for current RAG question answering. */
+    private String content;
 
     public static LlmMessageRequest userText(String text) {
         return LlmMessageRequest.builder()
                 .role("user")
-                .content(List.of(LlmContentItem.text(text)))
+                .content(text)
                 .build();
     }
 }

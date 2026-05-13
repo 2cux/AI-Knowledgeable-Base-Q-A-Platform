@@ -66,6 +66,7 @@ app:
       hot-questions-ttl-minutes: ${HOT_QUESTIONS_CACHE_TTL_MINUTES:5}
   llm:
     enabled: true
+    # Configure the full LLM endpoint, for example https://api.xiaocaseai.com/messages.
     base-url: ${APP_LLM_BASE_URL:}
     api-key: ${APP_LLM_API_KEY:}
     model: ${APP_LLM_MODEL:claude-opus-4-6}

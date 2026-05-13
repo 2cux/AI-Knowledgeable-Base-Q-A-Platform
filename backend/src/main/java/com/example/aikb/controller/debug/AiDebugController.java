@@ -12,7 +12,6 @@ import com.example.aikb.service.debug.AiDebugAccessGuard;
 import com.example.aikb.service.embedding.EmbeddingService;
 import com.example.aikb.service.llm.LlmService;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -91,13 +90,12 @@ public class AiDebugController {
         aiDebugAccessGuard.ensureAccessible();
 
         String question = resolveText(request == null ? null : request.getText(), "请用一句话回答：你已经接通了吗？");
-        JsonNode response = llmService.chatText(question);
-        if (response == null || response.isNull() || response.isMissingNode()) {
+        String rawResponse = llmService.chatText(question);
+        if (!StringUtils.hasText(rawResponse)) {
             throw new BusinessException(50000, "LLM 返回结果为空");
         }
 
-        String rawResponse = response.toString();
-        if (!StringUtils.hasText(rawResponse) || "{}".equals(rawResponse)) {
+        if ("{}".equals(rawResponse.trim())) {
             throw new BusinessException(50000, "LLM 返回结果为空对象，请确认响应结构或上游服务状态");
         }
 

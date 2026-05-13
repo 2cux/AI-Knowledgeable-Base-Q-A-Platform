@@ -46,7 +46,7 @@ public class RagAnswerGeneratorServiceImpl implements AnswerGeneratorService {
                     rawResponse == null ? 0 : rawResponse.length());
             AnswerExtractResult extractResult = answerExtractor.extract(rawResponse);
             if (!extractResult.isSuccess()) {
-                log.warn("LLM answer extraction failed, questionLength={}, chunkCount={}, failureReason={}",
+                log.warn("LLM answer extraction failed: LLM 响应中未找到文本内容, questionLength={}, chunkCount={}, failureReason={}",
                         question == null ? 0 : question.length(), chunks.size(), extractResult.getFailureReason());
                 return unavailable();
             }
