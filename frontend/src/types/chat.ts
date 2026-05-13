@@ -1,3 +1,5 @@
+import type { FeedbackState } from './feedback'
+
 export type Citation = {
   documentId?: number | string | null
   documentName?: string | null
@@ -33,10 +35,15 @@ export type ChatAskResponse = {
 
 export type ChatMessage = {
   id: string
+  messageId?: string
+  chatRecordId?: number | string
+  conversationId?: string
+  knowledgeBaseId?: number | string
   role: 'user' | 'assistant'
   content: string
   citations?: Citation[]
   createdAt?: string
   status?: 'sending' | 'success' | 'failed'
   response?: ChatAskResponse
+  feedback?: FeedbackState
 }

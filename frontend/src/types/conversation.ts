@@ -1,4 +1,5 @@
 import type { Citation } from './chat'
+import type { FeedbackReason, FeedbackState, FeedbackType } from './feedback'
 
 export type ConversationSummary = {
   conversationId: string
@@ -17,8 +18,15 @@ export type ConversationMessage = {
   role: 'USER' | 'ASSISTANT' | 'user' | 'assistant'
   content: string
   citations?: Citation[] | string | null
+  chatRecordId?: number | string | null
   createdAt?: string
   answerStatus?: string
+  feedback?: FeedbackState | null
+  feedbackId?: number | string | null
+  feedbackType?: FeedbackType | 'LIKE' | 'DISLIKE' | null
+  feedbackReason?: FeedbackReason | null
+  feedbackComment?: string | null
+  feedbackCreatedAt?: string | null
 }
 
 export type ConversationDetail = {

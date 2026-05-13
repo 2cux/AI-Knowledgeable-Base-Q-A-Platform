@@ -1,14 +1,29 @@
 import type { ChatAskResponse, ChatMessage } from '../../types/chat'
+import type { FeedbackSubmitRequest } from '../../types/feedback'
 import { normalizeSources } from '../../utils/chatSources'
+import { FeedbackActions } from './FeedbackActions'
 import { SourceList } from './SourceList'
 
 type ChatMessageListProps = {
   messages: ChatMessage[]
   sending: boolean
   detailLoading: boolean
+  knowledgeBaseId?: number | string
+  conversationId?: string
+  onSubmitFeedback: (message: ChatMessage, request: FeedbackSubmitRequest) => Promise<void>
 }
 
-function ResponseMeta({ message }: { message: ChatMessage }) {
+function ResponseMeta({
+  message,
+  knowledgeBaseId,
+  conversationId,
+  onSubmitFeedback,
+}: {
+  message: ChatMessage
+  knowledgeBaseId?: number | string
+  conversationId?: string
+  onSubmitFeedback: (message: ChatMessage, request: FeedbackSubmitRequest) => Promise<void>
+}) {
   const response: ChatAskResponse | undefined = message.response
   const citations = message.citations ?? normalizeSources(response)
   const effectiveCount = response?.effectiveChunkCount ?? response?.retrievedChunkCount
@@ -37,11 +52,27 @@ function ResponseMeta({ message }: { message: ChatMessage }) {
           {rawCount !== null && rawCount !== undefined ? `，原始召回 ${rawCount} 个切片` : ''}
         </div>
       ) : null}
+
+      <FeedbackActions
+        knowledgeBaseId={message.knowledgeBaseId ?? knowledgeBaseId}
+        conversationId={message.conversationId ?? conversationId}
+        messageId={message.messageId}
+        chatRecordId={message.chatRecordId}
+        feedback={message.feedback}
+        onSubmit={(request) => onSubmitFeedback(message, request)}
+      />
     </div>
   )
 }
 
-export function ChatMessageList({ messages, sending, detailLoading }: ChatMessageListProps) {
+export function ChatMessageList({
+  messages,
+  sending,
+  detailLoading,
+  knowledgeBaseId,
+  conversationId,
+  onSubmitFeedback,
+}: ChatMessageListProps) {
   if (detailLoading) {
     return (
       <div className="flex min-h-72 items-center justify-center text-center text-sm text-slate-500">
@@ -76,7 +107,14 @@ export function ChatMessageList({ messages, sending, detailLoading }: ChatMessag
             ].join(' ')}
           >
             <div className="whitespace-pre-wrap break-words">{message.content}</div>
-            {message.role === 'assistant' ? <ResponseMeta message={message} /> : null}
+            {message.role === 'assistant' ? (
+              <ResponseMeta
+                message={message}
+                knowledgeBaseId={knowledgeBaseId}
+                conversationId={conversationId}
+                onSubmitFeedback={onSubmitFeedback}
+              />
+            ) : null}
             {message.role === 'user' && message.status === 'failed' ? (
               <div className="mt-2 text-xs text-red-600">发送失败，请稍后重试。</div>
             ) : null}

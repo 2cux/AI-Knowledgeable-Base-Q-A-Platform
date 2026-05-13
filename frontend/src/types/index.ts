@@ -26,3 +26,11 @@ export type {
 } from './document'
 
 export type { ChatAskRequest, ChatAskResponse, Citation } from './chat'
+
+export type {
+  FeedbackReason,
+  FeedbackState,
+  FeedbackSubmitRequest,
+  FeedbackSubmitResponse,
+  FeedbackType,
+} from './feedback'
