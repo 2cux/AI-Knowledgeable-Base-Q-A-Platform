@@ -33,6 +33,10 @@ export const router = createBrowserRouter([
             element: <KnowledgeBaseListPage />,
           },
           {
+            path: '/knowledge-bases/:knowledgeBaseId/chat',
+            element: <ChatPage />,
+          },
+          {
             path: '/knowledge-bases/:id',
             element: <KnowledgeBaseDetailPage />,
           },

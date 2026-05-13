@@ -24,3 +24,5 @@ export type {
   DocumentUploadResponse,
   KnowledgeDocument,
 } from './document'
+
+export type { ChatAskRequest, ChatAskResponse, Citation } from './chat'

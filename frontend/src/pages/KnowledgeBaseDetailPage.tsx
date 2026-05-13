@@ -516,8 +516,18 @@ export function KnowledgeBaseDetailPage() {
             {knowledgeBase?.description || '暂无描述'}
           </p>
         </div>
-        <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-          文档数：<span className="font-semibold text-slate-900">{documents.length}</span>
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
+          {canUseKnowledgeBase ? (
+            <Link
+              to={`/knowledge-bases/${knowledgeBaseId}/chat`}
+              className="inline-flex h-10 items-center justify-center rounded bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-700"
+            >
+              去问答
+            </Link>
+          ) : null}
+          <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+            文档数：<span className="font-semibold text-slate-900">{documents.length}</span>
+          </div>
         </div>
       </div>
 
