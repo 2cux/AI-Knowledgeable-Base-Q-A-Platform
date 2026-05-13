@@ -3,11 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { askChatQuestion } from '../api/chat'
+import { SourceList } from '../components/chat/SourceList'
 import { getDocumentsByKnowledgeBaseId } from '../api/document'
 import { getKnowledgeBaseById, getKnowledgeBases } from '../api/knowledgeBase'
-import type { ChatAskResponse, Citation } from '../types/chat'
+import type { ChatAskResponse } from '../types/chat'
 import type { KnowledgeDocument } from '../types/document'
 import type { KnowledgeBase } from '../types/knowledgeBase'
+import { normalizeSources } from '../utils/chatSources'
 
 const DEFAULT_PAGE_NUM = 1
 const DEFAULT_PAGE_SIZE = 50
@@ -105,16 +107,6 @@ function normalizeAnswer(answer: string) {
   return answer
 }
 
-function getCitations(response?: ChatAskResponse) {
-  return (
-    response?.citations ??
-    response?.sources ??
-    response?.chunks ??
-    response?.retrievedChunks ??
-    []
-  ).filter(Boolean)
-}
-
 function isEmbeddingReady(documents: KnowledgeDocument[]) {
   if (documents.length === 0) {
     return false
@@ -127,41 +119,12 @@ function createMessageId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function formatScore(score?: number | null) {
-  if (typeof score !== 'number') {
-    return null
-  }
-
-  return score.toFixed(4)
-}
-
-function SourceCard({ citation, index }: { citation: Citation; index: number }) {
-  const content = citation.contentSnippet || citation.content
-  const score = formatScore(citation.score)
-
-  return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <span className="font-medium text-slate-700">来源 {index + 1}</span>
-        {citation.documentName ? <span>{citation.documentName}</span> : null}
-        {citation.chunkIndex !== null && citation.chunkIndex !== undefined ? (
-          <span>切片 #{citation.chunkIndex}</span>
-        ) : citation.chunkId ? (
-          <span>切片 ID {citation.chunkId}</span>
-        ) : null}
-        {score ? <span>相关度 {score}</span> : null}
-      </div>
-      {content ? <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-xs text-slate-600">{content}</p> : null}
-    </div>
-  )
-}
-
 function ResponseMeta({ response }: { response?: ChatAskResponse }) {
   if (!response) {
     return null
   }
 
-  const citations = getCitations(response)
+  const citations = normalizeSources(response)
   const effectiveCount = response.effectiveChunkCount ?? response.retrievedChunkCount
   const rawCount = response.rawRetrievedChunkCount
   const shouldWarn = response.matched === false || effectiveCount === 0 || rawCount === 0
@@ -175,18 +138,7 @@ function ResponseMeta({ response }: { response?: ChatAskResponse }) {
       ) : null}
 
       {citations.length > 0 ? (
-        <div className="space-y-2">
-          <div className="text-xs font-medium text-slate-500">引用来源</div>
-          <div className="grid gap-2 md:grid-cols-2">
-            {citations.map((citation, index) => (
-              <SourceCard
-                key={`${citation.documentId ?? 'doc'}-${citation.chunkId ?? citation.chunkIndex ?? index}`}
-                citation={citation}
-                index={index}
-              />
-            ))}
-          </div>
-        </div>
+        <SourceList sources={citations} />
       ) : effectiveCount !== null && effectiveCount !== undefined ? (
         <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
           检索命中：{effectiveCount} 个有效切片
@@ -353,12 +305,20 @@ export function ChatPage() {
         conversationId,
       })
 
-      if (response.code !== 0 || !response.data) {
+      if (response.code !== 0 && !response.data) {
+        setErrorMessage(response.message || '问答请求失败，请稍后重试')
+        return
+      }
+
+      if (!response.data) {
         setErrorMessage(response.message || '问答请求失败，请稍后重试')
         return
       }
 
       const chatResponse = response.data
+      if (response.code !== 0) {
+        setErrorMessage(response.message || '问答请求失败，请稍后重试')
+      }
       const nextConversationId = chatResponse.conversationId?.trim()
       if (nextConversationId) {
         setConversationId(nextConversationId)

@@ -6,7 +6,7 @@ export type Citation = {
   chunkIndex?: number | null
   content?: string | null
   contentSnippet?: string | null
-  score?: number | null
+  score?: number | string | null
 }
 
 export type ChatAskRequest = {
@@ -25,8 +25,8 @@ export type ChatAskResponse = {
   rawRetrievedChunkCount?: number | null
   effectiveChunkCount?: number | null
   minEffectiveScore?: number | null
-  citations?: Citation[] | null
-  sources?: Citation[] | null
-  chunks?: Citation[] | null
-  retrievedChunks?: Citation[] | null
+  citations?: Citation[] | string | null
+  sources?: Citation[] | string | null
+  chunks?: Citation[] | string | null
+  retrievedChunks?: Citation[] | string | null
 }
