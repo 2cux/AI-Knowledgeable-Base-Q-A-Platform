@@ -30,3 +30,13 @@ export type ChatAskResponse = {
   chunks?: Citation[] | string | null
   retrievedChunks?: Citation[] | string | null
 }
+
+export type ChatMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  citations?: Citation[]
+  createdAt?: string
+  status?: 'sending' | 'success' | 'failed'
+  response?: ChatAskResponse
+}
