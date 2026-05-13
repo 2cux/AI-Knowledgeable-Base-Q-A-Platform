@@ -675,7 +675,8 @@ export function ChatPage() {
           message.id === userMessageId ? { ...message, status: 'success' as const } : message,
         ),
         {
-          id: createMessageId('assistant'),
+          id: chatResponse.messageId ?? createMessageId('assistant'),
+          messageId: chatResponse.messageId ?? undefined,
           chatRecordId: chatResponse.chatRecordId ?? undefined,
           conversationId: nextConversationId,
           knowledgeBaseId: requestKnowledgeBaseId,

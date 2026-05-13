@@ -19,6 +19,7 @@ export type ChatAskRequest = {
 
 export type ChatAskResponse = {
   conversationId?: string | null
+  messageId?: string | null
   chatRecordId?: number | string | null
   answer?: string | null
   answerStatus?: string | null

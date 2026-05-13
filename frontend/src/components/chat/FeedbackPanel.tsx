@@ -22,7 +22,8 @@ type FeedbackPanelProps = {
 export function FeedbackPanel({ submitting, error, onCancel, onSubmit }: FeedbackPanelProps) {
   const [reason, setReason] = useState<FeedbackReason>('OTHER')
   const [comment, setComment] = useState('')
-  const isOverLimit = comment.length > FEEDBACK_COMMENT_LIMIT
+  const maxCommentLength = FEEDBACK_COMMENT_LIMIT - `[${reason}] `.length
+  const isOverLimit = comment.length > maxCommentLength
 
   return (
     <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -52,7 +53,7 @@ export function FeedbackPanel({ submitting, error, onCancel, onSubmit }: Feedbac
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           disabled={submitting}
-          maxLength={FEEDBACK_COMMENT_LIMIT + 50}
+          maxLength={maxCommentLength + 50}
           rows={3}
           placeholder="可选：补充说明，最多 500 字"
           className="w-full resize-none rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
@@ -61,7 +62,7 @@ export function FeedbackPanel({ submitting, error, onCancel, onSubmit }: Feedbac
 
       <div className="mt-1 flex items-center justify-between gap-3 text-xs">
         <span className={isOverLimit ? 'text-red-600' : 'text-slate-400'}>
-          {comment.length}/{FEEDBACK_COMMENT_LIMIT}
+          {comment.length}/{maxCommentLength}
         </span>
         {error ? <span className="text-red-600">{error}</span> : null}
       </div>

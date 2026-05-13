@@ -62,10 +62,10 @@ export function FeedbackActions({
 }: FeedbackActionsProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const disabledReason = unavailableReason({ knowledgeBaseId, conversationId, chatRecordId })
-  const submitted = Boolean(feedback?.submitted || feedback?.feedbackType)
+  const submitted = feedback?.submitted === true
   const submitting = Boolean(feedback?.submitting)
   const stored = splitStoredFeedbackComment(feedback?.comment)
-  const selectedType = feedback?.feedbackType
+  const selectedType = submitted || submitting ? feedback?.feedbackType : undefined
   const selectedReason = feedback?.reason ?? stored.reason
   const selectedComment = feedback?.comment && stored.reason ? stored.comment : feedback?.comment
 
