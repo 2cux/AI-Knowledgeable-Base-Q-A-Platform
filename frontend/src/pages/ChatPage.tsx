@@ -186,9 +186,13 @@ export function ChatPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [conversationListError, setConversationListError] = useState('')
   const [question, setQuestion] = useState('')
-  const [conversationId, setConversationId] = useState<string | undefined>()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const conversationId = useMemo(
+    () => searchParams.get(CONVERSATION_QUERY_KEY)?.trim() || undefined,
+    [searchParams],
+  )
+  const skipNextDetailLoadForConversationRef = useRef<string | undefined>(undefined)
 
   const selectedIdNumber = useMemo(() => {
     const parsed = Number(selectedKnowledgeBaseId)
@@ -276,7 +280,7 @@ export function ChatPage() {
   )
 
   const loadConversationDetail = useCallback(
-    async (nextConversationId: string, options?: { fromUrl?: boolean }) => {
+    async (nextConversationId: string) => {
       if (selectedIdNumber === null) {
         return
       }
@@ -289,7 +293,10 @@ export function ChatPage() {
       try {
         const response = await getConversationDetail(nextConversationId)
 
-        if (detailRequestSeqRef.current !== requestSeq) {
+        if (
+          detailRequestSeqRef.current !== requestSeq ||
+          latestConversationIdRef.current !== nextConversationId
+        ) {
           return
         }
 
@@ -301,20 +308,19 @@ export function ChatPage() {
           throw new Error('该会话不属于当前知识库。')
         }
 
-        setConversationId(response.data.conversationId)
         setMessages(mapConversationMessages(response.data))
-        replaceConversationQuery(response.data.conversationId)
       } catch (error) {
-        if (detailRequestSeqRef.current !== requestSeq) {
+        if (
+          detailRequestSeqRef.current !== requestSeq ||
+          latestConversationIdRef.current !== nextConversationId
+        ) {
           return
         }
 
         setErrorMessage(getErrorMessage(error, '会话详情加载失败，请稍后重试。'))
-        if (options?.fromUrl) {
-          setConversationId(undefined)
-          setMessages([])
-          replaceConversationQuery(undefined)
-        }
+        setMessages([])
+        latestConversationIdRef.current = undefined
+        replaceConversationQuery(undefined)
       } finally {
         if (detailRequestSeqRef.current === requestSeq) {
           setIsConversationDetailLoading(false)
@@ -369,7 +375,7 @@ export function ChatPage() {
         setCurrentKnowledgeBase(null)
         setDocuments([])
         setConversations([])
-        setConversationId(undefined)
+        latestConversationIdRef.current = undefined
         setMessages([])
         return
       }
@@ -406,7 +412,6 @@ export function ChatPage() {
       return
     }
 
-    setConversationId(undefined)
     setMessages([])
     setQuestion('')
     void loadConversations(selectedIdNumber)
@@ -417,14 +422,18 @@ export function ChatPage() {
       return
     }
 
-    const queryConversationId = searchParams.get(CONVERSATION_QUERY_KEY)?.trim()
-    if (!queryConversationId || queryConversationId === conversationId) {
+    if (!conversationId) {
+      return
+    }
+
+    if (skipNextDetailLoadForConversationRef.current === conversationId) {
+      skipNextDetailLoadForConversationRef.current = undefined
       return
     }
 
     // URL restoration is intentionally best-effort; backend authorization remains authoritative.
-    void loadConversationDetail(queryConversationId, { fromUrl: true })
-  }, [conversationId, loadConversationDetail, searchParams, selectedIdNumber])
+    void loadConversationDetail(conversationId)
+  }, [conversationId, loadConversationDetail, selectedIdNumber])
 
   useEffect(() => {
     listBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -432,7 +441,7 @@ export function ChatPage() {
 
   function handleKnowledgeBaseChange(value: string) {
     setSelectedKnowledgeBaseId(value)
-    setConversationId(undefined)
+    latestConversationIdRef.current = undefined
     setMessages([])
     setQuestion('')
     setErrorMessage('')
@@ -446,7 +455,7 @@ export function ChatPage() {
 
   function handleNewConversation() {
     detailRequestSeqRef.current += 1
-    setConversationId(undefined)
+    latestConversationIdRef.current = undefined
     setMessages([])
     setQuestion('')
     setErrorMessage('')
@@ -459,11 +468,11 @@ export function ChatPage() {
       return
     }
 
-    setConversationId(nextConversationId)
+    latestConversationIdRef.current = nextConversationId
+    detailRequestSeqRef.current += 1
     setMessages([])
     setQuestion('')
     replaceConversationQuery(nextConversationId)
-    void loadConversationDetail(nextConversationId)
   }
 
   function updateConversationFromAnswer(answer: ChatAskResponse, sentQuestion: string) {
@@ -538,7 +547,8 @@ export function ChatPage() {
       }
 
       if (nextConversationId && stillOnSameTarget) {
-        setConversationId(nextConversationId)
+        latestConversationIdRef.current = nextConversationId
+        skipNextDetailLoadForConversationRef.current = nextConversationId
         replaceConversationQuery(nextConversationId)
       }
 
