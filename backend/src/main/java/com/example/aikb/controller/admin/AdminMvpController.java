@@ -56,7 +56,6 @@ public class AdminMvpController {
             @RequestParam(required = false) @Positive Long knowledgeBaseId,
             @RequestParam(required = false) String feedbackType,
             @RequestParam(required = false) String reason,
-            @RequestParam(required = false) Boolean handled,
             @RequestParam(defaultValue = "1") @Min(1) long page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) long pageSize) {
         return Result.success(adminChatRecordQueryService.pageFeedback(knowledgeBaseId, feedbackType, reason, null,

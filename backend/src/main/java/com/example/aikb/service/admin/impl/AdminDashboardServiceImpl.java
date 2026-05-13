@@ -2,7 +2,6 @@ package com.example.aikb.service.admin.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.aikb.common.PageResult;
-import com.example.aikb.entity.Document;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.mapper.ChatFeedbackMapper;
 import com.example.aikb.mapper.ChatRecordMapper;
@@ -39,7 +38,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         return AdminDashboardVO.builder()
                 .knowledgeBaseCount(countKnowledgeBases())
-                .documentCount(documentMapper.selectCount(new LambdaQueryWrapper<Document>()))
+                .documentCount(documentMapper.countAdminVisibleDocuments())
                 .chatRecordCount(chatRecordMapper.selectCount(null))
                 .feedbackCount(chatFeedbackMapper.selectCount(null))
                 .unmatchedQuestionCount(countUnmatchedQuestions())
