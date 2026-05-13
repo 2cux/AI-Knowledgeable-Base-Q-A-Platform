@@ -17,10 +17,6 @@ spring:
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
     virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
-    publisher-confirm-type: correlated
-    publisher-returns: true
-    template:
-      mandatory: true
     listener:
       simple:
         acknowledge-mode: manual
@@ -69,23 +65,21 @@ app:
       stats-ttl-minutes: ${ADMIN_STATS_CACHE_TTL_MINUTES:5}
       hot-questions-ttl-minutes: ${HOT_QUESTIONS_CACHE_TTL_MINUTES:5}
   llm:
-    enabled: ${APP_LLM_ENABLED:true}
-    provider: ${APP_LLM_PROVIDER:vendor-http}
-    base-url: ${APP_LLM_BASE_URL:${OPENAI_LLM_BASE_URL:}}
-    api-key: ${APP_LLM_API_KEY:${OPENAI_API_KEY:}}
-    model: ${APP_LLM_MODEL:your-chat-model}
-    max-tokens: ${APP_LLM_MAX_TOKENS:1024}
-    connect-timeout: ${APP_LLM_CONNECT_TIMEOUT:10s}
-    read-timeout: ${APP_LLM_READ_TIMEOUT:60s}
+    enabled: true
+    base-url: ${APP_LLM_BASE_URL:}
+    api-key: ${APP_LLM_API_KEY:}
+    model: ${APP_LLM_MODEL:claude-opus-4-6}
+    max-tokens: 1024
+    connect-timeout: 10s
+    read-timeout: 60s
   embedding:
-    enabled: ${APP_EMBEDDING_ENABLED:true}
-    provider: ${APP_EMBEDDING_PROVIDER:external-http}
-    base-url: ${APP_EMBEDDING_BASE_URL:${OPENAI_EMBEDDING_BASE_URL:}}
-    api-key: ${APP_EMBEDDING_API_KEY:${OPENAI_API_KEY:}}
+    enabled: true
+    base-url: ${APP_EMBEDDING_BASE_URL:}
+    api-key: ${APP_EMBEDDING_API_KEY:}
     model: ${APP_EMBEDDING_MODEL:text-embedding-3-large}
     # Embedding vector dimension. Must match the configured model.
     vector-size: ${APP_EMBEDDING_VECTOR_SIZE:${EMBEDDING_VECTOR_SIZE:3072}}
-    normalized: ${APP_EMBEDDING_NORMALIZED:true}
-    embedding-type: ${APP_EMBEDDING_TYPE:float}
-    connect-timeout: ${APP_EMBEDDING_CONNECT_TIMEOUT:10s}
-    read-timeout: ${APP_EMBEDDING_READ_TIMEOUT:120s}
+    normalized: true
+    embedding-type: float
+    connect-timeout: 5s
+    read-timeout: 60s
