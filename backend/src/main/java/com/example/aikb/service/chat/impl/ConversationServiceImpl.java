@@ -5,9 +5,11 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.aikb.common.PageResult;
+import com.example.aikb.entity.ChatFeedback;
 import com.example.aikb.entity.Conversation;
 import com.example.aikb.entity.Message;
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.mapper.ChatFeedbackMapper;
 import com.example.aikb.mapper.ConversationMapper;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.chat.ConversationService;
@@ -16,8 +18,12 @@ import com.example.aikb.vo.chat.ConversationDetailVO;
 import com.example.aikb.vo.chat.ConversationListItemVO;
 import com.example.aikb.vo.chat.MessageVO;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +38,7 @@ public class ConversationServiceImpl implements ConversationService {
     private final ConversationMapper conversationMapper;
     private final MessageService messageService;
     private final CitationJsonCodec citationJsonCodec;
+    private final ChatFeedbackMapper chatFeedbackMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -86,10 +93,11 @@ public class ConversationServiceImpl implements ConversationService {
     public ConversationDetailVO getCurrentUserDetail(String conversationId) {
         Long userId = CurrentUser.getUserId();
         Conversation conversation = getByUidForUser(conversationId, userId);
-        List<MessageVO> messages = messageService
-                .listByConversation(conversation.getConversationUid(), userId, conversation.getKnowledgeBaseId())
-                .stream()
-                .map(this::toMessageVO)
+        List<Message> conversationMessages = messageService
+                .listByConversation(conversation.getConversationUid(), userId, conversation.getKnowledgeBaseId());
+        Map<Long, ChatFeedback> feedbackByRecordId = feedbackByRecordId(conversationMessages, userId);
+        List<MessageVO> messages = conversationMessages.stream()
+                .map(message -> toMessageVO(message, feedbackByRecordId.get(message.getChatRecordId())))
                 .toList();
         return ConversationDetailVO.builder()
                 .conversationId(conversation.getConversationUid())
@@ -151,15 +159,40 @@ public class ConversationServiceImpl implements ConversationService {
                 .build();
     }
 
-    private MessageVO toMessageVO(Message message) {
-        return MessageVO.builder()
+    private Map<Long, ChatFeedback> feedbackByRecordId(List<Message> messages, Long userId) {
+        List<Long> chatRecordIds = messages.stream()
+                .map(Message::getChatRecordId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (chatRecordIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return chatFeedbackMapper.selectList(new LambdaQueryWrapper<ChatFeedback>()
+                .in(ChatFeedback::getChatRecordId, chatRecordIds)
+                .eq(ChatFeedback::getUserId, userId))
+                .stream()
+                .collect(Collectors.toMap(ChatFeedback::getChatRecordId, feedback -> feedback, (first, second) -> first));
+    }
+
+    private MessageVO toMessageVO(Message message, ChatFeedback feedback) {
+        MessageVO.MessageVOBuilder builder = MessageVO.builder()
                 .messageId(message.getMessageUid())
                 .role(message.getRole())
                 .content(message.getContent())
                 .citations(citationJsonCodec.deserialize(message.getCitations(), message.getId()))
                 .chatRecordId(message.getChatRecordId())
-                .createdAt(message.getCreatedAt())
-                .build();
+                .createdAt(message.getCreatedAt());
+
+        if (feedback != null) {
+            builder.feedbackId(feedback.getId())
+                    .feedbackType(feedback.getFeedbackType())
+                    .feedbackComment(feedback.getComment())
+                    .feedbackCreatedAt(feedback.getCreatedAt());
+        }
+
+        return builder.build();
     }
 
     private String preview(String answer) {

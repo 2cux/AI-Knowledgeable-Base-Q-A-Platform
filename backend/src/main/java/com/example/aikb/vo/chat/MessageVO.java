@@ -16,5 +16,9 @@ public class MessageVO {
     private String content;
     private List<CitationVO> citations;
     private Long chatRecordId;
+    private Long feedbackId;
+    private String feedbackType;
+    private String feedbackComment;
+    private LocalDateTime feedbackCreatedAt;
     private LocalDateTime createdAt;
 }

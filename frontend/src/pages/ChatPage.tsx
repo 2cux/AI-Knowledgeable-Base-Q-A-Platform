@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { askChatQuestion } from '../api/chat'
 import { getConversationDetail, getConversations } from '../api/conversation'
 import { getDocumentsByKnowledgeBaseId } from '../api/document'
+import { splitStoredFeedbackComment, submitFeedback, toClientFeedbackType } from '../api/feedback'
 import { getKnowledgeBaseById, getKnowledgeBases } from '../api/knowledgeBase'
 import { ChatInput } from '../components/chat/ChatInput'
 import { ChatMessageList } from '../components/chat/ChatMessageList'
@@ -11,6 +12,7 @@ import { ConversationSidebar } from '../components/chat/ConversationSidebar'
 import type { ChatAskResponse, ChatMessage } from '../types/chat'
 import type { ConversationDetail, ConversationMessage, ConversationSummary } from '../types/conversation'
 import type { KnowledgeDocument } from '../types/document'
+import type { FeedbackState, FeedbackSubmitRequest } from '../types/feedback'
 import type { KnowledgeBase } from '../types/knowledgeBase'
 import { normalizeSources } from '../utils/chatSources'
 
@@ -129,6 +131,26 @@ function mapRole(role: ConversationMessage['role']): ChatMessage['role'] {
   return role === 'USER' || role === 'user' ? 'user' : 'assistant'
 }
 
+function mapFeedback(message: ConversationMessage): FeedbackState | undefined {
+  const feedbackType = toClientFeedbackType(message.feedback?.feedbackType ?? message.feedbackType)
+  const feedbackComment = message.feedback?.comment ?? message.feedbackComment
+  const storedComment = splitStoredFeedbackComment(feedbackComment)
+  const reason = message.feedback?.reason ?? message.feedbackReason ?? storedComment.reason
+
+  if (!feedbackType && !message.feedback?.submitted) {
+    return undefined
+  }
+
+  return {
+    feedbackId: message.feedback?.feedbackId ?? message.feedbackId ?? undefined,
+    feedbackType,
+    reason,
+    comment: storedComment.comment ?? feedbackComment ?? undefined,
+    submitted: true,
+    createdAt: message.feedback?.createdAt ?? message.feedbackCreatedAt ?? undefined,
+  }
+}
+
 function mapConversationMessages(detail: ConversationDetail): ChatMessage[] {
   const indexedMessages = (detail.messages ?? []).map((message, index) => ({
     message,
@@ -152,11 +174,16 @@ function mapConversationMessages(detail: ConversationDetail): ChatMessage[] {
 
     return {
       id: message.messageId || fallbackId,
+      messageId: message.messageId,
+      chatRecordId: message.chatRecordId ?? undefined,
+      conversationId: message.conversationId || detail.conversationId,
+      knowledgeBaseId: detail.knowledgeBaseId,
       role,
       content: role === 'assistant' ? normalizeAnswer(content) : content,
       citations: role === 'assistant' ? normalizeSources(message.citations) : [],
       createdAt: message.createdAt,
       status: 'success' as const,
+      feedback: role === 'assistant' ? mapFeedback(message) : undefined,
     }
   })
 }
@@ -498,6 +525,93 @@ export function ChatPage() {
     })
   }
 
+  async function handleSubmitFeedback(message: ChatMessage, request: FeedbackSubmitRequest) {
+    const requestConversationId = request.conversationId
+    const requestKnowledgeBaseId = request.knowledgeBaseId
+
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === message.id
+          ? {
+              ...item,
+              feedback: {
+                ...item.feedback,
+                feedbackType: request.feedbackType,
+                reason: request.reason,
+                comment: request.comment,
+                submitting: true,
+                error: undefined,
+              },
+            }
+          : item,
+      ),
+    )
+
+    try {
+      const { response } = await submitFeedback(request)
+
+      if (response.code !== 0) {
+        throw new Error(response.message || '反馈提交失败，请稍后重试。')
+      }
+
+      const stillOnSameTarget =
+        String(latestKnowledgeBaseIdRef.current) === String(requestKnowledgeBaseId) &&
+        latestConversationIdRef.current === requestConversationId
+
+      if (!stillOnSameTarget) {
+        return
+      }
+
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id
+            ? {
+                ...item,
+                feedback: {
+                  ...item.feedback,
+                  feedbackType: request.feedbackType,
+                  reason: request.reason,
+                  comment: request.comment,
+                  submitted: true,
+                  submitting: false,
+                  error: undefined,
+                  createdAt: new Date().toISOString(),
+                },
+              }
+            : item,
+        ),
+      )
+    } catch (error) {
+      const stillOnSameTarget =
+        String(latestKnowledgeBaseIdRef.current) === String(requestKnowledgeBaseId) &&
+        latestConversationIdRef.current === requestConversationId
+
+      if (!stillOnSameTarget) {
+        return
+      }
+
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id
+            ? {
+                ...item,
+                feedback: {
+                  ...item.feedback,
+                  feedbackType: request.feedbackType,
+                  reason: request.reason,
+                  comment: request.comment,
+                  submitted: false,
+                  submitting: false,
+                  error: getErrorMessage(error, '反馈提交失败，请稍后重试。'),
+                },
+              }
+            : item,
+        ),
+      )
+      throw error
+    }
+  }
+
   async function handleSend() {
     const trimmedQuestion = question.trim()
 
@@ -562,6 +676,9 @@ export function ChatPage() {
         ),
         {
           id: createMessageId('assistant'),
+          chatRecordId: chatResponse.chatRecordId ?? undefined,
+          conversationId: nextConversationId,
+          knowledgeBaseId: requestKnowledgeBaseId,
           role: 'assistant',
           content: normalizeAnswer(chatResponse.answer),
           citations: normalizeSources(chatResponse),
@@ -667,6 +784,9 @@ export function ChatPage() {
               messages={messages}
               sending={isSending}
               detailLoading={isConversationDetailLoading}
+              knowledgeBaseId={selectedIdNumber ?? undefined}
+              conversationId={conversationId}
+              onSubmitFeedback={handleSubmitFeedback}
             />
             <div ref={listBottomRef} />
           </div>
