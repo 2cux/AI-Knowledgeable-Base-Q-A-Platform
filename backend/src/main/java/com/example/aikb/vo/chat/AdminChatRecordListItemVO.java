@@ -14,8 +14,14 @@ public class AdminChatRecordListItemVO {
     @Schema(description = "Chat record ID", example = "1")
     private Long id;
 
+    @Schema(description = "Question user ID", example = "1")
+    private Long userId;
+
     @Schema(description = "Knowledge base ID", example = "1")
     private Long knowledgeBaseId;
+
+    @Schema(description = "Conversation ID")
+    private String conversationId;
 
     @Schema(description = "Question")
     private String question;
@@ -31,6 +37,12 @@ public class AdminChatRecordListItemVO {
 
     @Schema(description = "Effective chunk count", example = "3")
     private Integer retrievedChunkCount;
+
+    @Schema(description = "Raw retrieved chunk count before effective filtering", example = "5")
+    private Integer rawRetrievedChunkCount;
+
+    @Schema(description = "Requested retrieval topK", example = "5")
+    private Integer topK;
 
     @Schema(description = "Created time")
     private LocalDateTime createdAt;

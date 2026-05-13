@@ -22,6 +22,7 @@ public interface ChatFeedbackMapper extends BaseMapper<ChatFeedback> {
                 f.chat_record_id AS chatRecordId,
                 f.user_id AS userId,
                 r.knowledge_base_id AS knowledgeBaseId,
+                r.conversation_id AS conversationId,
                 r.question,
                 r.answer,
                 f.feedback_type AS feedbackType,
@@ -36,6 +37,9 @@ public interface ChatFeedbackMapper extends BaseMapper<ChatFeedback> {
             <if test="feedbackType != null and feedbackType != ''">
                 AND f.feedback_type = #{feedbackType}
             </if>
+            <if test="reasonPattern != null and reasonPattern != ''">
+                AND f.comment LIKE #{reasonPattern}
+            </if>
             <if test="startTime != null">
                 AND f.created_at &gt;= #{startTime}
             </if>
@@ -48,6 +52,7 @@ public interface ChatFeedbackMapper extends BaseMapper<ChatFeedback> {
     IPage<AdminChatFeedbackQueryRow> selectAdminFeedbackPage(Page<AdminChatFeedbackQueryRow> page,
             @Param("knowledgeBaseId") Long knowledgeBaseId,
             @Param("feedbackType") String feedbackType,
+            @Param("reasonPattern") String reasonPattern,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
 

@@ -2,15 +2,18 @@ import { NavLink, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../context/AuthContext'
 
-const navItems = [
+const baseNavItems = [
   { to: '/knowledge-bases', label: '知识库' },
   { to: '/chat', label: '问答' },
-  { to: '/admin', label: '管理' },
 ]
 
 export function Navbar() {
   const navigate = useNavigate()
   const { logout, user } = useAuth()
+  const navItems =
+    user?.role?.toUpperCase() === 'ADMIN'
+      ? [...baseNavItems, { to: '/admin', label: '管理' }]
+      : baseNavItems
 
   function handleLogout() {
     logout()

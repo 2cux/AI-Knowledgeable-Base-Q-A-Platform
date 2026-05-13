@@ -13,6 +13,7 @@ import com.example.aikb.exception.BusinessException;
 import com.example.aikb.mapper.ChatFeedbackMapper;
 import com.example.aikb.mapper.ChatRecordMapper;
 import com.example.aikb.service.admin.AdminPermissionService;
+import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.service.chat.AdminChatRecordQueryService;
 import com.example.aikb.service.chat.AdminChatStatsCacheService;
 import com.example.aikb.service.chat.AdminHotQuestionsCacheService;
@@ -53,14 +54,21 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     private final AdminHotQuestionsCacheService adminHotQuestionsCacheService;
 
     @Override
-    public PageResult<AdminChatRecordListItemVO> page(Long knowledgeBaseId, Boolean matched, long pageNum,
-            long pageSize) {
+    public PageResult<AdminChatRecordListItemVO> page(Long knowledgeBaseId, Boolean matched, String answerStatus,
+            String keyword, long pageNum, long pageSize) {
         adminPermissionService.ensureAdmin();
+        AnswerStatus status = parseAnswerStatus(answerStatus);
+        String normalizedKeyword = normalizeKeyword(keyword);
 
         Page<ChatRecord> page = Page.of(pageNum, pageSize);
         IPage<ChatRecord> result = chatRecordMapper.selectPage(page, new LambdaQueryWrapper<ChatRecord>()
                 .eq(knowledgeBaseId != null, ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
                 .eq(matched != null, ChatRecord::getMatched, matched)
+                .eq(status != null, ChatRecord::getAnswerStatus, status)
+                .and(normalizedKeyword != null, wrapper -> wrapper
+                        .like(ChatRecord::getQuestion, normalizedKeyword)
+                        .or()
+                        .like(ChatRecord::getAnswer, normalizedKeyword))
                 .orderByDesc(ChatRecord::getCreatedAt)
                 .orderByDesc(ChatRecord::getId));
 
@@ -93,7 +101,8 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
         Page<ChatRecord> pageRequest = Page.of(pageNum, pageSize);
         IPage<ChatRecord> result = chatRecordMapper.selectPage(pageRequest, new QueryWrapper<ChatRecord>()
                 .select("id", "user_id", "knowledge_base_id", "conversation_id", "question", "answer",
-                        "matched", "retrieved_chunk_count", "top_k", "created_at")
+                        "answer_status", "matched", "retrieved_chunk_count", "raw_retrieved_chunk_count", "top_k",
+                        "created_at")
                 .eq("matched", false)
                 .eq(knowledgeBaseId != null, "knowledge_base_id", knowledgeBaseId)
                 .ge(startTime != null, "created_at", startTime)
@@ -115,17 +124,59 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     }
 
     @Override
-    public PageResult<AdminChatFeedbackVO> pageFeedback(Long knowledgeBaseId, String rating, LocalDateTime startTime,
-            LocalDateTime endTime, Long page, Long size) {
+    public PageResult<AdminMissedQuestionVO> pageUnmatchedQuestions(Long knowledgeBaseId, String keyword, Long page,
+            Long size) {
+        adminPermissionService.ensureAdmin();
+        if (knowledgeBaseId != null && knowledgeBaseId <= 0) {
+            throw new BusinessException(40001, "knowledgeBaseId must be greater than 0");
+        }
+
+        long pageNum = normalizePageNum(page);
+        long pageSize = normalizePageSize(size);
+        String normalizedKeyword = normalizeKeyword(keyword);
+        Page<ChatRecord> pageRequest = Page.of(pageNum, pageSize);
+        IPage<ChatRecord> result = chatRecordMapper.selectPage(pageRequest, new LambdaQueryWrapper<ChatRecord>()
+                .eq(knowledgeBaseId != null, ChatRecord::getKnowledgeBaseId, knowledgeBaseId)
+                .and(normalizedKeyword != null, wrapper -> wrapper
+                        .like(ChatRecord::getQuestion, normalizedKeyword)
+                        .or()
+                        .like(ChatRecord::getAnswer, normalizedKeyword))
+                .and(wrapper -> wrapper
+                        .eq(ChatRecord::getMatched, false)
+                        .or()
+                        .eq(ChatRecord::getRetrievedChunkCount, 0)
+                        .or()
+                        .in(ChatRecord::getAnswerStatus, AnswerStatus.NO_HIT, AnswerStatus.WEAK_HIT,
+                                AnswerStatus.RETRIEVAL_UNAVAILABLE))
+                .orderByDesc(ChatRecord::getCreatedAt)
+                .orderByDesc(ChatRecord::getId));
+
+        List<AdminMissedQuestionVO> list = result.getRecords()
+                .stream()
+                .map(this::toMissedQuestionVO)
+                .toList();
+
+        return PageResult.<AdminMissedQuestionVO>builder()
+                .list(list)
+                .total(result.getTotal())
+                .pageNum(pageNum)
+                .pageSize(pageSize)
+                .build();
+    }
+
+    @Override
+    public PageResult<AdminChatFeedbackVO> pageFeedback(Long knowledgeBaseId, String rating, String reason,
+            LocalDateTime startTime, LocalDateTime endTime, Long page, Long size) {
         adminPermissionService.ensureAdmin();
         validateOperationQuery(knowledgeBaseId, startTime, endTime);
 
         String feedbackType = normalizeFeedbackType(rating);
+        String normalizedReason = normalizeFeedbackReason(reason);
         long pageNum = normalizePageNum(page);
         long pageSize = normalizePageSize(size);
         Page<AdminChatFeedbackQueryRow> pageRequest = Page.of(pageNum, pageSize);
         IPage<AdminChatFeedbackQueryRow> result = chatFeedbackMapper.selectAdminFeedbackPage(pageRequest,
-                knowledgeBaseId, feedbackType, startTime, endTime);
+                knowledgeBaseId, feedbackType, normalizedReason, startTime, endTime);
 
         List<AdminChatFeedbackVO> list = result.getRecords()
                 .stream()
@@ -230,12 +281,16 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
     private AdminChatRecordListItemVO toListItemVO(ChatRecord record) {
         return AdminChatRecordListItemVO.builder()
                 .id(record.getId())
+                .userId(record.getUserId())
                 .knowledgeBaseId(record.getKnowledgeBaseId())
+                .conversationId(record.getConversationId())
                 .question(record.getQuestion())
                 .answerPreview(preview(record.getAnswer()))
                 .answerStatus(record.getAnswerStatus())
                 .matched(record.getMatched())
                 .retrievedChunkCount(record.getRetrievedChunkCount())
+                .rawRetrievedChunkCount(record.getRawRetrievedChunkCount())
+                .topK(record.getTopK())
                 .createdAt(record.getCreatedAt())
                 .build();
     }
@@ -248,8 +303,10 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .conversationId(record.getConversationId())
                 .question(record.getQuestion())
                 .answerPreview(preview(record.getAnswer()))
+                .answerStatus(record.getAnswerStatus())
                 .matched(record.getMatched())
                 .retrievedChunkCount(record.getRetrievedChunkCount())
+                .rawRetrievedChunkCount(record.getRawRetrievedChunkCount())
                 .topK(record.getTopK())
                 .createdAt(record.getCreatedAt())
                 .build();
@@ -261,10 +318,13 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .chatRecordId(row.getChatRecordId())
                 .userId(row.getUserId())
                 .knowledgeBaseId(row.getKnowledgeBaseId())
+                .conversationId(row.getConversationId())
                 .question(row.getQuestion())
                 .answerPreview(preview(row.getAnswer()))
                 .rating(row.getFeedbackType())
-                .comment(row.getComment())
+                .feedbackType(row.getFeedbackType())
+                .reason(extractFeedbackReason(row.getComment()))
+                .comment(extractFeedbackComment(row.getComment()))
                 .createdAt(row.getCreatedAt())
                 .build();
     }
@@ -295,6 +355,26 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
             return answer;
         }
         return answer.substring(0, ANSWER_PREVIEW_LENGTH) + "...";
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        return keyword.trim();
+    }
+
+    private AnswerStatus parseAnswerStatus(String answerStatus) {
+        if (answerStatus == null || answerStatus.isBlank()) {
+            return null;
+        }
+        String normalized = answerStatus.trim().toUpperCase();
+        for (AnswerStatus status : AnswerStatus.values()) {
+            if (status.getValue().equals(normalized) || status.name().equals(normalized)) {
+                return status;
+            }
+        }
+        throw new BusinessException(40001, "Unsupported answerStatus");
     }
 
     private long normalizePageNum(Long page) {
@@ -348,5 +428,37 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
             throw new BusinessException(40001, "rating only supports LIKE or DISLIKE");
         }
         return normalized;
+    }
+
+    private String normalizeFeedbackReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return null;
+        }
+        return "[" + reason.trim().toUpperCase() + "]%";
+    }
+
+    private String extractFeedbackReason(String comment) {
+        if (comment == null || !comment.startsWith("[")) {
+            return null;
+        }
+        int end = comment.indexOf(']');
+        if (end <= 1) {
+            return null;
+        }
+        return comment.substring(1, end);
+    }
+
+    private String extractFeedbackComment(String comment) {
+        if (comment == null) {
+            return null;
+        }
+        if (!comment.startsWith("[")) {
+            return comment;
+        }
+        int end = comment.indexOf(']');
+        if (end < 0 || end + 1 >= comment.length()) {
+            return "";
+        }
+        return comment.substring(end + 1).trim();
     }
 }

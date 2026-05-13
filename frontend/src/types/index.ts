@@ -34,3 +34,12 @@ export type {
   FeedbackSubmitResponse,
   FeedbackType,
 } from './feedback'
+
+export type {
+  AdminChatRecordDetail,
+  AdminChatRecordListItem,
+  AdminDashboard,
+  AdminFeedbackItem,
+  AdminPage,
+  AdminUnmatchedQuestion,
+} from './admin'

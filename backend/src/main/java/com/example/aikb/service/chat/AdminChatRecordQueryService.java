@@ -11,40 +11,26 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 管理端问答日志查询服务。
+ * Admin-side query service for chat records, feedback, and operation stats.
  */
 public interface AdminChatRecordQueryService {
 
-    /**
-     * 分页查询系统问答日志。
-     */
-    PageResult<AdminChatRecordListItemVO> page(Long knowledgeBaseId, Boolean matched, long pageNum, long pageSize);
+    PageResult<AdminChatRecordListItemVO> page(Long knowledgeBaseId, Boolean matched, String answerStatus,
+            String keyword, long pageNum, long pageSize);
 
-    /**
-     * Page missed questions for admin governance.
-     */
     PageResult<AdminMissedQuestionVO> pageMissedQuestions(Long knowledgeBaseId, LocalDateTime startTime,
             LocalDateTime endTime, Long page, Long size);
 
-    /**
-     * Page chat feedback for admin operation.
-     */
-    PageResult<AdminChatFeedbackVO> pageFeedback(Long knowledgeBaseId, String rating, LocalDateTime startTime,
-            LocalDateTime endTime, Long page, Long size);
+    PageResult<AdminChatFeedbackVO> pageFeedback(Long knowledgeBaseId, String rating, String reason,
+            LocalDateTime startTime, LocalDateTime endTime, Long page, Long size);
 
-    /**
-     * Query TopN hot questions for admin operation.
-     */
     List<AdminHotQuestionVO> listHotQuestions(Long knowledgeBaseId, LocalDateTime startTime,
             LocalDateTime endTime, Integer limit);
 
-    /**
-     * Query basic chat statistics for admin operation.
-     */
     AdminChatStatsVO getStats(Long knowledgeBaseId, LocalDateTime startTime, LocalDateTime endTime);
 
-    /**
-     * 查询单条问答日志详情。
-     */
     AdminChatRecordDetailVO getById(Long id);
+
+    PageResult<AdminMissedQuestionVO> pageUnmatchedQuestions(Long knowledgeBaseId, String keyword, Long page,
+            Long size);
 }

@@ -1,5 +1,6 @@
 package com.example.aikb.vo.chat;
 
+import com.example.aikb.service.chat.AnswerStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import lombok.Builder;
@@ -28,11 +29,17 @@ public class AdminMissedQuestionVO {
     @Schema(description = "Answer preview")
     private String answerPreview;
 
+    @Schema(description = "RAG answer status", example = "NO_HIT")
+    private AnswerStatus answerStatus;
+
     @Schema(description = "Whether effective evidence chunks exist", example = "false")
     private Boolean matched;
 
     @Schema(description = "Effective chunk count", example = "0")
     private Integer retrievedChunkCount;
+
+    @Schema(description = "Raw retrieved chunk count before effective filtering", example = "0")
+    private Integer rawRetrievedChunkCount;
 
     @Schema(description = "Requested retrieval topK", example = "5")
     private Integer topK;

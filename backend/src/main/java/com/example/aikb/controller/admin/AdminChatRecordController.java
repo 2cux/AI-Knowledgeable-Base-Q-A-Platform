@@ -46,7 +46,7 @@ public class AdminChatRecordController {
             @RequestParam(defaultValue = "10")
             @Min(value = 1, message = "pageSize不能小于1")
             @Max(value = 100, message = "pageSize不能大于100") long pageSize) {
-        return Result.success(adminChatRecordQueryService.page(knowledgeBaseId, matched, pageNum, pageSize));
+        return Result.success(adminChatRecordQueryService.page(knowledgeBaseId, matched, null, null, pageNum, pageSize));
     }
 
     @Operation(summary = "查询问答日志详情", description = "管理端查看单条问答记录完整内容")
@@ -84,7 +84,7 @@ public class AdminChatRecordController {
             @RequestParam(required = false) Long page,
             @RequestParam(required = false) Long size) {
         return Result.success(adminChatRecordQueryService.pageFeedback(
-                knowledgeBaseId, rating, startTime, endTime, page, size));
+                knowledgeBaseId, rating, null, startTime, endTime, page, size));
     }
 
     @Operation(summary = "List hot questions", description = "Admin query for TopN hot questions")

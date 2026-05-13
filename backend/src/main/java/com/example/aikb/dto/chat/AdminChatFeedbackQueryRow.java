@@ -13,6 +13,7 @@ public class AdminChatFeedbackQueryRow {
     private Long chatRecordId;
     private Long userId;
     private Long knowledgeBaseId;
+    private String conversationId;
     private String question;
     private String answer;
     private String feedbackType;
