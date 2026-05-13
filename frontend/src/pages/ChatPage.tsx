@@ -245,6 +245,10 @@ export function ChatPage() {
           size: DEFAULT_PAGE_SIZE,
         })
 
+        if (latestKnowledgeBaseIdRef.current !== knowledgeBaseId) {
+          return
+        }
+
         if (response.code !== 0 || !response.data) {
           setConversations([])
           setConversationListError(response.message || '历史会话加载失败。')
@@ -256,10 +260,16 @@ export function ChatPage() {
         )
         setConversations(nextConversations)
       } catch (error) {
+        if (latestKnowledgeBaseIdRef.current !== knowledgeBaseId) {
+          return
+        }
+
         setConversations([])
         setConversationListError(getErrorMessage(error, '历史会话加载失败，请稍后重试。'))
       } finally {
-        setIsConversationListLoading(false)
+        if (latestKnowledgeBaseIdRef.current === knowledgeBaseId) {
+          setIsConversationListLoading(false)
+        }
       }
     },
     [],
@@ -450,6 +460,7 @@ export function ChatPage() {
     }
 
     setConversationId(nextConversationId)
+    setMessages([])
     setQuestion('')
     replaceConversationQuery(nextConversationId)
     void loadConversationDetail(nextConversationId)
@@ -522,7 +533,9 @@ export function ChatPage() {
         latestKnowledgeBaseIdRef.current === requestKnowledgeBaseId &&
         latestConversationIdRef.current === requestConversationId
 
-      updateConversationFromAnswer(chatResponse, trimmedQuestion)
+      if (latestKnowledgeBaseIdRef.current === requestKnowledgeBaseId) {
+        updateConversationFromAnswer(chatResponse, trimmedQuestion)
+      }
 
       if (nextConversationId && stillOnSameTarget) {
         setConversationId(nextConversationId)
