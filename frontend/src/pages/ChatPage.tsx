@@ -319,6 +319,10 @@ export function ChatPage() {
       if (response.code !== 0) {
         setErrorMessage(response.message || '问答请求失败，请稍后重试')
       }
+      const answer =
+        typeof chatResponse.answer === 'string'
+          ? chatResponse.answer
+          : response.message || '问答请求失败，请稍后重试'
       const nextConversationId = chatResponse.conversationId?.trim()
       if (nextConversationId) {
         setConversationId(nextConversationId)
@@ -329,7 +333,7 @@ export function ChatPage() {
         {
           id: createMessageId('assistant'),
           role: 'assistant',
-          content: normalizeAnswer(chatResponse.answer),
+          content: normalizeAnswer(answer),
           response: chatResponse,
         },
       ])
