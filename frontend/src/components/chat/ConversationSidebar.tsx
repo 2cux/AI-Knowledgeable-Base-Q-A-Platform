@@ -19,7 +19,7 @@ export function ConversationSidebar({
   onNewConversation,
 }: ConversationSidebarProps) {
   return (
-    <aside className="flex max-h-80 flex-col rounded-md border border-slate-200 bg-white shadow-sm lg:max-h-none lg:w-80 lg:shrink-0">
+    <aside className="flex max-h-72 min-h-0 flex-col border-b border-slate-200 bg-white lg:h-full lg:max-h-none lg:w-72 lg:shrink-0 lg:border-b-0 lg:border-r">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">历史会话</h2>
         <button
@@ -30,7 +30,7 @@ export function ConversationSidebar({
           新建会话
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
         <ConversationList
           conversations={conversations}
           currentConversationId={currentConversationId}

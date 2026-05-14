@@ -14,4 +14,8 @@ public interface ChatFeedbackService {
      * @param request 反馈请求参数
      */
     void submit(Long chatRecordId, ChatFeedbackRequest request);
+
+    void update(Long chatRecordId, ChatFeedbackRequest request);
+
+    void cancel(Long chatRecordId);
 }

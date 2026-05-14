@@ -1,6 +1,7 @@
 package com.example.aikb.service.chat.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.aikb.dto.chat.ChatFeedbackRequest;
 import com.example.aikb.entity.ChatFeedback;
 import com.example.aikb.entity.ChatRecord;
@@ -53,6 +54,39 @@ public class ChatFeedbackServiceImpl implements ChatFeedbackService {
         }
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void update(Long chatRecordId, ChatFeedbackRequest request) {
+        if (request == null) {
+            throw new BusinessException(40001, "反馈请求不能为空");
+        }
+        Long userId = CurrentUser.getUserId();
+        ChatRecord chatRecord = getOwnChatRecord(chatRecordId, userId);
+        String feedbackType = normalizeFeedbackType(request.getFeedbackType());
+
+        ChatFeedback feedback = existingFeedback(chatRecord.getId(), userId);
+        if (feedback == null) {
+            throw new BusinessException(40400, "反馈记录不存在");
+        }
+
+        chatFeedbackMapper.update(null, new LambdaUpdateWrapper<ChatFeedback>()
+                .eq(ChatFeedback::getId, feedback.getId())
+                .eq(ChatFeedback::getUserId, userId)
+                .set(ChatFeedback::getFeedbackType, feedbackType)
+                .set(ChatFeedback::getComment, trimToNull(request.getComment())));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void cancel(Long chatRecordId) {
+        Long userId = CurrentUser.getUserId();
+        ChatRecord chatRecord = getOwnChatRecord(chatRecordId, userId);
+
+        chatFeedbackMapper.delete(new LambdaUpdateWrapper<ChatFeedback>()
+                .eq(ChatFeedback::getChatRecordId, chatRecord.getId())
+                .eq(ChatFeedback::getUserId, userId));
+    }
+
     private ChatRecord getOwnChatRecord(Long chatRecordId, Long userId) {
         ChatRecord chatRecord = chatRecordMapper.selectOne(new LambdaQueryWrapper<ChatRecord>()
                 .eq(ChatRecord::getId, chatRecordId)
@@ -79,6 +113,13 @@ public class ChatFeedbackServiceImpl implements ChatFeedbackService {
         if (count != null && count > 0) {
             throw new BusinessException(40900, "该问答记录已提交反馈");
         }
+    }
+
+    private ChatFeedback existingFeedback(Long chatRecordId, Long userId) {
+        return chatFeedbackMapper.selectOne(new LambdaQueryWrapper<ChatFeedback>()
+                .eq(ChatFeedback::getChatRecordId, chatRecordId)
+                .eq(ChatFeedback::getUserId, userId)
+                .last("LIMIT 1"));
     }
 
     private String trimToNull(String value) {

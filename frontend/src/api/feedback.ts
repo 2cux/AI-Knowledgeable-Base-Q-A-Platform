@@ -1,6 +1,8 @@
 import request from './request'
 import type { ApiResponse } from '../types/auth'
 import type {
+  FeedbackCancelRequest,
+  FeedbackCancelResponse,
   FeedbackReason,
   FeedbackSubmitRequest,
   FeedbackSubmitResponse,
@@ -51,8 +53,7 @@ function compactComment(reason?: FeedbackReason, comment?: string) {
     return trimmedComment || undefined
   }
 
-  // The existing backend only persists feedbackType and comment, so the MVP stores
-  // the selected reason as a compact comment prefix for historical replay.
+  // The backend stores one comment field; keep the reason prefix for history replay.
   return trimmedComment ? `[${reason}] ${trimmedComment}` : `[${reason}]`
 }
 
@@ -71,10 +72,14 @@ export function splitStoredFeedbackComment(comment?: string | null) {
   }
 }
 
-export async function submitFeedback(data: FeedbackSubmitRequest) {
-  if (!data.chatRecordId) {
-    throw new Error('缺少问答记录 ID，无法提交反馈。')
+function assertChatRecordId(chatRecordId: FeedbackSubmitRequest['chatRecordId'], action: string) {
+  if (!chatRecordId) {
+    throw new Error(`缺少问答记录 ID，无法${action}反馈。`)
   }
+}
+
+export async function submitFeedback(data: FeedbackSubmitRequest) {
+  assertChatRecordId(data.chatRecordId, '提交')
 
   const body: BackendFeedbackRequest = {
     feedbackType: toBackendFeedbackType(data.feedbackType),
@@ -88,6 +93,42 @@ export async function submitFeedback(data: FeedbackSubmitRequest) {
 
   const result: FeedbackSubmitResponse = {
     submitted: response.code === 0,
+  }
+
+  return { response, result }
+}
+
+export async function updateFeedback(data: FeedbackSubmitRequest) {
+  assertChatRecordId(data.chatRecordId, '修改')
+
+  const body: BackendFeedbackRequest = {
+    feedbackType: toBackendFeedbackType(data.feedbackType),
+    comment: compactComment(data.reason, data.comment),
+  }
+
+  const response = await request.put<ApiResponse<null>, ApiResponse<null>>(
+    `${CHAT_RECORD_PATH}/${encodeURIComponent(String(data.chatRecordId))}/feedback`,
+    body,
+  )
+
+  const result: FeedbackSubmitResponse = {
+    submitted: response.code === 0,
+  }
+
+  return { response, result }
+}
+
+export async function cancelFeedback(data: FeedbackCancelRequest) {
+  if (!data.chatRecordId) {
+    throw new Error('缺少问答记录 ID，无法撤回反馈。')
+  }
+
+  const response = await request.delete<ApiResponse<null>, ApiResponse<null>>(
+    `${CHAT_RECORD_PATH}/${encodeURIComponent(String(data.chatRecordId))}/feedback`,
+  )
+
+  const result: FeedbackCancelResponse = {
+    cancelled: response.code === 0,
   }
 
   return { response, result }

@@ -13,22 +13,33 @@ import type { KnowledgeBase } from '../types/knowledgeBase'
 const DEFAULT_PAGE_NUM = 1
 const DEFAULT_PAGE_SIZE = 20
 
-type FormState =
-  | {
-      mode: 'create'
-      name: string
-      description: string
+type FormState = {
+  mode: 'create'
+  name: string
+  description: string
+}
+
+type EditFormState = {
+  name: string
+  description: string
+}
+
+type ResponseError = {
+  response?: {
+    status?: number
+    data?: {
+      message?: string
     }
-  | {
-      mode: 'edit'
-      id: number
-      name: string
-      description: string
-    }
+  }
+}
+
+function isResponseError(error: unknown): error is ResponseError {
+  return typeof error === 'object' && error !== null && 'response' in error
+}
 
 function getErrorMessage(error: unknown, fallback: string) {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response
+  if (isResponseError(error)) {
+    const response = error.response
     return response?.data?.message || fallback
   }
 
@@ -37,6 +48,56 @@ function getErrorMessage(error: unknown, fallback: string) {
   }
 
   return fallback
+}
+
+function getDeleteErrorMessage(error: unknown) {
+  if (isResponseError(error)) {
+    const status = error.response?.status
+
+    if (status === 401) {
+      return '登录已失效，请重新登录后再删除知识库。'
+    }
+
+    if (status === 403) {
+      return '无权限删除该知识库。'
+    }
+
+    if (status === 404) {
+      return '知识库不存在或已被删除。'
+    }
+
+    if (status && status >= 500) {
+      return '服务异常，请稍后重试。'
+    }
+
+    return error.response?.data?.message || '删除知识库失败，请稍后重试。'
+  }
+
+  if (error instanceof Error) {
+    return error.message || '删除知识库失败，请稍后重试。'
+  }
+
+  return '删除知识库失败，请稍后重试。'
+}
+
+function getDeleteResponseMessage(code: number, message?: string) {
+  if (code === 401 || code === 40100) {
+    return '登录已失效，请重新登录后再删除知识库。'
+  }
+
+  if (code === 403 || code === 40300) {
+    return '无权限删除该知识库。'
+  }
+
+  if (code === 404 || code === 40400) {
+    return '知识库不存在或已被删除。'
+  }
+
+  if (code >= 500 || code === 50000) {
+    return '服务异常，请稍后重试。'
+  }
+
+  return message || '删除知识库失败，请稍后重试。'
 }
 
 function formatDate(value?: string | null) {
@@ -64,17 +125,25 @@ function createEmptyForm(): FormState {
 export function KnowledgeBaseListPage() {
   const navigate = useNavigate()
   const savingRef = useRef(false)
+  const savingEditRef = useRef(false)
   const deletingRef = useRef(false)
 
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [formErrorMessage, setFormErrorMessage] = useState('')
   const [formState, setFormState] = useState<FormState | null>(null)
+  const [editingKnowledgeBase, setEditingKnowledgeBase] = useState<KnowledgeBase | null>(null)
+  const [editForm, setEditForm] = useState<EditFormState>({ name: '', description: '' })
+  const [editOpen, setEditOpen] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [pendingDeleteKnowledgeBase, setPendingDeleteKnowledgeBase] = useState<KnowledgeBase | null>(null)
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState('')
 
   async function loadKnowledgeBases() {
     setIsLoading(true)
@@ -118,13 +187,24 @@ export function KnowledgeBaseListPage() {
   function openEditForm(knowledgeBase: KnowledgeBase) {
     setErrorMessage('')
     setSuccessMessage('')
-    setFormErrorMessage('')
-    setFormState({
-      mode: 'edit',
-      id: knowledgeBase.id,
+    setEditError(null)
+    setEditingKnowledgeBase(knowledgeBase)
+    setEditForm({
       name: knowledgeBase.name,
       description: knowledgeBase.description ?? '',
     })
+    setEditOpen(true)
+  }
+
+  function closeEditDialog() {
+    if (savingEditRef.current) {
+      return
+    }
+
+    setEditOpen(false)
+    setEditingKnowledgeBase(null)
+    setEditError(null)
+    setEditForm({ name: '', description: '' })
   }
 
   function closeForm() {
@@ -158,11 +238,8 @@ export function KnowledgeBaseListPage() {
     setFormErrorMessage('')
 
     try {
-      // 统一在提交前 trim，并按当前表单模式调用创建或更新接口。
-      const response =
-        formState.mode === 'create'
-          ? await createKnowledgeBase({ name, description })
-          : await updateKnowledgeBase(formState.id, { name, description })
+      // 统一在提交前 trim，再调用创建接口。
+      const response = await createKnowledgeBase({ name, description })
 
       if (response.code !== 0 || !response.data) {
         setFormErrorMessage(response.message || '保存知识库失败')
@@ -171,7 +248,7 @@ export function KnowledgeBaseListPage() {
 
       setFormState(null)
       setFormErrorMessage('')
-      setSuccessMessage(formState.mode === 'create' ? '知识库创建成功' : '知识库更新成功')
+      setSuccessMessage('知识库创建成功')
       await loadKnowledgeBases()
     } catch (error) {
       setFormErrorMessage(getErrorMessage(error, '保存知识库失败，请稍后重试'))
@@ -181,15 +258,77 @@ export function KnowledgeBaseListPage() {
     }
   }
 
-  async function handleDelete(knowledgeBase: KnowledgeBase) {
+  async function handleSaveEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!editingKnowledgeBase || savingEditRef.current) {
+      return
+    }
+
+    const name = editForm.name.trim()
+    const description = editForm.description.trim()
+
+    if (!name) {
+      setEditError('请输入知识库名称')
+      return
+    }
+
+    savingEditRef.current = true
+    setSavingEdit(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+    setEditError(null)
+
+    try {
+      const response = await updateKnowledgeBase(editingKnowledgeBase.id, { name, description })
+
+      if (response.code !== 0 || !response.data) {
+        setEditError(response.message || '保存知识库失败')
+        return
+      }
+
+      setEditOpen(false)
+      setEditingKnowledgeBase(null)
+      setEditForm({ name: '', description: '' })
+      setEditError(null)
+      setSuccessMessage('知识库更新成功')
+      await loadKnowledgeBases()
+    } catch (error) {
+      setEditError(getErrorMessage(error, '保存知识库失败，请稍后重试'))
+    } finally {
+      savingEditRef.current = false
+      setSavingEdit(false)
+    }
+  }
+
+  function openDeleteConfirm(knowledgeBase: KnowledgeBase) {
     if (deletingRef.current) {
       return
     }
 
-    // 删除前做二次确认，避免误删；后端负责逻辑删除。
-    const confirmed = window.confirm(`确认删除知识库“${knowledgeBase.name}”吗？`)
+    setErrorMessage('')
+    setSuccessMessage('')
+    setDeleteErrorMessage('')
+    setPendingDeleteKnowledgeBase(knowledgeBase)
+  }
 
-    if (!confirmed) {
+  function closeDeleteConfirm() {
+    if (deletingRef.current) {
+      return
+    }
+
+    setPendingDeleteKnowledgeBase(null)
+    setDeleteErrorMessage('')
+  }
+
+  async function confirmDeleteKnowledgeBase() {
+    if (!pendingDeleteKnowledgeBase || deletingRef.current) {
+      return
+    }
+
+    const knowledgeBase = pendingDeleteKnowledgeBase
+
+    if (deletingRef.current) {
       return
     }
 
@@ -197,23 +336,29 @@ export function KnowledgeBaseListPage() {
     setDeletingId(knowledgeBase.id)
     setErrorMessage('')
     setSuccessMessage('')
+    setDeleteErrorMessage('')
 
     try {
       const response = await deleteKnowledgeBase(knowledgeBase.id)
 
       if (response.code !== 0) {
-        setErrorMessage(response.message || '删除知识库失败')
+        setDeleteErrorMessage(getDeleteResponseMessage(response.code, response.message))
         return
       }
 
-      setFormState((current) =>
-        current?.mode === 'edit' && current.id === knowledgeBase.id ? null : current,
-      )
+      if (editingKnowledgeBase?.id === knowledgeBase.id) {
+        setEditOpen(false)
+        setEditingKnowledgeBase(null)
+        setEditForm({ name: '', description: '' })
+        setEditError(null)
+      }
       setFormErrorMessage('')
       setSuccessMessage('知识库删除成功')
+      setPendingDeleteKnowledgeBase(null)
+      setDeleteErrorMessage('')
       await loadKnowledgeBases()
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, '删除知识库失败，请稍后重试'))
+      setDeleteErrorMessage(getDeleteErrorMessage(error))
     } finally {
       deletingRef.current = false
       setDeletingId(null)
@@ -255,7 +400,7 @@ export function KnowledgeBaseListPage() {
         >
           <div>
             <h2 className="text-base font-semibold">
-              {formState.mode === 'create' ? '新建知识库' : '编辑知识库'}
+              新建知识库
             </h2>
             <p className="mt-1 text-sm text-slate-500">名称必填，描述可选。</p>
           </div>
@@ -391,7 +536,7 @@ export function KnowledgeBaseListPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleDelete(knowledgeBase)}
+                    onClick={() => openDeleteConfirm(knowledgeBase)}
                     disabled={deletingId !== null}
                     className="rounded border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
                   >
@@ -403,6 +548,127 @@ export function KnowledgeBaseListPage() {
           </ul>
         )}
       </div>
+
+      {editOpen && editingKnowledgeBase ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-knowledge-base-title"
+        >
+          <form
+            onSubmit={handleSaveEdit}
+            className="w-full max-w-xl space-y-5 rounded-md bg-white p-6 shadow-xl"
+          >
+            <div>
+              <h2 id="edit-knowledge-base-title" className="text-lg font-semibold text-slate-950">
+                编辑知识库
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">名称必填，描述可选。</p>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">名称</span>
+                <input
+                  value={editForm.name}
+                  onChange={(event) =>
+                    setEditForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  maxLength={128}
+                  placeholder="例如：产品知识库"
+                  autoFocus
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">描述</span>
+                <input
+                  value={editForm.description}
+                  onChange={(event) =>
+                    setEditForm((current) => ({ ...current, description: event.target.value }))
+                  }
+                  className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  maxLength={500}
+                  placeholder="用于管理产品文档和问答资料"
+                />
+              </label>
+            </div>
+
+            {editError ? (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {editError}
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeEditDialog}
+                disabled={savingEdit}
+                className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {savingEdit ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {pendingDeleteKnowledgeBase ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-knowledge-base-title"
+        >
+          <div className="w-full max-w-md rounded-md bg-white p-6 shadow-xl">
+            <h2 id="delete-knowledge-base-title" className="text-lg font-semibold text-slate-950">
+              确认删除知识库？
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              你确定要删除知识库「
+              <span className="font-semibold text-slate-950">{pendingDeleteKnowledgeBase.name}</span>
+              」吗？删除后该知识库将不可用，相关文档、解析结果、向量数据、RAG
+              问答能力和历史会话 / 问答记录可能无法恢复。
+            </p>
+
+            {deleteErrorMessage ? (
+              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {deleteErrorMessage}
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDeleteConfirm}
+                disabled={deletingId !== null}
+                autoFocus
+                className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteKnowledgeBase()}
+                disabled={deletingId !== null}
+                className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                {deletingId === pendingDeleteKnowledgeBase.id ? '删除中...' : '确认删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

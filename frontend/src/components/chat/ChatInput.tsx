@@ -23,10 +23,10 @@ export function ChatInput({ value, disabled, sending, onChange, onSend }: ChatIn
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        rows={3}
+        rows={2}
         maxLength={2000}
         placeholder="输入问题，Enter 发送，Shift + Enter 换行"
-        className="min-h-24 flex-1 resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+        className="min-h-20 flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100"
       />
       <button
         type="button"

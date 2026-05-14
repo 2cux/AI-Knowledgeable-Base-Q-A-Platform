@@ -1,7 +1,7 @@
 import type { ChatAskResponse, ChatMessage } from '../../types/chat'
-import type { FeedbackSubmitRequest } from '../../types/feedback'
+import type { FeedbackCancelRequest, FeedbackSubmitRequest } from '../../types/feedback'
 import { normalizeSources } from '../../utils/chatSources'
-import { FeedbackActions } from './FeedbackActions'
+import { AssistantMessageActions } from './AssistantMessageActions'
 import { SourceList } from './SourceList'
 
 type ChatMessageListProps = {
@@ -10,7 +10,29 @@ type ChatMessageListProps = {
   detailLoading: boolean
   knowledgeBaseId?: number | string
   conversationId?: string
+  retryingMessageIds?: Set<string>
   onSubmitFeedback: (message: ChatMessage, request: FeedbackSubmitRequest) => Promise<void>
+  onCancelFeedback: (message: ChatMessage, request: FeedbackCancelRequest) => Promise<void>
+  onRetry: (message: ChatMessage, previousUserMessage?: ChatMessage) => Promise<void>
+}
+
+function ChatWelcome() {
+  return (
+    <div className="flex min-h-[22rem] items-center justify-center px-4 text-center">
+      <div className="max-w-xl">
+        <h2 className="text-2xl font-semibold text-slate-950">有什么我能帮到你吗？</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-500">
+          输入问题，开始基于当前知识库的问答。
+        </p>
+        <div className="mt-6 grid gap-2 text-left text-sm text-slate-600 sm:grid-cols-2">
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">询问当前知识库中的制度内容</div>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">让系统总结文档重点</div>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">查询某个流程或操作说明</div>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">核对文档中的关键要求</div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ResponseMeta({
@@ -18,11 +40,21 @@ function ResponseMeta({
   knowledgeBaseId,
   conversationId,
   onSubmitFeedback,
+  onCancelFeedback,
+  onRetry,
+  previousUserMessage,
+  retrying,
+  retryDisabled,
 }: {
   message: ChatMessage
   knowledgeBaseId?: number | string
   conversationId?: string
   onSubmitFeedback: (message: ChatMessage, request: FeedbackSubmitRequest) => Promise<void>
+  onCancelFeedback: (message: ChatMessage, request: FeedbackCancelRequest) => Promise<void>
+  onRetry: (message: ChatMessage, previousUserMessage?: ChatMessage) => Promise<void>
+  previousUserMessage?: ChatMessage
+  retrying?: boolean
+  retryDisabled?: boolean
 }) {
   const response: ChatAskResponse | undefined = message.response
   const citations = message.citations ?? normalizeSources(response)
@@ -53,13 +85,19 @@ function ResponseMeta({
         </div>
       ) : null}
 
-      <FeedbackActions
+      <AssistantMessageActions
+        content={message.content}
         knowledgeBaseId={message.knowledgeBaseId ?? knowledgeBaseId}
         conversationId={message.conversationId ?? conversationId}
         messageId={message.messageId}
         chatRecordId={message.chatRecordId}
         feedback={message.feedback}
+        retrying={retrying}
+        retryDisabled={retryDisabled || !previousUserMessage}
+        retryDisabledReason={!previousUserMessage ? '无法找到原问题' : undefined}
         onSubmit={(request) => onSubmitFeedback(message, request)}
+        onCancel={(request) => onCancelFeedback(message, request)}
+        onRetry={() => onRetry(message, previousUserMessage)}
       />
     </div>
   )
@@ -71,7 +109,10 @@ export function ChatMessageList({
   detailLoading,
   knowledgeBaseId,
   conversationId,
+  retryingMessageIds = new Set<string>(),
   onSubmitFeedback,
+  onCancelFeedback,
+  onRetry,
 }: ChatMessageListProps) {
   if (detailLoading) {
     return (
@@ -82,23 +123,25 @@ export function ChatMessageList({
   }
 
   if (messages.length === 0) {
-    return (
-      <div className="flex min-h-72 items-center justify-center text-center text-sm text-slate-500">
-        输入问题开始新的会话
-      </div>
-    )
+    return <ChatWelcome />
   }
 
   return (
     <div className="space-y-5">
-      {messages.map((message) => (
+      {messages.map((message, index) => {
+        const previousUserMessage =
+          message.role === 'assistant'
+            ? [...messages.slice(0, index)].reverse().find((item) => item.role === 'user')
+            : undefined
+
+        return (
         <div
           key={message.id}
           className={['flex', message.role === 'user' ? 'justify-end' : 'justify-start'].join(' ')}
         >
           <div
             className={[
-              'max-w-[88%] rounded-md px-4 py-3 text-sm leading-6',
+              'max-w-[88%] rounded-md px-4 py-3 text-sm leading-6 sm:max-w-[82%]',
               message.role === 'user'
                 ? message.status === 'failed'
                   ? 'border border-red-200 bg-red-50 text-red-800'
@@ -113,6 +156,11 @@ export function ChatMessageList({
                 knowledgeBaseId={knowledgeBaseId}
                 conversationId={conversationId}
                 onSubmitFeedback={onSubmitFeedback}
+                onCancelFeedback={onCancelFeedback}
+                onRetry={onRetry}
+                previousUserMessage={previousUserMessage}
+                retrying={retryingMessageIds.has(message.id)}
+                retryDisabled={sending || Boolean(message.feedback?.submitting)}
               />
             ) : null}
             {message.role === 'user' && message.status === 'failed' ? (
@@ -120,7 +168,8 @@ export function ChatMessageList({
             ) : null}
           </div>
         </div>
-      ))}
+        )
+      })}
 
       {sending ? (
         <div className="flex justify-start">

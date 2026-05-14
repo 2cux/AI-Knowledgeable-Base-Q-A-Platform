@@ -18,3 +18,27 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+.app-nav-link {
+  border-radius: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.app-nav-link-active,
+.app-nav-link-active:hover {
+  background: #111827;
+  color: #ffffff;
+}
+
+.app-nav-link-inactive {
+  color: #334155;
+}
+
+.app-nav-link-inactive:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}

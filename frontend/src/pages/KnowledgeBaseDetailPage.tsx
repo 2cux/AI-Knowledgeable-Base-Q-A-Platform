@@ -504,32 +504,43 @@ export function KnowledgeBaseDetailPage() {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <Link to="/knowledge-bases" className="text-sm font-medium text-slate-500 hover:text-slate-900">
-            返回知识库列表
-          </Link>
-          <h1 className="mt-3 break-words text-2xl font-semibold text-slate-950">
-            {knowledgeBase?.name ?? '知识库详情'}
-          </h1>
-          <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">
-            {knowledgeBase?.description || '暂无描述'}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
-          {canUseKnowledgeBase ? (
+      <header className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
             <Link
-              to={`/knowledge-bases/${knowledgeBaseId}/chat`}
-              className="inline-flex h-10 items-center justify-center rounded bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-700"
+              to="/knowledge-bases"
+              className="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 hover:text-slate-950 active:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
             >
-              去问答
+              ← 返回知识库列表
             </Link>
-          ) : null}
-          <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-            文档数：<span className="font-semibold text-slate-900">{documents.length}</span>
+            <h1 className="mt-4 break-words text-2xl font-semibold text-slate-950">
+              {knowledgeBase?.name ?? '知识库详情'}
+            </h1>
+            <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-600">
+              {knowledgeBase?.description || '暂无描述'}
+            </p>
+            {knowledgeBase?.updatedAt || knowledgeBase?.createdAt ? (
+              <p className="mt-2 text-xs text-slate-500">
+                更新时间：{formatDate(knowledgeBase.updatedAt ?? knowledgeBase.createdAt)}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center lg:justify-end">
+            {canUseKnowledgeBase ? (
+              <Link
+                to={`/knowledge-bases/${knowledgeBaseId}/chat`}
+                aria-label="进入知识库问答"
+                className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-slate-950 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 active:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:w-auto"
+              >
+                进入知识库问答
+              </Link>
+            ) : null}
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              文档数：<span className="font-semibold text-slate-900">{documents.length}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {errorMessage ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

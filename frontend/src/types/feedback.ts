@@ -19,6 +19,14 @@ export type FeedbackSubmitRequest = {
   comment?: string
 }
 
+export type FeedbackCancelRequest = {
+  knowledgeBaseId: number | string
+  conversationId?: string
+  messageId?: string
+  chatRecordId?: number | string
+  feedbackId?: number | string
+}
+
 export type FeedbackState = {
   feedbackId?: number | string
   feedbackType?: FeedbackType
@@ -33,4 +41,8 @@ export type FeedbackState = {
 export type FeedbackSubmitResponse = {
   feedbackId?: number | string
   submitted: boolean
+}
+
+export type FeedbackCancelResponse = {
+  cancelled: boolean
 }

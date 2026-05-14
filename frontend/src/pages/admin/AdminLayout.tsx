@@ -22,12 +22,7 @@ export function AdminLayout() {
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  [
-                    'rounded px-3 py-2 transition',
-                    isActive
-                      ? 'bg-slate-900 text-white'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                  ].join(' ')
+                  ['app-nav-link', isActive ? 'app-nav-link-active' : 'app-nav-link-inactive'].join(' ')
                 }
               >
                 {item.label}
