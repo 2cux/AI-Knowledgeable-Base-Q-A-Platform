@@ -7,8 +7,8 @@ import type {
   KnowledgeDocument,
 } from '../types/document'
 
-const KNOWLEDGE_BASE_PATH = '/api/kb'
-const DOCUMENT_PATH = '/api/documents'
+const KNOWLEDGE_BASE_PATH = '/kb'
+const DOCUMENT_PATH = '/documents'
 
 export function getDocumentsByKnowledgeBaseId(knowledgeBaseId: number) {
   return request.get<ApiResponse<KnowledgeDocument[]>, ApiResponse<KnowledgeDocument[]>>(

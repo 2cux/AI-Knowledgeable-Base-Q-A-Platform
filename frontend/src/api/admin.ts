@@ -50,14 +50,14 @@ function unwrap<T>(response: ApiResponse<T>) {
 
 export async function getAdminDashboard() {
   const response = await request.get<ApiResponse<AdminDashboard>, ApiResponse<AdminDashboard>>(
-    '/api/admin/dashboard',
+    '/admin/dashboard',
   )
   return unwrap(response)
 }
 
 export async function getAdminChatRecords(params: AdminListParams) {
   const response = await request.get<ApiResponse<BackendPage<AdminChatRecordListItem>>, ApiResponse<BackendPage<AdminChatRecordListItem>>>(
-    '/api/admin/chat-records',
+    '/admin/chat-records',
     { params: paramsOf(params) },
   )
   return normalizePage(unwrap(response), params)
@@ -65,14 +65,14 @@ export async function getAdminChatRecords(params: AdminListParams) {
 
 export async function getAdminChatRecordDetail(id: number) {
   const response = await request.get<ApiResponse<AdminChatRecordDetail>, ApiResponse<AdminChatRecordDetail>>(
-    `/api/admin/chat-records/${encodeURIComponent(String(id))}`,
+    `/admin/chat-records/${encodeURIComponent(String(id))}`,
   )
   return unwrap(response)
 }
 
 export async function getAdminFeedback(params: AdminListParams) {
   const response = await request.get<ApiResponse<BackendPage<AdminFeedbackItem>>, ApiResponse<BackendPage<AdminFeedbackItem>>>(
-    '/api/admin/feedback',
+    '/admin/feedback',
     { params: paramsOf(params) },
   )
   return normalizePage(unwrap(response), params)
@@ -80,7 +80,7 @@ export async function getAdminFeedback(params: AdminListParams) {
 
 export async function getAdminUnmatchedQuestions(params: AdminListParams) {
   const response = await request.get<ApiResponse<BackendPage<AdminUnmatchedQuestion>>, ApiResponse<BackendPage<AdminUnmatchedQuestion>>>(
-    '/api/admin/unmatched-questions',
+    '/admin/unmatched-questions',
     { params: paramsOf(params) },
   )
   return normalizePage(unwrap(response), params)

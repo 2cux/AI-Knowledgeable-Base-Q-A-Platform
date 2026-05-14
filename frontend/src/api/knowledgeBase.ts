@@ -8,7 +8,7 @@ import type {
   UpdateKnowledgeBaseRequest,
 } from '../types/knowledgeBase'
 
-const KNOWLEDGE_BASE_PATH = '/api/kb'
+const KNOWLEDGE_BASE_PATH = '/kb'
 
 export function getKnowledgeBases(params: KnowledgeBasePageParams = {}) {
   return request.get<ApiResponse<KnowledgeBaseListResponse>, ApiResponse<KnowledgeBaseListResponse>>(

@@ -9,7 +9,7 @@ import type {
   ConversationSummary,
 } from '../types/conversation'
 
-const CONVERSATION_PATH = '/api/chat/conversations'
+const CONVERSATION_PATH = '/chat/conversations'
 
 export function getConversations(params: ConversationPageParams) {
   return request.get<ApiResponse<ConversationListResponse>, ApiResponse<ConversationListResponse>>(

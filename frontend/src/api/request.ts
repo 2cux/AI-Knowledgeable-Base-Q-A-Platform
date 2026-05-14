@@ -5,7 +5,7 @@ import { getToken, removeToken } from '../utils/token'
 export const UNAUTHORIZED_EVENT = 'aikb:unauthorized'
 
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 30000,
 })
 

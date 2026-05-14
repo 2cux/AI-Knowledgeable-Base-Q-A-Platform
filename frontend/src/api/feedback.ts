@@ -9,7 +9,7 @@ import type {
   FeedbackType,
 } from '../types/feedback'
 
-const CHAT_RECORD_PATH = '/api/chat/records'
+const CHAT_RECORD_PATH = '/chat/records'
 
 type BackendFeedbackType = 'LIKE' | 'DISLIKE'
 
