@@ -234,6 +234,7 @@ export function ChatPage() {
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState(routeKnowledgeBaseId ?? '')
   const [currentKnowledgeBase, setCurrentKnowledgeBase] = useState<KnowledgeBase | null>(null)
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([])
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [isConversationListLoading, setIsConversationListLoading] = useState(false)
@@ -1129,21 +1130,70 @@ export function ChatPage() {
 
   return (
     <>
-    <section className="flex h-screen overflow-hidden">
-      <ConversationSidebar
-        conversations={conversations}
-        currentConversationId={conversationId}
-        loading={isConversationListLoading}
-        errorMessage={conversationListError}
-        onSelect={handleSelectConversation}
-        onNewConversation={handleNewConversation}
-        onRename={handleOpenRename}
-        onDelete={handleOpenDelete}
-        onTogglePin={handleTogglePin}
-        bottomContent={<UserMenu />}
-      />
+    {/* Mobile sidebar drawer */}
+    {sidebarOpen ? (
+      <div className="fixed inset-0 z-50 md:hidden">
+        <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+        <div className="absolute bottom-0 left-0 top-0 w-72 max-w-[82vw] bg-white">
+          <ConversationSidebar
+            conversations={conversations}
+            currentConversationId={conversationId}
+            loading={isConversationListLoading}
+            errorMessage={conversationListError}
+            onSelect={(id) => { handleSelectConversation(id); setSidebarOpen(false); }}
+            onNewConversation={() => { handleNewConversation(); setSidebarOpen(false); }}
+            onRename={handleOpenRename}
+            onDelete={handleOpenDelete}
+            onTogglePin={handleTogglePin}
+            bottomContent={<UserMenu />}
+          />
+        </div>
+      </div>
+    ) : null}
+
+    <section className="flex h-screen h-[100dvh] overflow-hidden">
+      {/* Desktop sidebar */}
+      <div className="hidden md:block md:w-72 md:shrink-0">
+        <ConversationSidebar
+          conversations={conversations}
+          currentConversationId={conversationId}
+          loading={isConversationListLoading}
+          errorMessage={conversationListError}
+          onSelect={handleSelectConversation}
+          onNewConversation={handleNewConversation}
+          onRename={handleOpenRename}
+          onDelete={handleOpenDelete}
+          onTogglePin={handleTogglePin}
+          bottomContent={<UserMenu />}
+        />
+      </div>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+      {/* Mobile header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2 md:hidden">
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
+          aria-label="打开历史会话"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </button>
+        <span className="truncate text-sm font-semibold text-slate-900">AI Knowledge Base QA</span>
+        <button
+          type="button"
+          onClick={handleNewConversation}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
+          aria-label="新建会话"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </button>
+      </div>
+
       {errorMessage ? (
         <div className="mx-4 mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-6">
           {errorMessage}
@@ -1175,7 +1225,7 @@ export function ChatPage() {
             </div>
           </div>
 
-          <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.04)] sm:px-6">
+          <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.04)] sm:px-6 pb-safe-bottom">
             <div className="mx-auto max-w-4xl">
             <ChatInput
               value={question}

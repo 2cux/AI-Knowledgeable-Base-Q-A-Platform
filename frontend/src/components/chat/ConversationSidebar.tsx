@@ -29,7 +29,7 @@ export function ConversationSidebar({
   bottomContent,
 }: ConversationSidebarProps) {
   return (
-    <aside className="flex max-h-72 min-h-0 flex-col border-b border-slate-200 bg-white lg:h-full lg:max-h-none lg:w-72 lg:shrink-0 lg:border-b-0 lg:border-r">
+    <aside className="flex h-full min-h-0 flex-col border-b border-slate-200 bg-white lg:h-full lg:w-72 lg:shrink-0 lg:border-b-0 lg:border-r">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <span className="text-sm font-semibold text-slate-900">AI Knowledge Base QA</span>
         <button

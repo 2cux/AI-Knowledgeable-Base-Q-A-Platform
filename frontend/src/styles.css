@@ -76,6 +76,21 @@ a {
   }
 }
 
+/* Hide scrollbar for horizontal-scroll elements (mobile suggestions, tables, etc.) */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe-area bottom padding for mobile input area */
+.pb-safe-bottom {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
 .thinking-orbit {
   position: relative;
   display: inline-block;

@@ -20,12 +20,28 @@ type ChatMessageListProps = {
 function ChatWelcome() {
   return (
     <div className="flex min-h-[22rem] items-center justify-center px-4 text-center">
-      <div className="max-w-xl">
+      <div className="w-full max-w-xl">
         <h2 className="text-2xl font-semibold text-slate-950">有什么我能帮到你吗？</h2>
         <p className="mt-3 text-sm leading-6 text-slate-500">
           我会基于企业知识库为你回答问题。
         </p>
-        <div className="mt-6 grid gap-2 text-left text-sm text-slate-600 sm:grid-cols-2">
+        {/* Mobile: horizontal scroll chips */}
+        <div className="mt-6 flex gap-2 overflow-x-auto sm:hidden scrollbar-none -mx-1 px-1">
+          <div className="shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+            询问企业内部制度或流程
+          </div>
+          <div className="shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+            让系统总结知识库文档重点
+          </div>
+          <div className="shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+            查询某个操作说明或规范
+          </div>
+          <div className="shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+            核对文档中的关键要求
+          </div>
+        </div>
+        {/* Desktop: grid cards */}
+        <div className="mt-6 hidden text-left text-sm text-slate-600 sm:grid sm:grid-cols-2 sm:gap-2">
           <div className="rounded-md border border-slate-200 bg-white px-3 py-2">询问企业内部制度或流程</div>
           <div className="rounded-md border border-slate-200 bg-white px-3 py-2">让系统总结知识库文档重点</div>
           <div className="rounded-md border border-slate-200 bg-white px-3 py-2">查询某个操作说明或规范</div>
