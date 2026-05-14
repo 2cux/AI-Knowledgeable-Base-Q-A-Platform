@@ -92,6 +92,7 @@ function normalizeSourceItem(value: unknown): Citation | null {
     chunkId: readId(record.chunkId),
     documentId: readId(record.documentId),
     knowledgeBaseId: readId(record.knowledgeBaseId),
+    knowledgeBaseName: readString(record.knowledgeBaseName),
     chunkIndex: readNumber(record.chunkIndex),
     documentName,
     score: readNumber(record.score),

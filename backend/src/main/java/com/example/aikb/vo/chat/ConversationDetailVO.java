@@ -14,6 +14,8 @@ public class ConversationDetailVO {
     private String conversationId;
     private String title;
     private Long knowledgeBaseId;
+
+    private String scopeType;
     private LocalDateTime createdAt;
     private LocalDateTime lastActiveAt;
     private List<MessageVO> messages;

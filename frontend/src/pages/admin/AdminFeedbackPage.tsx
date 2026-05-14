@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { getAdminFeedback } from '../../api/admin'
+import { Select } from '../../components/common/Select'
 import type { AdminFeedbackItem, AdminPage } from '../../types/admin'
 
 const PAGE_SIZE = 20
@@ -70,21 +71,33 @@ export function AdminFeedbackPage() {
           setPage(1)
         }}
       >
-        <select className="rounded border border-slate-300 px-3 py-2 text-sm" value={feedbackType} onChange={(event) => { setFeedbackType(event.target.value); setPage(1) }}>
-          <option value="">反馈类型</option>
-          <option value="LIKE">LIKE</option>
-          <option value="DISLIKE">DISLIKE</option>
-        </select>
-        <select className="rounded border border-slate-300 px-3 py-2 text-sm" value={reason} onChange={(event) => { setReason(event.target.value); setPage(1) }}>
-          <option value="">反馈原因</option>
-          <option value="ANSWER_ACCURATE">ANSWER_ACCURATE</option>
-          <option value="ANSWER_INACCURATE">ANSWER_INACCURATE</option>
-          <option value="SOURCE_NOT_RELEVANT">SOURCE_NOT_RELEVANT</option>
-          <option value="ANSWER_INCOMPLETE">ANSWER_INCOMPLETE</option>
-          <option value="HALLUCINATION">HALLUCINATION</option>
-          <option value="FORMAT_BAD">FORMAT_BAD</option>
-          <option value="OTHER">OTHER</option>
-        </select>
+        <Select
+          value={feedbackType}
+          onChange={(nextValue) => { setFeedbackType(String(nextValue)); setPage(1) }}
+          placeholder="反馈类型"
+          ariaLabel="反馈类型"
+          options={[
+            { label: '反馈类型', value: '' },
+            { label: 'LIKE', value: 'LIKE' },
+            { label: 'DISLIKE', value: 'DISLIKE' },
+          ]}
+        />
+        <Select
+          value={reason}
+          onChange={(nextValue) => { setReason(String(nextValue)); setPage(1) }}
+          placeholder="反馈原因"
+          ariaLabel="反馈原因"
+          options={[
+            { label: '反馈原因', value: '' },
+            { label: 'ANSWER_ACCURATE', value: 'ANSWER_ACCURATE' },
+            { label: 'ANSWER_INACCURATE', value: 'ANSWER_INACCURATE' },
+            { label: 'SOURCE_NOT_RELEVANT', value: 'SOURCE_NOT_RELEVANT' },
+            { label: 'ANSWER_INCOMPLETE', value: 'ANSWER_INCOMPLETE' },
+            { label: 'HALLUCINATION', value: 'HALLUCINATION' },
+            { label: 'FORMAT_BAD', value: 'FORMAT_BAD' },
+            { label: 'OTHER', value: 'OTHER' },
+          ]}
+        />
         <button className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">筛选</button>
       </form>
 

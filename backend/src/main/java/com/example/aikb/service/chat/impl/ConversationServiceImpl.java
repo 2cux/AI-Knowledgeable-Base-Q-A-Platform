@@ -34,6 +34,10 @@ public class ConversationServiceImpl implements ConversationService {
 
     private static final int TITLE_LENGTH = 30;
     private static final int ANSWER_PREVIEW_LENGTH = 120;
+    private static final String SCOPE_ENTERPRISE_ALL = "ENTERPRISE_ALL";
+    private static final String SCOPE_KNOWLEDGE_BASE = "KNOWLEDGE_BASE";
+    private static final String TITLE_SOURCE_AUTO = "AUTO";
+    private static final String TITLE_SOURCE_USER = "USER";
 
     private final ConversationMapper conversationMapper;
     private final MessageService messageService;
@@ -76,6 +80,8 @@ public class ConversationServiceImpl implements ConversationService {
                         .eq(Conversation::getUserId, userId)
                         .eq(knowledgeBaseId != null, Conversation::getKnowledgeBaseId, knowledgeBaseId)
                         .eq(Conversation::getDeleted, false)
+                        .orderByDesc(Conversation::getPinned)
+                        .orderByDesc(Conversation::getPinnedAt)
                         .orderByDesc(Conversation::getLastActiveAt)
                         .orderByDesc(Conversation::getId));
         List<ConversationListItemVO> list = result.getRecords().stream()
@@ -103,10 +109,90 @@ public class ConversationServiceImpl implements ConversationService {
                 .conversationId(conversation.getConversationUid())
                 .title(conversation.getTitle())
                 .knowledgeBaseId(conversation.getKnowledgeBaseId())
+                .scopeType(conversation.getScopeType())
                 .createdAt(conversation.getCreatedAt())
                 .lastActiveAt(conversation.getLastActiveAt())
                 .messages(messages)
                 .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ConversationListItemVO renameCurrentUserConversation(String conversationId, Long knowledgeBaseId,
+            String title) {
+        Long userId = CurrentUser.getUserId();
+        Conversation conversation = getByUidForUser(conversationId, userId);
+        validateKnowledgeBase(conversation, knowledgeBaseId);
+        String trimmedTitle = title == null ? "" : title.trim();
+        if (trimmedTitle.isEmpty()) {
+            throw new BusinessException(40001, "title不能为空");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int updated = conversationMapper.update(null, new LambdaUpdateWrapper<Conversation>()
+                .eq(Conversation::getId, conversation.getId())
+                .eq(Conversation::getUserId, userId)
+                .eq(Conversation::getDeleted, false)
+                .set(Conversation::getTitle, trimmedTitle)
+                .set(Conversation::getTitleSource, TITLE_SOURCE_USER)
+                .set(Conversation::getUpdatedAt, now));
+        if (updated == 0) {
+            throw new BusinessException(40400, "会话不存在");
+        }
+
+        conversation.setTitle(trimmedTitle);
+        conversation.setTitleSource(TITLE_SOURCE_USER);
+        conversation.setUpdatedAt(now);
+        return toListItemVO(conversation);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ConversationListItemVO pinCurrentUserConversation(String conversationId, Long knowledgeBaseId,
+            Boolean pinned) {
+        if (pinned == null) {
+            throw new BusinessException(40001, "pinned不能为空");
+        }
+
+        Long userId = CurrentUser.getUserId();
+        Conversation conversation = getByUidForUser(conversationId, userId);
+        validateKnowledgeBase(conversation, knowledgeBaseId);
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime pinnedAt = pinned ? now : null;
+        int updated = conversationMapper.update(null, new LambdaUpdateWrapper<Conversation>()
+                .eq(Conversation::getId, conversation.getId())
+                .eq(Conversation::getUserId, userId)
+                .eq(Conversation::getDeleted, false)
+                .set(Conversation::getPinned, pinned)
+                .set(Conversation::getPinnedAt, pinnedAt)
+                .set(Conversation::getUpdatedAt, now));
+        if (updated == 0) {
+            throw new BusinessException(40400, "会话不存在");
+        }
+
+        conversation.setPinned(pinned);
+        conversation.setPinnedAt(pinnedAt);
+        conversation.setUpdatedAt(now);
+        return toListItemVO(conversation);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteCurrentUserConversation(String conversationId, Long knowledgeBaseId) {
+        Long userId = CurrentUser.getUserId();
+        Conversation conversation = getByUidForUser(conversationId, userId);
+        validateKnowledgeBase(conversation, knowledgeBaseId);
+
+        int updated = conversationMapper.update(null, new LambdaUpdateWrapper<Conversation>()
+                .eq(Conversation::getId, conversation.getId())
+                .eq(Conversation::getUserId, userId)
+                .eq(Conversation::getDeleted, false)
+                .set(Conversation::getDeleted, true)
+                .set(Conversation::getUpdatedAt, LocalDateTime.now()));
+        if (updated == 0) {
+            throw new BusinessException(40400, "会话不存在");
+        }
     }
 
     private Conversation create(Long userId, Long knowledgeBaseId, String question) {
@@ -115,7 +201,9 @@ public class ConversationServiceImpl implements ConversationService {
         conversation.setConversationUid(UUID.randomUUID().toString());
         conversation.setUserId(userId);
         conversation.setKnowledgeBaseId(knowledgeBaseId);
+        conversation.setScopeType(knowledgeBaseId == null ? SCOPE_ENTERPRISE_ALL : SCOPE_KNOWLEDGE_BASE);
         conversation.setTitle(shorten(question, TITLE_LENGTH));
+        conversation.setTitleSource(TITLE_SOURCE_AUTO);
         conversation.setMessageCount(0);
         conversation.setLastActiveAt(now);
         conversation.setCreatedAt(now);
@@ -141,7 +229,7 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     private void validateKnowledgeBase(Conversation conversation, Long knowledgeBaseId) {
-        if (!knowledgeBaseId.equals(conversation.getKnowledgeBaseId())) {
+        if (!Objects.equals(knowledgeBaseId, conversation.getKnowledgeBaseId())) {
             throw new BusinessException(40001, "conversationId与knowledgeBaseId不一致");
         }
     }
@@ -151,11 +239,14 @@ public class ConversationServiceImpl implements ConversationService {
                 .conversationId(conversation.getConversationUid())
                 .title(conversation.getTitle())
                 .knowledgeBaseId(conversation.getKnowledgeBaseId())
+                .scopeType(conversation.getScopeType())
                 .messageCount(conversation.getMessageCount())
                 .lastQuestion(conversation.getLastQuestion())
                 .lastAnswerPreview(conversation.getLastAnswerPreview())
                 .lastActiveAt(conversation.getLastActiveAt())
                 .createdAt(conversation.getCreatedAt())
+                .pinned(Boolean.TRUE.equals(conversation.getPinned()))
+                .pinnedAt(conversation.getPinnedAt())
                 .build();
     }
 

@@ -4,6 +4,7 @@ export type Citation = {
   documentId?: number | string | null
   documentName?: string | null
   knowledgeBaseId?: number | string | null
+  knowledgeBaseName?: string | null
   chunkId?: number | string | null
   chunkIndex?: number | null
   content?: string | null
@@ -12,7 +13,7 @@ export type Citation = {
 }
 
 export type ChatAskRequest = {
-  knowledgeBaseId: number | string
+  knowledgeBaseId?: number | string | null
   question: string
   conversationId?: string
 }

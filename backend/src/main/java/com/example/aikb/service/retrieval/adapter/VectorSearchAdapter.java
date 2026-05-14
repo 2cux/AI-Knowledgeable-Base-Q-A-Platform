@@ -17,4 +17,6 @@ public interface VectorSearchAdapter {
      * @return 按相关性排序后的候选结果
      */
     List<RetrievalCandidate> search(Long knowledgeBaseId, RetrievalQueryEmbedding queryEmbedding, int topK);
+
+    List<RetrievalCandidate> searchGlobal(RetrievalQueryEmbedding queryEmbedding, int topK);
 }

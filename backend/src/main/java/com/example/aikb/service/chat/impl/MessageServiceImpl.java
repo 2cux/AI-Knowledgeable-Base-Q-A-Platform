@@ -20,6 +20,8 @@ public class MessageServiceImpl implements MessageService {
 
     public static final String ROLE_USER = "USER";
     public static final String ROLE_ASSISTANT = "ASSISTANT";
+    private static final String SCOPE_ENTERPRISE_ALL = "ENTERPRISE_ALL";
+    private static final String SCOPE_KNOWLEDGE_BASE = "KNOWLEDGE_BASE";
 
     private final MessageMapper messageMapper;
     private final CitationJsonCodec citationJsonCodec;
@@ -49,7 +51,8 @@ public class MessageServiceImpl implements MessageService {
         return messageMapper.selectList(new LambdaQueryWrapper<Message>()
                 .eq(Message::getConversationUid, conversationUid)
                 .eq(Message::getUserId, userId)
-                .eq(Message::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(knowledgeBaseId != null, Message::getKnowledgeBaseId, knowledgeBaseId)
+                .isNull(knowledgeBaseId == null, Message::getKnowledgeBaseId)
                 .eq(Message::getDeleted, false)
                 .orderByAsc(Message::getCreatedAt)
                 .orderByAsc(Message::getId));
@@ -60,7 +63,8 @@ public class MessageServiceImpl implements MessageService {
         List<Message> messages = messageMapper.selectList(new LambdaQueryWrapper<Message>()
                 .eq(Message::getConversationUid, conversationUid)
                 .eq(Message::getUserId, userId)
-                .eq(Message::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(knowledgeBaseId != null, Message::getKnowledgeBaseId, knowledgeBaseId)
+                .isNull(knowledgeBaseId == null, Message::getKnowledgeBaseId)
                 .eq(Message::getDeleted, false)
                 .orderByDesc(Message::getCreatedAt)
                 .orderByDesc(Message::getId)
@@ -77,6 +81,7 @@ public class MessageServiceImpl implements MessageService {
         message.setConversationUid(conversationUid);
         message.setUserId(userId);
         message.setKnowledgeBaseId(knowledgeBaseId);
+        message.setScopeType(knowledgeBaseId == null ? SCOPE_ENTERPRISE_ALL : SCOPE_KNOWLEDGE_BASE);
         message.setRole(role);
         message.setContent(content);
         message.setCreatedAt(now);

@@ -7,6 +7,9 @@ type ConversationListProps = {
   loading: boolean
   errorMessage?: string
   onSelect: (conversationId: string) => void
+  onRename: (conversation: ConversationSummary) => void
+  onDelete: (conversation: ConversationSummary) => void
+  onTogglePin: (conversation: ConversationSummary) => void
 }
 
 export function ConversationList({
@@ -15,6 +18,9 @@ export function ConversationList({
   loading,
   errorMessage,
   onSelect,
+  onRename,
+  onDelete,
+  onTogglePin,
 }: ConversationListProps) {
   if (loading) {
     return <div className="px-3 py-8 text-center text-sm text-slate-500">正在加载历史会话...</div>
@@ -40,6 +46,9 @@ export function ConversationList({
           conversation={conversation}
           selected={conversation.conversationId === currentConversationId}
           onSelect={onSelect}
+          onRename={onRename}
+          onDelete={onDelete}
+          onTogglePin={onTogglePin}
         />
       ))}
     </div>

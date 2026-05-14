@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,7 @@ import com.example.aikb.service.chat.AnswerStatus;
 import com.example.aikb.service.chat.ChatRecordService;
 import com.example.aikb.service.chat.ConversationContextLoader;
 import com.example.aikb.service.chat.ConversationService;
+import com.example.aikb.service.chat.ConversationTitleGenerateService;
 import com.example.aikb.service.chat.MessageService;
 import com.example.aikb.service.retrieval.RetrievalService;
 import com.example.aikb.vo.chat.ChatAskResponse;
@@ -81,7 +83,7 @@ class ChatServiceImplTest {
         chatService = new ChatServiceImpl(knowledgeBaseMapper, retrievalService,
                 answerGeneratorService, chatRecordService, new CitationJsonCodec(new ObjectMapper()),
                 retrievalProperties, conversationService, messageService, conversationContextLoader,
-                transactionTemplate);
+                transactionTemplate, mock(ConversationTitleGenerateService.class));
 
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new LoginUser(USER_ID, "tester"), null, Collections.emptyList()));

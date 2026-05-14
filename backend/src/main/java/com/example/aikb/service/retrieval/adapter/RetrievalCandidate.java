@@ -11,6 +11,7 @@ public class RetrievalCandidate {
     private Long chunkId;
     private Long documentId;
     private Long knowledgeBaseId;
+    private String knowledgeBaseName;
     private Integer chunkIndex;
     private String content;
     private String documentName;

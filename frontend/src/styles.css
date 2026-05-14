@@ -42,3 +42,58 @@ a {
   background: #f1f5f9;
   color: #0f172a;
 }
+
+.app-select-dropdown-in {
+  animation: select-dropdown-in 150ms ease-out;
+  transform-origin: top center;
+}
+
+@keyframes select-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes thinking-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.thinking-orbit {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  animation: thinking-rotate 1.6s linear infinite;
+  flex-shrink: 0;
+}
+
+.thinking-dot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: currentColor;
+  left: 50%;
+  top: 50%;
+  margin-left: -2px;
+  margin-top: -2px;
+  animation: thinking-pulse 1.6s ease-in-out infinite;
+}

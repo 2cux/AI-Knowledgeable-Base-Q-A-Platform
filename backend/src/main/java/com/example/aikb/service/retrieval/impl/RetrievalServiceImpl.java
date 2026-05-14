@@ -6,6 +6,7 @@ import com.example.aikb.config.AppRagRetrievalProperties;
 import com.example.aikb.dto.retrieval.RetrievalSearchRequest;
 import com.example.aikb.entity.KnowledgeBase;
 import com.example.aikb.exception.BusinessException;
+import com.example.aikb.mapper.ChunkEmbeddingMapper;
 import com.example.aikb.mapper.KnowledgeBaseMapper;
 import com.example.aikb.security.CurrentUser;
 import com.example.aikb.service.retrieval.QueryEmbeddingService;
@@ -34,8 +35,10 @@ public class RetrievalServiceImpl implements RetrievalService {
     private static final int MAX_TOP_K = 20;
     private static final int KNOWLEDGE_BASE_ACTIVE_STATUS = 1;
     private static final int KNOWLEDGE_BASE_NOT_DELETED = 0;
+    private static final String EMBEDDING_STATUS_SUCCESS = "SUCCESS";
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
+    private final ChunkEmbeddingMapper chunkEmbeddingMapper;
     private final QueryEmbeddingService queryEmbeddingService;
     private final VectorSearchAdapter vectorSearchAdapter;
     private final AppRagRetrievalProperties retrievalProperties;
@@ -85,6 +88,66 @@ public class RetrievalServiceImpl implements RetrievalService {
                 .rawRetrievedChunkCount(rawChunks.size())
                 .effectiveChunkCount(effectiveChunks.size())
                 .minEffectiveScore(minEffectiveScore)
+                .availableKnowledgeBase(true)
+                .build();
+    }
+
+    @Override
+    public RetrievalSearchVO searchGlobal(RetrievalSearchRequest request) {
+        int topK = resolveTopK(request.getTopK());
+        String query = resolveQuery(request);
+        long start = System.currentTimeMillis();
+
+        RetrievalQueryEmbedding queryEmbedding = queryEmbeddingService.embed(query);
+        boolean available = hasGlobalAvailableCandidates(queryEmbedding.getEmbeddingModel());
+        if (!available) {
+            return RetrievalSearchVO.builder()
+                    .question(query)
+                    .topK(topK)
+                    .total(0)
+                    .chunks(Collections.emptyList())
+                    .rawChunks(Collections.emptyList())
+                    .effectiveChunks(Collections.emptyList())
+                    .rawRetrievedChunkCount(0)
+                    .effectiveChunkCount(0)
+                    .minEffectiveScore(retrievalProperties.getMinEffectiveScore())
+                    .availableKnowledgeBase(false)
+                    .build();
+        }
+
+        List<RetrievalChunkVO> rawChunks = vectorSearchAdapter.searchGlobal(queryEmbedding, topK)
+                .stream()
+                .map(this::toVO)
+                .toList();
+        double minEffectiveScore = retrievalProperties.getMinEffectiveScore();
+        List<RetrievalChunkVO> effectiveChunks = filterEffectiveChunks(rawChunks, minEffectiveScore);
+
+        log.info("Global retrieval finished, queryLength={}, queryPreview={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, highestScore={}, durationMs={}",
+                query.length(),
+                LogSanitizer.preview(query, 80),
+                topK,
+                minEffectiveScore,
+                rawChunks.size(),
+                effectiveChunks.size(),
+                !effectiveChunks.isEmpty(),
+                rawChunks.stream()
+                        .map(RetrievalChunkVO::getScore)
+                        .filter(score -> score != null && Double.isFinite(score))
+                        .findFirst()
+                        .orElse(null),
+                System.currentTimeMillis() - start);
+
+        return RetrievalSearchVO.builder()
+                .question(query)
+                .topK(topK)
+                .total(rawChunks.size())
+                .chunks(rawChunks)
+                .rawChunks(rawChunks)
+                .effectiveChunks(effectiveChunks)
+                .rawRetrievedChunkCount(rawChunks.size())
+                .effectiveChunkCount(effectiveChunks.size())
+                .minEffectiveScore(minEffectiveScore)
+                .availableKnowledgeBase(true)
                 .build();
     }
 
@@ -130,6 +193,7 @@ public class RetrievalServiceImpl implements RetrievalService {
                 .chunkId(candidate.getChunkId())
                 .documentId(candidate.getDocumentId())
                 .knowledgeBaseId(candidate.getKnowledgeBaseId())
+                .knowledgeBaseName(candidate.getKnowledgeBaseName())
                 .chunkIndex(candidate.getChunkIndex())
                 .content(candidate.getContent())
                 .score(candidate.getScore())
@@ -147,5 +211,10 @@ public class RetrievalServiceImpl implements RetrievalService {
                     return score != null && Double.isFinite(score) && score >= minEffectiveScore;
                 })
                 .toList();
+    }
+
+    private boolean hasGlobalAvailableCandidates(String embeddingModel) {
+        Long count = chunkEmbeddingMapper.countGlobalRetrievalCandidates(EMBEDDING_STATUS_SUCCESS, embeddingModel);
+        return count != null && count > 0;
     }
 }

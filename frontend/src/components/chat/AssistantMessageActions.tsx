@@ -78,14 +78,9 @@ function SpinnerIcon({ className = '' }: IconProps) {
 }
 
 function unavailableReason({
-  knowledgeBaseId,
   conversationId,
   chatRecordId,
 }: Pick<AssistantMessageActionsProps, 'knowledgeBaseId' | 'conversationId' | 'chatRecordId'>) {
-  if (!knowledgeBaseId) {
-    return '缺少知识库 ID，暂时无法反馈。'
-  }
-
   if (!conversationId) {
     return '缺少会话 ID，暂时无法反馈。'
   }
@@ -100,9 +95,10 @@ function unavailableReason({
 function actionButtonClass(selected = false) {
   return [
     'inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent transition',
-    'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
+    selected
+      ? 'bg-slate-900 text-white hover:bg-slate-800 hover:text-white'
+      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
     'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-slate-500',
-    selected ? 'bg-slate-100 text-slate-900' : '',
   ].join(' ')
 }
 
@@ -156,6 +152,10 @@ export function AssistantMessageActions({
   const submitting = Boolean(feedback?.submitting)
   const submitted = feedback?.submitted === true
   const selectedType = submitted ? feedback?.feedbackType : undefined
+  const pendingType = submitting ? feedback?.submittingType ?? selectedType : undefined
+  const visibleType = pendingType ?? selectedType
+  const showHelpful = !visibleType || visibleType === 'HELPFUL'
+  const showNotHelpful = !visibleType || visibleType === 'NOT_HELPFUL'
   const stored = splitStoredFeedbackComment(feedback?.comment)
   const initialReason = feedback?.reason ?? stored.reason ?? 'ANSWER_INACCURATE'
   const initialComment = feedback?.comment && stored.reason ? stored.comment : feedback?.comment ?? ''
@@ -243,6 +243,7 @@ export function AssistantMessageActions({
           >
             <CopyIcon className="h-[18px] w-[18px]" />
           </button>
+          {showHelpful ? (
           <button
             type="button"
             disabled={Boolean(disabledReason) || submitting}
@@ -256,12 +257,14 @@ export function AssistantMessageActions({
             aria-label={selectedType === 'HELPFUL' ? '撤回有帮助反馈' : '有帮助'}
             aria-pressed={selectedType === 'HELPFUL'}
           >
-            {submitting && selectedType === 'HELPFUL' ? (
+            {submitting && pendingType === 'HELPFUL' ? (
               <SpinnerIcon className="h-[17px] w-[17px]" />
             ) : (
               <ThumbsUpIcon className="h-[18px] w-[18px]" />
             )}
           </button>
+          ) : null}
+          {showNotHelpful ? (
           <button
             type="button"
             disabled={Boolean(disabledReason) || submitting}
@@ -271,12 +274,13 @@ export function AssistantMessageActions({
             aria-label={selectedType === 'NOT_HELPFUL' ? '撤回无帮助反馈' : '无帮助'}
             aria-pressed={selectedType === 'NOT_HELPFUL'}
           >
-            {submitting && selectedType === 'NOT_HELPFUL' ? (
+            {submitting && pendingType === 'NOT_HELPFUL' ? (
               <SpinnerIcon className="h-[17px] w-[17px]" />
             ) : (
               <ThumbsDownIcon className="h-[18px] w-[18px]" />
             )}
           </button>
+          ) : null}
           <button
             type="button"
             disabled={retryDisabled || retrying || submitting}

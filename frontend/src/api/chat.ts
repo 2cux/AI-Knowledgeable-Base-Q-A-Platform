@@ -10,3 +10,10 @@ export function askChatQuestion(data: ChatAskRequest) {
     data,
   )
 }
+
+export function askGlobalChatQuestion(data: Omit<ChatAskRequest, 'knowledgeBaseId'>) {
+  return request.post<ApiResponse<ChatAskResponse>, ApiResponse<ChatAskResponse>>(
+    `${CHAT_PATH}/ask-global`,
+    data,
+  )
+}

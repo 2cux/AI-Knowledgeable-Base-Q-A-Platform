@@ -24,6 +24,9 @@ public class ChatRecord {
     @TableField("knowledge_base_id")
     private Long knowledgeBaseId;
 
+    @TableField("scope_type")
+    private String scopeType;
+
     @TableField("conversation_id")
     private String conversationId;
 

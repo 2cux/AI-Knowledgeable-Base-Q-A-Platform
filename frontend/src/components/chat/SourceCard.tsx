@@ -41,6 +41,7 @@ export function SourceCard({ source, displayIndex }: SourceCardProps) {
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="font-medium text-slate-700">来源 {displayIndex + 1}</span>
+        <span className="font-medium text-slate-700">{source.knowledgeBaseName || '企业知识库'}</span>
         <span className="font-medium text-slate-700">{source.documentName || '未知文档'}</span>
         {source.chunkIndex !== null && source.chunkIndex !== undefined ? (
           <span>片段 #{source.chunkIndex}</span>

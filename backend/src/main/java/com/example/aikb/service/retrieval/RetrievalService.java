@@ -15,4 +15,6 @@ public interface RetrievalService {
      * @return topK 相关 chunk
      */
     RetrievalSearchVO search(RetrievalSearchRequest request);
+
+    RetrievalSearchVO searchGlobal(RetrievalSearchRequest request);
 }

@@ -5,6 +5,7 @@ const adminNavItems = [
   { to: '/admin/chat-records', label: '问答日志' },
   { to: '/admin/feedback', label: '用户反馈' },
   { to: '/admin/unmatched', label: '未命中问题' },
+  { to: '/admin/knowledge-bases', label: '知识库管理' },
 ]
 
 export function AdminLayout() {
@@ -29,7 +30,7 @@ export function AdminLayout() {
               </NavLink>
             ))}
             <NavLink
-              to="/knowledge-bases"
+              to="/chat"
               className="rounded border border-slate-300 px-3 py-2 text-slate-700 transition hover:bg-slate-100"
             >
               返回用户端

@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { askChatQuestion } from '../api/chat'
-import { getConversationDetail, getConversations } from '../api/conversation'
+import { askChatQuestion, askGlobalChatQuestion } from '../api/chat'
+import {
+  deleteConversation,
+  getConversationDetail,
+  getConversations,
+  pinConversation,
+  renameConversation,
+} from '../api/conversation'
 import { getDocumentsByKnowledgeBaseId } from '../api/document'
 import {
   cancelFeedback,
@@ -15,6 +21,7 @@ import { getKnowledgeBaseById, getKnowledgeBases } from '../api/knowledgeBase'
 import { ChatInput } from '../components/chat/ChatInput'
 import { ChatMessageList } from '../components/chat/ChatMessageList'
 import { ConversationSidebar } from '../components/chat/ConversationSidebar'
+import { UserMenu } from '../components/UserMenu'
 import type { ChatAskResponse, ChatMessage } from '../types/chat'
 import type { ConversationDetail, ConversationMessage, ConversationSummary } from '../types/conversation'
 import type { KnowledgeDocument } from '../types/document'
@@ -33,6 +40,8 @@ type ResponseError = {
       message?: string
     }
   }
+  request?: unknown
+  message?: string
 }
 
 function isResponseError(error: unknown): error is ResponseError {
@@ -53,7 +62,19 @@ function getErrorMessage(error: unknown, fallback: string) {
       return '会话不存在、已删除，或不属于当前知识库。'
     }
 
+    if (error.response?.status === 405) {
+      return '请求方法不支持，请检查接口路径。'
+    }
+
+    if (error.response?.status && error.response.status >= 500) {
+      return '服务异常，请稍后重试。'
+    }
+
     return error.response?.data?.message || fallback
+  }
+
+  if (isResponseError(error) && error.request) {
+    return '无法连接服务器，请检查后端是否启动。'
   }
 
   if (error instanceof Error) {
@@ -183,7 +204,7 @@ function mapConversationMessages(detail: ConversationDetail): ChatMessage[] {
       messageId: message.messageId,
       chatRecordId: message.chatRecordId ?? undefined,
       conversationId: message.conversationId || detail.conversationId,
-      knowledgeBaseId: detail.knowledgeBaseId,
+      knowledgeBaseId: detail.knowledgeBaseId ?? undefined,
       role,
       content: role === 'assistant' ? normalizeAnswer(content) : content,
       citations: role === 'assistant' ? normalizeSources(message.citations) : [],
@@ -223,6 +244,13 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [retryingMessageIds, setRetryingMessageIds] = useState<Set<string>>(() => new Set())
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [renamingConversation, setRenamingConversation] = useState<ConversationSummary | null>(null)
+  const [renameTitle, setRenameTitle] = useState('')
+  const [renameSubmitting, setRenameSubmitting] = useState(false)
+  const [renameError, setRenameError] = useState('')
+  const [deletingConversation, setDeletingConversation] = useState<ConversationSummary | null>(null)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const conversationId = useMemo(
     () => searchParams.get(CONVERSATION_QUERY_KEY)?.trim() || undefined,
     [searchParams],
@@ -246,6 +274,7 @@ export function ChatPage() {
   }, [currentKnowledgeBase, knowledgeBases])
 
   const hasRouteKnowledgeBase = Boolean(routeKnowledgeBaseId)
+  const isGlobalChat = !hasRouteKnowledgeBase
   const embeddingReady = isEmbeddingReady(documents)
   const shouldShowEmbeddingHint = selectedIdNumber !== null && documents.length > 0 && !embeddingReady
 
@@ -272,14 +301,22 @@ export function ChatPage() {
     [searchParams, setSearchParams],
   )
 
+  const isSameKnowledgeBaseTarget = useCallback(
+    (targetKnowledgeBaseId?: number | string | null) =>
+      isGlobalChat
+        ? targetKnowledgeBaseId === null || targetKnowledgeBaseId === undefined || targetKnowledgeBaseId === ''
+        : String(latestKnowledgeBaseIdRef.current) === String(targetKnowledgeBaseId),
+    [isGlobalChat],
+  )
+
   const loadConversations = useCallback(
-    async (knowledgeBaseId: number) => {
+    async (knowledgeBaseId: number | null) => {
       setIsConversationListLoading(true)
       setConversationListError('')
 
       try {
         const response = await getConversations({
-          knowledgeBaseId,
+          knowledgeBaseId: knowledgeBaseId ?? undefined,
           page: DEFAULT_PAGE_NUM,
           size: DEFAULT_PAGE_SIZE,
         })
@@ -294,8 +331,10 @@ export function ChatPage() {
           return
         }
 
-        const nextConversations = conversationRecords(response.data).filter(
-          (conversation) => String(conversation.knowledgeBaseId) === String(knowledgeBaseId),
+        const nextConversations = conversationRecords(response.data).filter((conversation) =>
+          knowledgeBaseId === null
+            ? conversation.knowledgeBaseId === null || conversation.knowledgeBaseId === undefined
+            : String(conversation.knowledgeBaseId) === String(knowledgeBaseId),
         )
         setConversations(nextConversations)
       } catch (error) {
@@ -316,7 +355,7 @@ export function ChatPage() {
 
   const loadConversationDetail = useCallback(
     async (nextConversationId: string) => {
-      if (selectedIdNumber === null) {
+      if (!isGlobalChat && selectedIdNumber === null) {
         return
       }
 
@@ -339,7 +378,7 @@ export function ChatPage() {
           throw new Error(response.message || '会话详情加载失败。')
         }
 
-        if (String(response.data.knowledgeBaseId) !== String(selectedIdNumber)) {
+        if (!isGlobalChat && String(response.data.knowledgeBaseId) !== String(selectedIdNumber)) {
           throw new Error('该会话不属于当前知识库。')
         }
 
@@ -362,7 +401,7 @@ export function ChatPage() {
         }
       }
     },
-    [replaceConversationQuery, selectedIdNumber],
+    [isGlobalChat, replaceConversationQuery, selectedIdNumber],
   )
 
   useEffect(() => {
@@ -373,6 +412,15 @@ export function ChatPage() {
 
   useEffect(() => {
     async function loadKnowledgeBaseOptions() {
+      if (isGlobalChat) {
+        setKnowledgeBases([])
+        setCurrentKnowledgeBase(null)
+        setDocuments([])
+        setSelectedKnowledgeBaseId('')
+        setIsInitialLoading(false)
+        return
+      }
+
       setIsInitialLoading(true)
       setErrorMessage('')
 
@@ -402,10 +450,16 @@ export function ChatPage() {
     }
 
     void loadKnowledgeBaseOptions()
-  }, [])
+  }, [isGlobalChat])
 
   useEffect(() => {
     async function loadCurrentKnowledgeBase() {
+      if (isGlobalChat) {
+        setCurrentKnowledgeBase(null)
+        setDocuments([])
+        return
+      }
+
       if (selectedIdNumber === null) {
         setCurrentKnowledgeBase(null)
         setDocuments([])
@@ -440,20 +494,20 @@ export function ChatPage() {
     }
 
     void loadCurrentKnowledgeBase()
-  }, [selectedIdNumber])
+  }, [isGlobalChat, selectedIdNumber])
 
   useEffect(() => {
-    if (selectedIdNumber === null) {
+    if (!isGlobalChat && selectedIdNumber === null) {
       return
     }
 
     setMessages([])
     setQuestion('')
-    void loadConversations(selectedIdNumber)
-  }, [loadConversations, selectedIdNumber])
+    void loadConversations(isGlobalChat ? null : selectedIdNumber)
+  }, [isGlobalChat, loadConversations, selectedIdNumber])
 
   useEffect(() => {
-    if (selectedIdNumber === null) {
+    if (!isGlobalChat && selectedIdNumber === null) {
       return
     }
 
@@ -468,7 +522,7 @@ export function ChatPage() {
 
     // URL restoration is intentionally best-effort; backend authorization remains authoritative.
     void loadConversationDetail(conversationId)
-  }, [conversationId, loadConversationDetail, selectedIdNumber])
+  }, [conversationId, isGlobalChat, loadConversationDetail, selectedIdNumber])
 
   useEffect(() => {
     listBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -510,9 +564,173 @@ export function ChatPage() {
     replaceConversationQuery(nextConversationId)
   }
 
+  async function handleTogglePin(targetConversation: ConversationSummary) {
+    if (!targetConversation.conversationId) {
+      setErrorMessage('缺少会话或知识库信息，无法置顶。')
+      return
+    }
+
+    try {
+      const response = await pinConversation(targetConversation.conversationId, {
+        knowledgeBaseId: targetConversation.knowledgeBaseId,
+        pinned: !targetConversation.pinned,
+      })
+
+      if (response.code !== 0) {
+        throw new Error(response.message || '置顶操作失败，请稍后重试。')
+      }
+
+      const updatedConversation = response.data ?? {
+        ...targetConversation,
+        pinned: !targetConversation.pinned,
+        pinnedAt: !targetConversation.pinned ? new Date().toISOString() : undefined,
+      }
+
+      setConversations((current) =>
+        current.map((item) =>
+          item.conversationId === targetConversation.conversationId
+            ? { ...item, ...updatedConversation }
+            : item,
+        ),
+      )
+
+      void loadConversations(isGlobalChat ? null : selectedIdNumber)
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, '置顶操作失败，请稍后重试。'))
+    }
+  }
+
+  function handleOpenRename(nextConversation: ConversationSummary) {
+    setRenamingConversation(nextConversation)
+    setRenameTitle(nextConversation.title || '')
+    setRenameError('')
+  }
+
+  function handleCloseRename() {
+    if (renameSubmitting) {
+      return
+    }
+
+    setRenamingConversation(null)
+    setRenameTitle('')
+    setRenameError('')
+  }
+
+  async function handleSaveRename() {
+    if (!renamingConversation || renameSubmitting) {
+      return
+    }
+
+    const trimmedTitle = renameTitle.trim()
+    if (!trimmedTitle) {
+      setRenameError('会话标题不能为空。')
+      return
+    }
+
+    if (!renamingConversation.conversationId) {
+      setRenameError('缺少会话或知识库信息，无法重命名。')
+      return
+    }
+
+    setRenameSubmitting(true)
+    setRenameError('')
+
+    try {
+      const response = await renameConversation(renamingConversation.conversationId, {
+        knowledgeBaseId: renamingConversation.knowledgeBaseId,
+        title: trimmedTitle,
+      })
+
+      if (response.code !== 0) {
+        throw new Error(response.message || '重命名失败，请稍后重试。')
+      }
+
+      const updatedConversation = response.data ?? {
+        ...renamingConversation,
+        title: trimmedTitle,
+      }
+
+      setConversations((current) =>
+        current.map((item) =>
+          item.conversationId === renamingConversation.conversationId
+            ? { ...item, ...updatedConversation, title: updatedConversation.title || trimmedTitle }
+            : item,
+        ),
+      )
+      setRenamingConversation(null)
+      setRenameTitle('')
+    } catch (error) {
+      setRenameError(getErrorMessage(error, '重命名失败，请稍后重试。'))
+    } finally {
+      setRenameSubmitting(false)
+    }
+  }
+
+  function handleOpenDelete(nextConversation: ConversationSummary) {
+    setDeletingConversation(nextConversation)
+    setDeleteError('')
+  }
+
+  function handleCloseDelete() {
+    if (deleteSubmitting) {
+      return
+    }
+
+    setDeletingConversation(null)
+    setDeleteError('')
+  }
+
+  async function handleConfirmDelete() {
+    if (!deletingConversation || deleteSubmitting) {
+      return
+    }
+
+    if (!deletingConversation.conversationId) {
+      setDeleteError('缺少会话或知识库信息，无法删除。')
+      return
+    }
+
+    const deletingCurrentConversation = deletingConversation.conversationId === conversationId
+    setDeleteSubmitting(true)
+    setDeleteError('')
+
+    try {
+      const response = await deleteConversation(
+        deletingConversation.conversationId,
+        deletingConversation.knowledgeBaseId,
+      )
+
+      if (response.code !== 0) {
+        throw new Error(response.message || '删除失败，请稍后重试。')
+      }
+
+      setConversations((current) =>
+        current.filter((item) => item.conversationId !== deletingConversation.conversationId),
+      )
+
+      if (deletingCurrentConversation) {
+        detailRequestSeqRef.current += 1
+        latestConversationIdRef.current = undefined
+        setMessages([])
+        setQuestion('')
+        setErrorMessage('')
+        setIsConversationDetailLoading(false)
+        replaceConversationQuery(undefined)
+      }
+
+      void loadConversations(isGlobalChat ? null : selectedIdNumber)
+
+      setDeletingConversation(null)
+    } catch (error) {
+      setDeleteError(getErrorMessage(error, '删除失败，请稍后重试。'))
+    } finally {
+      setDeleteSubmitting(false)
+    }
+  }
+
   function updateConversationFromAnswer(answer: ChatAskResponse, sentQuestion: string) {
     const nextConversationId = answer.conversationId?.trim()
-    if (!nextConversationId || selectedIdNumber === null) {
+    if (!nextConversationId || (!isGlobalChat && selectedIdNumber === null)) {
       return
     }
 
@@ -520,13 +738,16 @@ export function ChatPage() {
       const existing = current.find((conversation) => conversation.conversationId === nextConversationId)
       const updated: ConversationSummary = {
         conversationId: nextConversationId,
-        knowledgeBaseId: selectedIdNumber,
+        knowledgeBaseId: isGlobalChat ? null : selectedIdNumber,
+        scopeType: isGlobalChat ? 'ENTERPRISE_ALL' : 'KNOWLEDGE_BASE',
         title: existing?.title || truncateTitle(sentQuestion),
         messageCount: (existing?.messageCount ?? 0) + 2,
         lastQuestion: sentQuestion,
         lastAnswerPreview: normalizeAnswer(answer.answer).slice(0, 120),
         lastActiveAt: new Date().toISOString(),
         createdAt: existing?.createdAt,
+        pinned: existing?.pinned,
+        pinnedAt: existing?.pinnedAt,
       }
 
       return [updated, ...current.filter((conversation) => conversation.conversationId !== nextConversationId)]
@@ -546,10 +767,8 @@ export function ChatPage() {
               ...item,
               feedback: {
                 ...item.feedback,
-                feedbackType: request.feedbackType,
-                reason: request.reason,
-                comment: request.comment,
                 submitting: true,
+                submittingType: request.feedbackType,
                 error: undefined,
               },
             }
@@ -565,7 +784,7 @@ export function ChatPage() {
       }
 
       const stillOnSameTarget =
-        String(latestKnowledgeBaseIdRef.current) === String(requestKnowledgeBaseId) &&
+        isSameKnowledgeBaseTarget(requestKnowledgeBaseId) &&
         latestConversationIdRef.current === requestConversationId
 
       if (!stillOnSameTarget) {
@@ -584,6 +803,7 @@ export function ChatPage() {
                   comment: request.comment,
                   submitted: true,
                   submitting: false,
+                  submittingType: undefined,
                   error: undefined,
                   createdAt: new Date().toISOString(),
                 },
@@ -593,7 +813,7 @@ export function ChatPage() {
       )
     } catch (error) {
       const stillOnSameTarget =
-        String(latestKnowledgeBaseIdRef.current) === String(requestKnowledgeBaseId) &&
+        isSameKnowledgeBaseTarget(requestKnowledgeBaseId) &&
         latestConversationIdRef.current === requestConversationId
 
       if (!stillOnSameTarget) {
@@ -608,6 +828,7 @@ export function ChatPage() {
                 feedback: {
                   ...previousFeedback,
                   submitting: false,
+                  submittingType: undefined,
                   error: getErrorMessage(error, '反馈提交失败，请稍后重试。'),
                 },
               }
@@ -631,6 +852,7 @@ export function ChatPage() {
               feedback: {
                 ...item.feedback,
                 submitting: true,
+                submittingType: item.feedback?.feedbackType,
                 error: undefined,
               },
             }
@@ -646,7 +868,7 @@ export function ChatPage() {
       }
 
       const stillOnSameTarget =
-        String(latestKnowledgeBaseIdRef.current) === String(requestKnowledgeBaseId) &&
+        isSameKnowledgeBaseTarget(requestKnowledgeBaseId) &&
         latestConversationIdRef.current === requestConversationId
 
       if (!stillOnSameTarget) {
@@ -661,6 +883,7 @@ export function ChatPage() {
                 feedback: {
                   submitted: false,
                   submitting: false,
+                  submittingType: undefined,
                   error: undefined,
                 },
               }
@@ -669,7 +892,7 @@ export function ChatPage() {
       )
     } catch (error) {
       const stillOnSameTarget =
-        String(latestKnowledgeBaseIdRef.current) === String(requestKnowledgeBaseId) &&
+        isSameKnowledgeBaseTarget(requestKnowledgeBaseId) &&
         latestConversationIdRef.current === requestConversationId
 
       if (!stillOnSameTarget) {
@@ -697,11 +920,11 @@ export function ChatPage() {
   async function handleSend() {
     const trimmedQuestion = question.trim()
 
-    if (!trimmedQuestion || isSending || selectedIdNumber === null) {
+    if (!trimmedQuestion || isSending || (!isGlobalChat && selectedIdNumber === null)) {
       return
     }
 
-    const requestKnowledgeBaseId = selectedIdNumber
+    const requestKnowledgeBaseId = isGlobalChat ? null : selectedIdNumber
     const requestConversationId = conversationId
     const userMessageId = createMessageId('user')
     const requestSeq = sendRequestSeqRef.current + 1
@@ -721,12 +944,17 @@ export function ChatPage() {
     setErrorMessage('')
 
     try {
-      const response = await askChatQuestion({
-        knowledgeBaseId: requestKnowledgeBaseId,
-        question: trimmedQuestion,
-        // Existing sessions must reuse conversationId; new sessions omit it and let the backend create one.
-        conversationId: requestConversationId,
-      })
+      const response = isGlobalChat
+        ? await askGlobalChatQuestion({
+            question: trimmedQuestion,
+            // Existing sessions must reuse conversationId; new sessions omit it and let the backend create one.
+            conversationId: requestConversationId,
+          })
+        : await askChatQuestion({
+            knowledgeBaseId: requestKnowledgeBaseId,
+            question: trimmedQuestion,
+            conversationId: requestConversationId,
+          })
 
       if (response.code !== 0 || !response.data) {
         throw new Error(response.message || '问答请求失败，请稍后重试。')
@@ -735,10 +963,10 @@ export function ChatPage() {
       const chatResponse = response.data
       const nextConversationId = chatResponse.conversationId?.trim()
       const stillOnSameTarget =
-        latestKnowledgeBaseIdRef.current === requestKnowledgeBaseId &&
+        isSameKnowledgeBaseTarget(requestKnowledgeBaseId) &&
         latestConversationIdRef.current === requestConversationId
 
-      if (latestKnowledgeBaseIdRef.current === requestKnowledgeBaseId) {
+      if (isSameKnowledgeBaseTarget(requestKnowledgeBaseId)) {
         updateConversationFromAnswer(chatResponse, trimmedQuestion)
       }
 
@@ -761,7 +989,7 @@ export function ChatPage() {
           messageId: chatResponse.messageId ?? undefined,
           chatRecordId: chatResponse.chatRecordId ?? undefined,
           conversationId: nextConversationId,
-          knowledgeBaseId: requestKnowledgeBaseId,
+          knowledgeBaseId: requestKnowledgeBaseId ?? undefined,
           role: 'assistant',
           content: normalizeAnswer(chatResponse.answer),
           citations: normalizeSources(chatResponse),
@@ -773,7 +1001,7 @@ export function ChatPage() {
       void loadConversations(requestKnowledgeBaseId)
     } catch (error) {
       const stillOnSameTarget =
-        latestKnowledgeBaseIdRef.current === requestKnowledgeBaseId &&
+        isSameKnowledgeBaseTarget(requestKnowledgeBaseId) &&
         latestConversationIdRef.current === requestConversationId
 
       if (stillOnSameTarget) {
@@ -793,7 +1021,7 @@ export function ChatPage() {
 
   async function handleRetry(message: ChatMessage, previousUserMessage?: ChatMessage) {
     const originalQuestion = previousUserMessage?.content?.trim()
-    const requestKnowledgeBaseId = Number(message.knowledgeBaseId ?? selectedIdNumber)
+    const requestKnowledgeBaseId = isGlobalChat ? null : Number(message.knowledgeBaseId ?? selectedIdNumber)
     const requestConversationId = message.conversationId ?? conversationId
 
     if (!originalQuestion) {
@@ -801,7 +1029,7 @@ export function ChatPage() {
       return
     }
 
-    if (!Number.isInteger(requestKnowledgeBaseId) || requestKnowledgeBaseId <= 0) {
+    if (!isGlobalChat && (requestKnowledgeBaseId == null || !Number.isInteger(requestKnowledgeBaseId) || requestKnowledgeBaseId <= 0)) {
       setErrorMessage('缺少知识库 ID，不能重新生成。')
       return
     }
@@ -821,18 +1049,23 @@ export function ChatPage() {
         role: 'user',
         content: originalQuestion,
         conversationId: requestConversationId,
-        knowledgeBaseId: requestKnowledgeBaseId,
+        knowledgeBaseId: requestKnowledgeBaseId ?? undefined,
         status: 'sending',
       },
     ])
     setErrorMessage('')
 
     try {
-      const response = await askChatQuestion({
-        knowledgeBaseId: requestKnowledgeBaseId,
-        question: originalQuestion,
-        conversationId: requestConversationId,
-      })
+      const response = isGlobalChat
+        ? await askGlobalChatQuestion({
+            question: originalQuestion,
+            conversationId: requestConversationId,
+          })
+        : await askChatQuestion({
+            knowledgeBaseId: requestKnowledgeBaseId ?? undefined,
+            question: originalQuestion,
+            conversationId: requestConversationId,
+          })
 
       if (response.code !== 0 || !response.data) {
         throw new Error(response.message || '重新生成失败，请稍后重试。')
@@ -841,10 +1074,10 @@ export function ChatPage() {
       const chatResponse = response.data
       const nextConversationId = chatResponse.conversationId?.trim() || requestConversationId
       const stillOnSameTarget =
-        latestKnowledgeBaseIdRef.current === requestKnowledgeBaseId &&
+        isSameKnowledgeBaseTarget(requestKnowledgeBaseId) &&
         latestConversationIdRef.current === requestConversationId
 
-      if (latestKnowledgeBaseIdRef.current === requestKnowledgeBaseId) {
+      if (isSameKnowledgeBaseTarget(requestKnowledgeBaseId)) {
         updateConversationFromAnswer(chatResponse, originalQuestion)
       }
 
@@ -861,7 +1094,7 @@ export function ChatPage() {
           messageId: chatResponse.messageId ?? undefined,
           chatRecordId: chatResponse.chatRecordId ?? undefined,
           conversationId: nextConversationId,
-          knowledgeBaseId: requestKnowledgeBaseId,
+          knowledgeBaseId: requestKnowledgeBaseId ?? undefined,
           role: 'assistant',
           content: normalizeAnswer(chatResponse.answer),
           citations: normalizeSources(chatResponse),
@@ -873,7 +1106,7 @@ export function ChatPage() {
       void loadConversations(requestKnowledgeBaseId)
     } catch (error) {
       const stillOnSameTarget =
-        latestKnowledgeBaseIdRef.current === requestKnowledgeBaseId &&
+        isSameKnowledgeBaseTarget(requestKnowledgeBaseId) &&
         latestConversationIdRef.current === requestConversationId
 
       if (stillOnSameTarget) {
@@ -895,7 +1128,8 @@ export function ChatPage() {
   }
 
   return (
-    <section className="flex h-[calc(100vh-8rem)] min-h-[34rem] flex-col overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm lg:flex-row">
+    <>
+    <section className="flex h-screen overflow-hidden">
       <ConversationSidebar
         conversations={conversations}
         currentConversationId={conversationId}
@@ -903,51 +1137,13 @@ export function ChatPage() {
         errorMessage={conversationListError}
         onSelect={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onRename={handleOpenRename}
+        onDelete={handleOpenDelete}
+        onTogglePin={handleTogglePin}
+        bottomContent={<UserMenu />}
       />
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50">
-      <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-xl font-semibold text-slate-950">
-              {currentKnowledgeBase?.name ?? 'RAG 问答'}
-            </h1>
-            {conversationId ? (
-              <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-xs text-slate-500">
-                已恢复会话上下文
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-1 max-h-12 max-w-3xl overflow-hidden break-words text-sm leading-6 text-slate-600">
-            {currentKnowledgeBase?.description || '选择一个知识库后即可开始提问。'}
-          </p>
-          {hasRouteKnowledgeBase ? (
-            <Link
-              to={`/knowledge-bases/${selectedKnowledgeBaseId}`}
-              className="mt-2 inline-flex text-sm font-medium text-slate-500 hover:text-slate-900"
-            >
-              返回知识库详情
-            </Link>
-          ) : null}
-        </div>
-
-        <label className="w-full shrink-0 md:w-72">
-          <span className="text-sm font-medium text-slate-700">知识库</span>
-          <select
-            value={selectedKnowledgeBaseId}
-            onChange={(event) => handleKnowledgeBaseChange(event.target.value)}
-            className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-          >
-            <option value="">请选择知识库</option>
-            {selectableKnowledgeBases.map((knowledgeBase) => (
-              <option key={knowledgeBase.id} value={knowledgeBase.id}>
-                {knowledgeBase.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
       {errorMessage ? (
         <div className="mx-4 mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-6">
           {errorMessage}
@@ -968,7 +1164,7 @@ export function ChatPage() {
               messages={messages}
               sending={isSending}
               detailLoading={isConversationDetailLoading}
-              knowledgeBaseId={selectedIdNumber ?? undefined}
+              knowledgeBaseId={isGlobalChat ? undefined : selectedIdNumber ?? undefined}
               conversationId={conversationId}
               retryingMessageIds={retryingMessageIds}
               onSubmitFeedback={handleSubmitFeedback}
@@ -986,7 +1182,7 @@ export function ChatPage() {
               onChange={setQuestion}
               onSend={() => void handleSend()}
               sending={isSending}
-              disabled={isSending || selectedIdNumber === null || isConversationDetailLoading}
+              disabled={isSending || (!isGlobalChat && selectedIdNumber === null) || isConversationDetailLoading}
             />
             </div>
           </div>
@@ -994,5 +1190,95 @@ export function ChatPage() {
       </div>
       </main>
     </section>
+
+    {renamingConversation ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rename-conversation-title"
+      >
+        <div className="w-full max-w-sm rounded-md bg-white p-5 shadow-xl">
+          <h2 id="rename-conversation-title" className="text-base font-semibold text-slate-950">
+            重命名会话
+          </h2>
+          <label className="mt-4 block">
+            <span className="text-sm font-medium text-slate-700">会话标题</span>
+            <input
+              value={renameTitle}
+              onChange={(event) => setRenameTitle(event.target.value)}
+              maxLength={100}
+              autoFocus
+              className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+            />
+          </label>
+          {renameError ? (
+            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {renameError}
+            </div>
+          ) : null}
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleCloseRename}
+              disabled={renameSubmitting}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSaveRename()}
+              disabled={renameSubmitting || !renameTitle.trim()}
+              className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {renameSubmitting ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    {deletingConversation ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-conversation-title"
+      >
+        <div className="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
+          <h2 id="delete-conversation-title" className="text-base font-semibold text-slate-950">
+            确认删除会话？
+          </h2>
+          <p className="mt-3 break-words text-sm leading-6 text-slate-600">
+            你确定要删除会话「{deletingConversation.title || '未命名会话'}」吗？删除后该会话中的历史消息将不再显示。
+          </p>
+          {deleteError ? (
+            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {deleteError}
+            </div>
+          ) : null}
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleCloseDelete}
+              disabled={deleteSubmitting}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleConfirmDelete()}
+              disabled={deleteSubmitting}
+              className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleteSubmitting ? '删除中...' : '确认删除'}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   )
 }

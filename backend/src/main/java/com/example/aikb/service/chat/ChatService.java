@@ -15,4 +15,6 @@ public interface ChatService {
      * @return 问答结果
      */
     ChatAskResponse ask(ChatAskRequest request);
+
+    ChatAskResponse askGlobal(ChatAskRequest request);
 }

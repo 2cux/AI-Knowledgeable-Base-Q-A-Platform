@@ -22,6 +22,9 @@ public class CitationVO {
     @Schema(description = "知识库ID", example = "1")
     private Long knowledgeBaseId;
 
+    @Schema(description = "Knowledge base name", example = "IT Service Desk")
+    private String knowledgeBaseName;
+
     @Schema(description = "切片在文档内的序号", example = "0")
     private Integer chunkIndex;
 

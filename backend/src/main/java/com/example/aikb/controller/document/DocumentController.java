@@ -7,6 +7,7 @@ import com.example.aikb.dto.document.DocumentFileUploadRequest;
 import com.example.aikb.dto.document.DocumentListQuery;
 import com.example.aikb.dto.document.DocumentProcessRequest;
 import com.example.aikb.dto.document.DocumentUploadRequest;
+import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.document.DocumentProcessService;
 import com.example.aikb.service.document.DocumentService;
 import com.example.aikb.service.embedding.DocumentEmbeddingService;
@@ -50,22 +51,26 @@ public class DocumentController {
     private final DocumentProcessService documentProcessService;
     private final DocumentEmbeddingService documentEmbeddingService;
     private final TaskRecordService taskRecordService;
+    private final AdminPermissionService adminPermissionService;
 
     @Operation(summary = "上传文档元数据")
     @PostMapping("/upload")
     public Result<DocumentDetailVO> upload(@Valid @RequestBody DocumentUploadRequest request) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentService.upload(request), "Metadata uploaded successfully");
     }
 
     @Operation(summary = "上传真实文件")
     @PostMapping(value = "/upload-file", consumes = "multipart/form-data")
     public Result<DocumentFileUploadVO> uploadFile(@Valid @ModelAttribute DocumentFileUploadRequest request) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentService.uploadFile(request), "File uploaded successfully");
     }
 
     @Operation(summary = "分页查询文档")
     @GetMapping
     public Result<PageResult<DocumentListVO>> page(@Valid @ModelAttribute DocumentListQuery query) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentService.page(query));
     }
 
@@ -73,6 +78,7 @@ public class DocumentController {
     @GetMapping("/{documentId}")
     public Result<DocumentDetailVO> getById(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentService.getById(documentId));
     }
 
@@ -80,6 +86,7 @@ public class DocumentController {
     @DeleteMapping("/{documentId}")
     public Result<Void> delete(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        adminPermissionService.ensureAdmin();
         documentService.delete(documentId);
         return Result.success(null, "Document deleted successfully");
     }
@@ -88,6 +95,7 @@ public class DocumentController {
     @GetMapping("/{documentId}/status")
     public Result<DocumentStatusVO> getStatus(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentService.getStatus(documentId));
     }
 
@@ -95,6 +103,7 @@ public class DocumentController {
     @PostMapping("/{documentId}/parse")
     public Result<Long> parse(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentService.createParseTask(documentId), "Parse task created successfully");
     }
 
@@ -103,6 +112,7 @@ public class DocumentController {
     public Result<DocumentProcessVO> process(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId,
             @Valid @RequestBody(required = false) DocumentProcessRequest request) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentProcessService.process(documentId, request), "Document process task submitted");
     }
 
@@ -110,6 +120,7 @@ public class DocumentController {
     @GetMapping("/{documentId}/chunks")
     public Result<List<DocumentChunkVO>> listChunks(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentProcessService.listChunks(documentId));
     }
 
@@ -117,6 +128,7 @@ public class DocumentController {
     @GetMapping("/{documentId}/tasks")
     public Result<List<TaskRecordVO>> listTasks(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        adminPermissionService.ensureAdmin();
         return Result.success(taskRecordService.listByDocument(documentId));
     }
 
@@ -125,6 +137,7 @@ public class DocumentController {
     public Result<DocumentEmbeddingVO> embed(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId,
             @Valid @RequestBody(required = false) DocumentEmbeddingRequest request) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentEmbeddingService.embedDocument(documentId, request), "Document embedding task submitted");
     }
 
@@ -132,6 +145,7 @@ public class DocumentController {
     @GetMapping("/{documentId}/embedding-status")
     public Result<DocumentEmbeddingStatusVO> getEmbeddingStatus(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentEmbeddingService.getEmbeddingStatus(documentId));
     }
 }

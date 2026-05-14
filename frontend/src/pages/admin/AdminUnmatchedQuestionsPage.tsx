@@ -115,7 +115,7 @@ export function AdminUnmatchedQuestionsPage() {
                       <td className="px-4 py-3">{item.answerStatus || '-'}</td>
                       <td className="px-4 py-3">{item.matched ? '是' : '否'}</td>
                       <td className="px-4 py-3">{item.retrievedChunkCount ?? 0}</td>
-                      <td className="px-4 py-3">{item.knowledgeBaseId}</td>
+                      <td className="px-4 py-3">{item.knowledgeBaseId ?? '全企业知识库'}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatTime(item.createdAt)}</td>
                     </tr>
                   ))}

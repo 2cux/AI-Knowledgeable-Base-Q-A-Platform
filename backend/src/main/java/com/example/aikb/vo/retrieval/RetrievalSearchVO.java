@@ -44,4 +44,7 @@ public class RetrievalSearchVO {
 
     @Schema(description = "minimum effective score", example = "0.2")
     private Double minEffectiveScore;
+
+    @Schema(description = "Whether the scope contains published knowledge with successful embeddings")
+    private Boolean availableKnowledgeBase;
 }

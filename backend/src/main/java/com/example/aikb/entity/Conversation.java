@@ -26,7 +26,13 @@ public class Conversation {
     @TableField("knowledge_base_id")
     private Long knowledgeBaseId;
 
+    @TableField("scope_type")
+    private String scopeType;
+
     private String title;
+
+    @TableField("title_source")
+    private String titleSource;
 
     @TableField("message_count")
     private Integer messageCount;
@@ -47,4 +53,9 @@ public class Conversation {
     private LocalDateTime updatedAt;
 
     private Boolean deleted;
+
+    private Boolean pinned;
+
+    @TableField("pinned_at")
+    private LocalDateTime pinnedAt;
 }

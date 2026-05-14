@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum AnswerStatus {
 
     SUCCESS("SUCCESS"),
+    NO_AVAILABLE_KNOWLEDGE_BASE("NO_AVAILABLE_KNOWLEDGE_BASE"),
     NO_HIT("NO_HIT"),
     WEAK_HIT("WEAK_HIT"),
     LLM_UNAVAILABLE("LLM_UNAVAILABLE"),

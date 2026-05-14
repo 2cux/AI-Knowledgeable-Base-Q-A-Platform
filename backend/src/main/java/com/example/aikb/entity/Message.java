@@ -29,6 +29,9 @@ public class Message {
     @TableField("knowledge_base_id")
     private Long knowledgeBaseId;
 
+    @TableField("scope_type")
+    private String scopeType;
+
     private String role;
 
     private String content;

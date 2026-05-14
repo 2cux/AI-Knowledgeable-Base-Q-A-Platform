@@ -20,6 +20,8 @@ public class AdminMissedQuestionVO {
     @Schema(description = "Knowledge base ID", example = "1")
     private Long knowledgeBaseId;
 
+    private String scopeType;
+
     @Schema(description = "Conversation ID")
     private String conversationId;
 

@@ -18,6 +18,7 @@ import com.example.aikb.service.chat.ChatRecordService;
 import com.example.aikb.service.chat.ChatService;
 import com.example.aikb.service.chat.ConversationContextLoader;
 import com.example.aikb.service.chat.ConversationService;
+import com.example.aikb.service.chat.ConversationTitleGenerateService;
 import com.example.aikb.service.chat.MessageService;
 import com.example.aikb.service.retrieval.RetrievalService;
 import com.example.aikb.vo.chat.ChatAskResponse;
@@ -51,6 +52,11 @@ public class ChatServiceImpl implements ChatService {
             "\u77e5\u8bc6\u5e93\u68c0\u7d22\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c"
                     + "\u65e0\u6cd5\u57fa\u4e8e\u5f53\u524d\u77e5\u8bc6\u5e93"
                     + "\u751f\u6210\u53ef\u9760\u56de\u7b54\u3002\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002";
+    private static final String NO_AVAILABLE_KNOWLEDGE_BASE_ANSWER =
+            "\u5f53\u524d\u6682\u65e0\u53ef\u7528\u7684\u4f01\u4e1a\u77e5\u8bc6\u5e93\u5185\u5bb9\uff0c"
+                    + "\u8bf7\u8054\u7cfb\u7ba1\u7406\u5458\u7ef4\u62a4\u77e5\u8bc6\u5e93\u3002";
+    private static final String SCOPE_ENTERPRISE_ALL = "ENTERPRISE_ALL";
+    private static final String SCOPE_KNOWLEDGE_BASE = "KNOWLEDGE_BASE";
     private static final int KNOWLEDGE_BASE_ACTIVE_STATUS = 1;
     private static final int KNOWLEDGE_BASE_NOT_DELETED = 0;
 
@@ -64,16 +70,21 @@ public class ChatServiceImpl implements ChatService {
     private final MessageService messageService;
     private final ConversationContextLoader conversationContextLoader;
     private final TransactionTemplate transactionTemplate;
+    private final ConversationTitleGenerateService conversationTitleGenerateService;
 
     @Override
     public ChatAskResponse ask(ChatAskRequest request) {
         Long userId = CurrentUser.getUserId();
+        if (request.getKnowledgeBaseId() == null) {
+            throw new BusinessException(40001, "knowledgeBaseId cannot be empty for single knowledge base ask");
+        }
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
         String question = request.getQuestion().trim();
         int topK = request.getTopK() == null ? retrievalProperties.getTopK() : request.getTopK();
         Conversation conversation = conversationService.resolveForAsk(userId, knowledgeBase.getId(),
                 request.getConversationId(), question);
         String conversationId = conversation.getConversationUid();
+        boolean isNewConversation = request.getConversationId() == null || request.getConversationId().isBlank();
         String conversationContext = conversationContextLoader.load(userId, knowledgeBase.getId(), conversationId);
 
         RetrievalSearchRequest retrievalRequest = new RetrievalSearchRequest();
@@ -91,12 +102,20 @@ public class ChatServiceImpl implements ChatService {
             log.warn("Chat RAG retrieval unavailable, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, error={}",
                     userId, knowledgeBase.getId(), conversationId, question.length(), topK,
                     LogSanitizer.safeMessage(ex.getMessage()));
-            return retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
+            ChatAskResponse errorResponse = retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
+            if (isNewConversation) {
+                conversationTitleGenerateService.generateTitle(conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER);
+            }
+            return errorResponse;
         } catch (RuntimeException ex) {
             log.warn("Chat RAG retrieval unavailable unexpectedly, userId={}, knowledgeBaseId={}, conversationId={}, questionLength={}, topK={}, errorType={}",
                     userId, knowledgeBase.getId(), conversationId, question.length(), topK,
                     ex.getClass().getSimpleName());
-            return retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
+            ChatAskResponse errorResponse = retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
+            if (isNewConversation) {
+                conversationTitleGenerateService.generateTitle(conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER);
+            }
+            return errorResponse;
         }
         List<RetrievalChunkVO> rawChunks = retrievalResult == null || retrievalResult.getRawChunks() == null
                 ? Collections.emptyList()
@@ -116,9 +135,83 @@ public class ChatServiceImpl implements ChatService {
                 minEffectiveScore, rawChunks.size(), effectiveChunks.size(), resolution.matched(),
                 resolution.answerStatus(), resolution.llmCalled());
 
-        return buildResponse(conversationId, record.getId(), resolution.answer(), resolution.answerStatus(),
+        ChatAskResponse response = buildResponse(conversationId, record.getId(), resolution.answer(), resolution.answerStatus(),
                 resolution.matched(), effectiveChunks.size(), rawChunks.size(), minEffectiveScore,
                 resolution.citations());
+        if (isNewConversation) {
+            conversationTitleGenerateService.generateTitle(conversationId, question, resolution.answer());
+        }
+        return response;
+    }
+
+    @Override
+    public ChatAskResponse askGlobal(ChatAskRequest request) {
+        Long userId = CurrentUser.getUserId();
+        String question = request.getQuestion().trim();
+        int topK = request.getTopK() == null ? retrievalProperties.getTopK() : request.getTopK();
+        Conversation conversation = conversationService.resolveForAsk(userId, null,
+                request.getConversationId(), question);
+        String conversationId = conversation.getConversationUid();
+        boolean isNewConversation = request.getConversationId() == null || request.getConversationId().isBlank();
+        String conversationContext = conversationContextLoader.load(userId, null, conversationId);
+
+        RetrievalSearchRequest retrievalRequest = new RetrievalSearchRequest();
+        retrievalRequest.setQuery(question);
+        retrievalRequest.setTopK(topK);
+
+        RetrievalSearchVO retrievalResult;
+        try {
+            retrievalResult = retrievalService.searchGlobal(retrievalRequest);
+        } catch (BusinessException ex) {
+            if (isClientBusinessException(ex)) {
+                throw ex;
+            }
+            log.warn("Global chat RAG retrieval unavailable, userId={}, conversationId={}, questionLength={}, topK={}, error={}",
+                    userId, conversationId, question.length(), topK, LogSanitizer.safeMessage(ex.getMessage()));
+            ChatAskResponse errorResponse = retrievalUnavailable(userId, null, conversationId, question, topK);
+            if (isNewConversation) {
+                conversationTitleGenerateService.generateTitle(conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER);
+            }
+            return errorResponse;
+        } catch (RuntimeException ex) {
+            log.warn("Global chat RAG retrieval unavailable unexpectedly, userId={}, conversationId={}, questionLength={}, topK={}, errorType={}",
+                    userId, conversationId, question.length(), topK, ex.getClass().getSimpleName());
+            ChatAskResponse errorResponse = retrievalUnavailable(userId, null, conversationId, question, topK);
+            if (isNewConversation) {
+                conversationTitleGenerateService.generateTitle(conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER);
+            }
+            return errorResponse;
+        }
+
+        List<RetrievalChunkVO> rawChunks = retrievalResult == null || retrievalResult.getRawChunks() == null
+                ? Collections.emptyList()
+                : retrievalResult.getRawChunks();
+        List<RetrievalChunkVO> effectiveChunks = retrievalResult == null || retrievalResult.getEffectiveChunks() == null
+                ? Collections.emptyList()
+                : retrievalResult.getEffectiveChunks();
+
+        AnswerResolution resolution = retrievalResult != null
+                && Boolean.FALSE.equals(retrievalResult.getAvailableKnowledgeBase())
+                ? new AnswerResolution(NO_AVAILABLE_KNOWLEDGE_BASE_ANSWER,
+                        AnswerStatus.NO_AVAILABLE_KNOWLEDGE_BASE, false, Collections.emptyList(), false)
+                : resolveAnswer(question, conversationContext, rawChunks, effectiveChunks);
+        Double minEffectiveScore = retrievalResult == null ? null : retrievalResult.getMinEffectiveScore();
+        ChatRecord record = persistAskResult(userId, null, conversationId, question,
+                resolution.answer(), resolution.answerStatus(), resolution.matched(), effectiveChunks.size(),
+                rawChunks.size(), topK, resolution.citations());
+
+        log.info("Global chat RAG retrieval resolved, userId={}, conversationId={}, chatRecordId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
+                userId, conversationId, record.getId(), question.length(), topK, minEffectiveScore,
+                rawChunks.size(), effectiveChunks.size(), resolution.matched(), resolution.answerStatus(),
+                resolution.llmCalled());
+
+        ChatAskResponse response = buildResponse(conversationId, record.getId(), resolution.answer(), resolution.answerStatus(),
+                resolution.matched(), effectiveChunks.size(), rawChunks.size(), minEffectiveScore,
+                resolution.citations());
+        if (isNewConversation) {
+            conversationTitleGenerateService.generateTitle(conversationId, question, resolution.answer());
+        }
+        return response;
     }
 
     private AnswerResolution resolveAnswer(String question, String conversationContext,
@@ -173,6 +266,7 @@ public class ChatServiceImpl implements ChatService {
                 .chunkId(chunk.getChunkId())
                 .documentId(chunk.getDocumentId())
                 .knowledgeBaseId(chunk.getKnowledgeBaseId())
+                .knowledgeBaseName(chunk.getKnowledgeBaseName())
                 .chunkIndex(chunk.getChunkIndex())
                 .documentName(chunk.getDocumentName())
                 .score(chunk.getScore())
@@ -187,6 +281,7 @@ public class ChatServiceImpl implements ChatService {
             ChatRecord record = new ChatRecord();
             record.setUserId(userId);
             record.setKnowledgeBaseId(knowledgeBaseId);
+            record.setScopeType(knowledgeBaseId == null ? SCOPE_ENTERPRISE_ALL : SCOPE_KNOWLEDGE_BASE);
             record.setConversationId(conversationId);
             record.setQuestion(question);
             record.setAnswer(answer);

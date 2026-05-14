@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { getAdminChatRecordDetail, getAdminChatRecords } from '../../api/admin'
+import { Select } from '../../components/common/Select'
 import type { AdminChatRecordDetail, AdminChatRecordListItem, AdminPage } from '../../types/admin'
 
 const PAGE_SIZE = 20
@@ -106,19 +107,31 @@ export function AdminChatRecordsPage() {
       >
         <input className="rounded border border-slate-300 px-3 py-2 text-sm" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="关键词" />
         <input className="rounded border border-slate-300 px-3 py-2 text-sm" value={knowledgeBaseId} onChange={(event) => setKnowledgeBaseId(event.target.value)} placeholder="知识库 ID" />
-        <select className="rounded border border-slate-300 px-3 py-2 text-sm" value={matched} onChange={(event) => setMatched(event.target.value)}>
-          <option value="">命中状态</option>
-          <option value="true">已命中</option>
-          <option value="false">未命中</option>
-        </select>
-        <select className="rounded border border-slate-300 px-3 py-2 text-sm" value={answerStatus} onChange={(event) => setAnswerStatus(event.target.value)}>
-          <option value="">回答状态</option>
-          <option value="SUCCESS">SUCCESS</option>
-          <option value="NO_HIT">NO_HIT</option>
-          <option value="WEAK_HIT">WEAK_HIT</option>
-          <option value="LLM_UNAVAILABLE">LLM_UNAVAILABLE</option>
-          <option value="RETRIEVAL_UNAVAILABLE">RETRIEVAL_UNAVAILABLE</option>
-        </select>
+        <Select
+          value={matched}
+          onChange={(nextValue) => setMatched(String(nextValue))}
+          placeholder="命中状态"
+          ariaLabel="命中状态"
+          options={[
+            { label: '命中状态', value: '' },
+            { label: '已命中', value: 'true' },
+            { label: '未命中', value: 'false' },
+          ]}
+        />
+        <Select
+          value={answerStatus}
+          onChange={(nextValue) => setAnswerStatus(String(nextValue))}
+          placeholder="回答状态"
+          ariaLabel="回答状态"
+          options={[
+            { label: '回答状态', value: '' },
+            { label: 'SUCCESS', value: 'SUCCESS' },
+            { label: 'NO_HIT', value: 'NO_HIT' },
+            { label: 'WEAK_HIT', value: 'WEAK_HIT' },
+            { label: 'LLM_UNAVAILABLE', value: 'LLM_UNAVAILABLE' },
+            { label: 'RETRIEVAL_UNAVAILABLE', value: 'RETRIEVAL_UNAVAILABLE' },
+          ]}
+        />
         <button className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">筛选</button>
       </form>
 
@@ -152,7 +165,7 @@ export function AdminChatRecordsPage() {
                       <td className="px-4 py-3">{record.answerStatus || '-'}</td>
                       <td className="px-4 py-3">{record.matched ? '是' : '否'}</td>
                       <td className="px-4 py-3">{record.retrievedChunkCount ?? 0}</td>
-                      <td className="px-4 py-3">{record.knowledgeBaseId}</td>
+                      <td className="px-4 py-3">{record.knowledgeBaseId ?? '全企业知识库'}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatTime(record.createdAt)}</td>
                       <td className="px-4 py-3">
                         <button className="text-sm font-medium text-slate-900 hover:underline" type="button" onClick={() => void openDetail(record.id)}>

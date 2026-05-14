@@ -55,7 +55,9 @@ public class RagPromptBuilder {
             RetrievalChunkVO chunk = chunks.get(i);
             prompt.append("[Source ")
                     .append(i + 1)
-                    .append("] 文档：")
+                    .append("] 知识库：")
+                    .append(chunk.getKnowledgeBaseName() == null ? "企业知识库" : chunk.getKnowledgeBaseName())
+                    .append("，文档：")
                     .append(chunk.getDocumentName() == null ? "未知文档" : chunk.getDocumentName())
                     .append("，chunkIndex：")
                     .append(chunk.getChunkIndex())

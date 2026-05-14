@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -14,7 +13,6 @@ import lombok.Data;
 public class ChatAskRequest {
 
     /** 提问限定在指定知识库内，服务层会校验该知识库是否属于当前登录用户。 */
-    @NotNull(message = "knowledgeBaseId不能为空")
     @Positive(message = "knowledgeBaseId必须大于0")
     @Schema(description = "知识库ID", example = "1")
     private Long knowledgeBaseId;

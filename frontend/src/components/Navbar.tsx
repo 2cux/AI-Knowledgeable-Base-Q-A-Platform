@@ -2,18 +2,15 @@ import { NavLink, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../context/AuthContext'
 
-const baseNavItems = [
-  { to: '/knowledge-bases', label: '知识库' },
-  { to: '/chat', label: '问答' },
-]
+const userNavItems = [{ to: '/chat', label: '问答' }]
 
 export function Navbar() {
   const navigate = useNavigate()
   const { logout, user } = useAuth()
   const navItems =
     user?.role?.toUpperCase() === 'ADMIN'
-      ? [...baseNavItems, { to: '/admin', label: '管理' }]
-      : baseNavItems
+      ? [{ to: '/knowledge-bases', label: '知识库' }, ...userNavItems, { to: '/admin', label: '管理' }]
+      : userNavItems
 
   function handleLogout() {
     logout()
@@ -23,7 +20,7 @@ export function Navbar() {
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-5 px-5">
-        <NavLink to="/knowledge-bases" className="shrink-0 text-base font-semibold">
+        <NavLink to="/chat" className="shrink-0 text-base font-semibold">
           AI Knowledge Base QA
         </NavLink>
 

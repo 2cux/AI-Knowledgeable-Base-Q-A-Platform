@@ -3,13 +3,16 @@ import type { FeedbackReason, FeedbackState, FeedbackType } from './feedback'
 
 export type ConversationSummary = {
   conversationId: string
-  knowledgeBaseId: number | string
+  knowledgeBaseId?: number | string | null
+  scopeType?: string | null
   title: string
   messageCount?: number
   lastQuestion?: string
   lastAnswerPreview?: string
   lastActiveAt?: string
   createdAt?: string
+  pinned?: boolean
+  pinnedAt?: string
 }
 
 export type ConversationMessage = {
@@ -31,7 +34,8 @@ export type ConversationMessage = {
 
 export type ConversationDetail = {
   conversationId: string
-  knowledgeBaseId: number | string
+  knowledgeBaseId?: number | string | null
+  scopeType?: string | null
   title?: string
   createdAt?: string
   lastActiveAt?: string
@@ -50,4 +54,14 @@ export type ConversationPageParams = {
   knowledgeBaseId?: number | string
   page?: number
   size?: number
+}
+
+export type ConversationRenameRequest = {
+  knowledgeBaseId?: number | string | null
+  title: string
+}
+
+export type ConversationPinRequest = {
+  knowledgeBaseId?: number | string | null
+  pinned: boolean
 }

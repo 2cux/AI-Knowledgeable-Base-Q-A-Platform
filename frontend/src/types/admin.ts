@@ -9,7 +9,7 @@ export type AdminAnswerStatus =
 export type AdminChatRecordListItem = {
   id: number
   userId?: number
-  knowledgeBaseId: number
+  knowledgeBaseId?: number | null
   conversationId?: string | null
   question: string
   answerPreview: string
@@ -64,7 +64,7 @@ export type AdminFeedbackItem = {
 export type AdminUnmatchedQuestion = {
   id: number
   userId?: number
-  knowledgeBaseId: number
+  knowledgeBaseId?: number | null
   conversationId?: string | null
   question: string
   answerPreview?: string | null

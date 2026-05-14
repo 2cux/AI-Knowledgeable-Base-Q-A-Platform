@@ -10,7 +10,7 @@ export type FeedbackReason =
   | 'OTHER'
 
 export type FeedbackSubmitRequest = {
-  knowledgeBaseId: number | string
+  knowledgeBaseId?: number | string | null
   conversationId?: string
   messageId?: string
   chatRecordId?: number | string
@@ -20,7 +20,7 @@ export type FeedbackSubmitRequest = {
 }
 
 export type FeedbackCancelRequest = {
-  knowledgeBaseId: number | string
+  knowledgeBaseId?: number | string | null
   conversationId?: string
   messageId?: string
   chatRecordId?: number | string
@@ -34,6 +34,7 @@ export type FeedbackState = {
   comment?: string
   submitted?: boolean
   submitting?: boolean
+  submittingType?: FeedbackType
   error?: string
   createdAt?: string
 }

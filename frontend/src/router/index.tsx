@@ -1,6 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 
-import { Layout } from '../components/Layout'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { AdminChatRecordsPage } from '../pages/admin/AdminChatRecordsPage'
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage'
@@ -16,7 +15,7 @@ import { RegisterPage } from '../pages/RegisterPage'
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Navigate to="/knowledge-bases" replace />,
+    element: <Navigate to="/chat" replace />,
   },
   {
     path: '/login',
@@ -30,25 +29,8 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute />,
     children: [
       {
-        element: <Layout />,
-        children: [
-          {
-            path: '/knowledge-bases',
-            element: <KnowledgeBaseListPage />,
-          },
-          {
-            path: '/knowledge-bases/:knowledgeBaseId/chat',
-            element: <ChatPage />,
-          },
-          {
-            path: '/knowledge-bases/:id',
-            element: <KnowledgeBaseDetailPage />,
-          },
-          {
-            path: '/chat',
-            element: <ChatPage />,
-          },
-        ],
+        path: '/chat',
+        element: <ChatPage />,
       },
     ],
   },
@@ -79,12 +61,20 @@ export const router = createBrowserRouter([
             path: 'unmatched',
             element: <AdminUnmatchedQuestionsPage />,
           },
+          {
+            path: 'knowledge-bases',
+            element: <KnowledgeBaseListPage />,
+          },
+          {
+            path: 'knowledge-bases/:id',
+            element: <KnowledgeBaseDetailPage />,
+          },
         ],
       },
     ],
   },
   {
     path: '*',
-    element: <Navigate to="/knowledge-bases" replace />,
+    element: <Navigate to="/chat" replace />,
   },
 ])

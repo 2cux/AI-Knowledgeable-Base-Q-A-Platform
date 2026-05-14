@@ -21,6 +21,7 @@ public interface ChunkEmbeddingMapper extends BaseMapper<ChunkEmbedding> {
                 dc.id AS chunkId,
                 dc.document_id AS documentId,
                 dc.knowledge_base_id AS knowledgeBaseId,
+                kb.name AS knowledgeBaseName,
                 dc.chunk_index AS chunkIndex,
                 dc.content AS content,
                 d.file_name AS documentName,
@@ -30,13 +31,16 @@ public interface ChunkEmbeddingMapper extends BaseMapper<ChunkEmbedding> {
             FROM chunk_embedding ce
             INNER JOIN document_chunk dc ON dc.id = ce.chunk_id
             INNER JOIN document d ON d.id = dc.document_id
+            INNER JOIN knowledge_base kb ON kb.id = dc.knowledge_base_id
             WHERE ce.knowledge_base_id = #{knowledgeBaseId}
               AND dc.knowledge_base_id = #{knowledgeBaseId}
               AND d.knowledge_base_id = #{knowledgeBaseId}
+              AND kb.id = #{knowledgeBaseId}
               AND ce.status = #{status}
               AND ce.embedding_model = #{embeddingModel}
               AND ce.vector_json IS NOT NULL
               AND d.parse_status IN ('SUCCESS', 'CHUNKED', 'DONE')
+              AND d.embedding_status = 'SUCCESS'
             ORDER BY ce.id ASC
             LIMIT #{limit}
             """)
@@ -45,4 +49,57 @@ public interface ChunkEmbeddingMapper extends BaseMapper<ChunkEmbedding> {
             @Param("status") String status,
             @Param("embeddingModel") String embeddingModel,
             @Param("limit") Integer limit);
+
+    @Select("""
+            SELECT
+                dc.id AS chunkId,
+                dc.document_id AS documentId,
+                dc.knowledge_base_id AS knowledgeBaseId,
+                kb.name AS knowledgeBaseName,
+                dc.chunk_index AS chunkIndex,
+                dc.content AS content,
+                d.file_name AS documentName,
+                ce.vector_id AS vectorId,
+                ce.embedding_model AS embeddingModel,
+                ce.vector_json AS vectorJson
+            FROM chunk_embedding ce
+            INNER JOIN document_chunk dc ON dc.id = ce.chunk_id
+            INNER JOIN document d ON d.id = dc.document_id
+            INNER JOIN knowledge_base kb ON kb.id = dc.knowledge_base_id
+            WHERE kb.status = 1
+              AND kb.deleted = 0
+              AND ce.status = #{status}
+              AND ce.embedding_model = #{embeddingModel}
+              AND ce.vector_json IS NOT NULL
+              AND ce.knowledge_base_id = dc.knowledge_base_id
+              AND d.knowledge_base_id = dc.knowledge_base_id
+              AND d.parse_status IN ('SUCCESS', 'CHUNKED', 'DONE')
+              AND d.embedding_status = 'SUCCESS'
+            ORDER BY ce.id ASC
+            LIMIT #{limit}
+            """)
+    List<RetrievalCandidate> selectGlobalRetrievalCandidates(
+            @Param("status") String status,
+            @Param("embeddingModel") String embeddingModel,
+            @Param("limit") Integer limit);
+
+    @Select("""
+            SELECT COUNT(1)
+            FROM chunk_embedding ce
+            INNER JOIN document_chunk dc ON dc.id = ce.chunk_id
+            INNER JOIN document d ON d.id = dc.document_id
+            INNER JOIN knowledge_base kb ON kb.id = dc.knowledge_base_id
+            WHERE kb.status = 1
+              AND kb.deleted = 0
+              AND ce.status = #{status}
+              AND ce.embedding_model = #{embeddingModel}
+              AND ce.vector_json IS NOT NULL
+              AND ce.knowledge_base_id = dc.knowledge_base_id
+              AND d.knowledge_base_id = dc.knowledge_base_id
+              AND d.parse_status IN ('SUCCESS', 'CHUNKED', 'DONE')
+              AND d.embedding_status = 'SUCCESS'
+            """)
+    Long countGlobalRetrievalCandidates(
+            @Param("status") String status,
+            @Param("embeddingModel") String embeddingModel);
 }

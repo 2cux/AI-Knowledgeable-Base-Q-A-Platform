@@ -21,6 +21,9 @@ public class RetrievalChunkVO {
     @Schema(description = "知识库ID", example = "1")
     private Long knowledgeBaseId;
 
+    @Schema(description = "Knowledge base name", example = "IT Service Desk")
+    private String knowledgeBaseName;
+
     @Schema(description = "chunk在文档内的顺序，从0开始", example = "0")
     private Integer chunkIndex;
 

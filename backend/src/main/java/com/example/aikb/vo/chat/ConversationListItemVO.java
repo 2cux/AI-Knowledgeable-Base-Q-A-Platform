@@ -13,9 +13,13 @@ public class ConversationListItemVO {
     private String conversationId;
     private String title;
     private Long knowledgeBaseId;
+
+    private String scopeType;
     private Integer messageCount;
     private String lastQuestion;
     private String lastAnswerPreview;
     private LocalDateTime lastActiveAt;
     private LocalDateTime createdAt;
+    private Boolean pinned;
+    private LocalDateTime pinnedAt;
 }

@@ -100,7 +100,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
         long pageSize = normalizePageSize(size);
         Page<ChatRecord> pageRequest = Page.of(pageNum, pageSize);
         IPage<ChatRecord> result = chatRecordMapper.selectPage(pageRequest, new QueryWrapper<ChatRecord>()
-                .select("id", "user_id", "knowledge_base_id", "conversation_id", "question", "answer",
+                .select("id", "user_id", "knowledge_base_id", "scope_type", "conversation_id", "question", "answer",
                         "answer_status", "matched", "retrieved_chunk_count", "raw_retrieved_chunk_count", "top_k",
                         "created_at")
                 .eq("matched", false)
@@ -147,7 +147,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                         .eq(ChatRecord::getRetrievedChunkCount, 0)
                         .or()
                         .in(ChatRecord::getAnswerStatus, AnswerStatus.NO_HIT, AnswerStatus.WEAK_HIT,
-                                AnswerStatus.RETRIEVAL_UNAVAILABLE))
+                                AnswerStatus.NO_AVAILABLE_KNOWLEDGE_BASE, AnswerStatus.RETRIEVAL_UNAVAILABLE))
                 .orderByDesc(ChatRecord::getCreatedAt)
                 .orderByDesc(ChatRecord::getId));
 
@@ -283,6 +283,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .id(record.getId())
                 .userId(record.getUserId())
                 .knowledgeBaseId(record.getKnowledgeBaseId())
+                .scopeType(record.getScopeType())
                 .conversationId(record.getConversationId())
                 .question(record.getQuestion())
                 .answerPreview(preview(record.getAnswer()))
@@ -300,6 +301,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .id(record.getId())
                 .userId(record.getUserId())
                 .knowledgeBaseId(record.getKnowledgeBaseId())
+                .scopeType(record.getScopeType())
                 .conversationId(record.getConversationId())
                 .question(record.getQuestion())
                 .answerPreview(preview(record.getAnswer()))
@@ -334,6 +336,7 @@ public class AdminChatRecordQueryServiceImpl implements AdminChatRecordQueryServ
                 .id(record.getId())
                 .userId(record.getUserId())
                 .knowledgeBaseId(record.getKnowledgeBaseId())
+                .scopeType(record.getScopeType())
                 .conversationId(record.getConversationId())
                 .question(record.getQuestion())
                 .answer(record.getAnswer())

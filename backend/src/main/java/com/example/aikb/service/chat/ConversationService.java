@@ -20,4 +20,10 @@ public interface ConversationService {
     PageResult<ConversationListItemVO> pageCurrentUser(Long knowledgeBaseId, long pageNum, long pageSize);
 
     ConversationDetailVO getCurrentUserDetail(String conversationId);
+
+    ConversationListItemVO renameCurrentUserConversation(String conversationId, Long knowledgeBaseId, String title);
+
+    ConversationListItemVO pinCurrentUserConversation(String conversationId, Long knowledgeBaseId, Boolean pinned);
+
+    void deleteCurrentUserConversation(String conversationId, Long knowledgeBaseId);
 }

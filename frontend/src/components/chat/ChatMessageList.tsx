@@ -3,6 +3,7 @@ import type { FeedbackCancelRequest, FeedbackSubmitRequest } from '../../types/f
 import { normalizeSources } from '../../utils/chatSources'
 import { AssistantMessageActions } from './AssistantMessageActions'
 import { SourceList } from './SourceList'
+import { ThinkingIndicator } from './ThinkingIndicator'
 
 type ChatMessageListProps = {
   messages: ChatMessage[]
@@ -22,12 +23,12 @@ function ChatWelcome() {
       <div className="max-w-xl">
         <h2 className="text-2xl font-semibold text-slate-950">有什么我能帮到你吗？</h2>
         <p className="mt-3 text-sm leading-6 text-slate-500">
-          输入问题，开始基于当前知识库的问答。
+          我会基于企业知识库为你回答问题。
         </p>
         <div className="mt-6 grid gap-2 text-left text-sm text-slate-600 sm:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">询问当前知识库中的制度内容</div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">让系统总结文档重点</div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">查询某个流程或操作说明</div>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">询问企业内部制度或流程</div>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">让系统总结知识库文档重点</div>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">查询某个操作说明或规范</div>
           <div className="rounded-md border border-slate-200 bg-white px-3 py-2">核对文档中的关键要求</div>
         </div>
       </div>
@@ -173,9 +174,7 @@ export function ChatMessageList({
 
       {sending ? (
         <div className="flex justify-start">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-            正在生成回答...
-          </div>
+          <ThinkingIndicator text="正在生成" />
         </div>
       ) : null}
     </div>

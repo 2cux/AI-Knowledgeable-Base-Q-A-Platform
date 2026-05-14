@@ -50,6 +50,25 @@ public class DatabaseVectorSearchAdapter implements VectorSearchAdapter {
                 .toList();
     }
 
+    @Override
+    public List<RetrievalCandidate> searchGlobal(RetrievalQueryEmbedding queryEmbedding, int topK) {
+        if (queryEmbedding == null || queryEmbedding.getVector() == null || queryEmbedding.getVector().isEmpty()) {
+            throw new BusinessException("query embedding generation failed");
+        }
+
+        List<RetrievalCandidate> candidates =
+                chunkEmbeddingMapper.selectGlobalRetrievalCandidates(
+                        STATUS_SUCCESS, queryEmbedding.getEmbeddingModel(), CANDIDATE_LIMIT);
+
+        return candidates.stream()
+                .map(candidate -> scoreCandidate(candidate, queryEmbedding.getVector()))
+                .filter(candidate -> candidate.getScore() > 0D)
+                .sorted(Comparator.comparing(RetrievalCandidate::getScore).reversed()
+                        .thenComparing(RetrievalCandidate::getChunkId))
+                .limit(topK)
+                .toList();
+    }
+
     private RetrievalCandidate scoreCandidate(RetrievalCandidate candidate, List<Double> queryVector) {
         List<Double> chunkVector = parseVector(candidate);
         candidate.setScore(cosine(queryVector, chunkVector));

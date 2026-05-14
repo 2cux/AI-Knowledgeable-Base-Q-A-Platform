@@ -20,6 +20,9 @@ public class AdminChatRecordListItemVO {
     @Schema(description = "Knowledge base ID", example = "1")
     private Long knowledgeBaseId;
 
+    @Schema(description = "Ask search scope", example = "ENTERPRISE_ALL")
+    private String scopeType;
+
     @Schema(description = "Conversation ID")
     private String conversationId;
 

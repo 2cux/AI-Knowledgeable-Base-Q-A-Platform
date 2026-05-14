@@ -5,6 +5,7 @@ import com.example.aikb.common.Result;
 import com.example.aikb.dto.kb.KnowledgeBaseCreateRequest;
 import com.example.aikb.dto.kb.KnowledgeBasePageRequest;
 import com.example.aikb.dto.kb.KnowledgeBaseUpdateRequest;
+import com.example.aikb.service.admin.AdminPermissionService;
 import com.example.aikb.service.document.DocumentService;
 import com.example.aikb.service.kb.KnowledgeBaseService;
 import com.example.aikb.vo.document.DocumentListVO;
@@ -38,16 +39,19 @@ public class KnowledgeBaseController {
 
     private final KnowledgeBaseService knowledgeBaseService;
     private final DocumentService documentService;
+    private final AdminPermissionService adminPermissionService;
 
     @Operation(summary = "创建知识库")
     @PostMapping
     public Result<KnowledgeBaseVO> create(@Valid @RequestBody KnowledgeBaseCreateRequest request) {
+        adminPermissionService.ensureAdmin();
         return Result.success(knowledgeBaseService.create(request), "Created successfully");
     }
 
     @Operation(summary = "分页查询知识库")
     @GetMapping
     public Result<PageResult<KnowledgeBaseVO>> page(@Valid @ModelAttribute KnowledgeBasePageRequest request) {
+        adminPermissionService.ensureAdmin();
         return Result.success(knowledgeBaseService.page(request));
     }
 
@@ -55,6 +59,7 @@ public class KnowledgeBaseController {
     @GetMapping("/{id}")
     public Result<KnowledgeBaseVO> getById(
             @PathVariable @Positive(message = "Knowledge base id must be greater than 0") Long id) {
+        adminPermissionService.ensureAdmin();
         return Result.success(knowledgeBaseService.getById(id));
     }
 
@@ -63,6 +68,7 @@ public class KnowledgeBaseController {
     public Result<KnowledgeBaseVO> update(
             @PathVariable @Positive(message = "Knowledge base id must be greater than 0") Long id,
             @Valid @RequestBody KnowledgeBaseUpdateRequest request) {
+        adminPermissionService.ensureAdmin();
         return Result.success(knowledgeBaseService.update(id, request), "Updated successfully");
     }
 
@@ -70,6 +76,7 @@ public class KnowledgeBaseController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(
             @PathVariable @Positive(message = "Knowledge base id must be greater than 0") Long id) {
+        adminPermissionService.ensureAdmin();
         knowledgeBaseService.delete(id);
         return Result.success(null, "Deleted successfully");
     }
@@ -78,6 +85,7 @@ public class KnowledgeBaseController {
     @GetMapping("/{id}/documents")
     public Result<List<DocumentListVO>> listDocuments(
             @PathVariable @Positive(message = "Knowledge base id must be greater than 0") Long id) {
+        adminPermissionService.ensureAdmin();
         return Result.success(documentService.listByKnowledgeBase(id));
     }
 }

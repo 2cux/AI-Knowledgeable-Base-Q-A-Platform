@@ -185,9 +185,9 @@ class AdminChatRecordQueryServiceImplTest {
         Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 10);
         mapperPage.setRecords(List.of(row));
         mapperPage.setTotal(1);
-        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
+        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any(), any())).thenReturn(mapperPage);
 
-        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null);
+        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null, null);
 
         assertThat(result.getPageNum()).isEqualTo(1);
         assertThat(result.getPageSize()).isEqualTo(10);
@@ -208,14 +208,14 @@ class AdminChatRecordQueryServiceImplTest {
     @Test
     void pageFeedbackLimitsOversizedPageSize() {
         Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 100);
-        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
+        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any(), any())).thenReturn(mapperPage);
 
-        service.pageFeedback(11L, " like ", null, null, 2L, 200L);
+        service.pageFeedback(11L, " like ", null, null, null, 2L, 200L);
 
         ArgumentCaptor<Page<AdminChatFeedbackQueryRow>> pageCaptor = ArgumentCaptor.forClass(Page.class);
         ArgumentCaptor<String> feedbackTypeCaptor = ArgumentCaptor.forClass(String.class);
         verify(chatFeedbackMapper).selectAdminFeedbackPage(pageCaptor.capture(), any(), feedbackTypeCaptor.capture(),
-                any(), any());
+                any(), any(), any());
         assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2);
         assertThat(pageCaptor.getValue().getSize()).isEqualTo(100);
         assertThat(feedbackTypeCaptor.getValue()).isEqualTo("LIKE");
@@ -226,9 +226,9 @@ class AdminChatRecordQueryServiceImplTest {
         Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 10);
         mapperPage.setRecords(List.of());
         mapperPage.setTotal(0);
-        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
+        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any(), any())).thenReturn(mapperPage);
 
-        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null);
+        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null, null);
 
         assertThat(result.getPageNum()).isEqualTo(1);
         assertThat(result.getPageSize()).isEqualTo(10);
@@ -243,9 +243,9 @@ class AdminChatRecordQueryServiceImplTest {
         Page<AdminChatFeedbackQueryRow> mapperPage = new Page<>(1, 10);
         mapperPage.setRecords(List.of(row));
         mapperPage.setTotal(1);
-        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any())).thenReturn(mapperPage);
+        when(chatFeedbackMapper.selectAdminFeedbackPage(any(), any(), any(), any(), any(), any())).thenReturn(mapperPage);
 
-        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null);
+        PageResult<AdminChatFeedbackVO> result = service.pageFeedback(null, null, null, null, null, null, null);
 
         assertThat(result.getList()).hasSize(1);
         assertThat(result.getList().get(0).getAnswerPreview()).isEmpty();
@@ -253,12 +253,12 @@ class AdminChatRecordQueryServiceImplTest {
 
     @Test
     void pageFeedbackThrowsWhenRatingInvalid() {
-        assertThatThrownBy(() -> service.pageFeedback(null, "BAD", null, null, 1L, 10L))
+        assertThatThrownBy(() -> service.pageFeedback(null, "BAD", null, null, null, 1L, 10L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("rating");
 
         verify(adminPermissionService).ensureAdmin();
-        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any());
+        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -266,12 +266,12 @@ class AdminChatRecordQueryServiceImplTest {
         LocalDateTime startTime = LocalDateTime.of(2026, 5, 3, 10, 0);
         LocalDateTime endTime = LocalDateTime.of(2026, 5, 2, 10, 0);
 
-        assertThatThrownBy(() -> service.pageFeedback(null, null, startTime, endTime, 1L, 10L))
+        assertThatThrownBy(() -> service.pageFeedback(null, null, null, startTime, endTime, 1L, 10L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("startTime");
 
         verify(adminPermissionService).ensureAdmin();
-        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any());
+        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -279,11 +279,11 @@ class AdminChatRecordQueryServiceImplTest {
         doThrow(new BusinessException(40300, "forbidden"))
                 .when(adminPermissionService).ensureAdmin();
 
-        assertThatThrownBy(() -> service.pageFeedback(null, null, null, null, 1L, 10L))
+        assertThatThrownBy(() -> service.pageFeedback(null, null, null, null, null, 1L, 10L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("forbidden");
 
-        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any());
+        verify(chatFeedbackMapper, never()).selectAdminFeedbackPage(any(), any(), any(), any(), any(), any());
     }
 
     @Test

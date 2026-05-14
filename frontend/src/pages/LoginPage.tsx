@@ -33,12 +33,12 @@ export function LoginPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const from = (location.state as LocationState | null)?.from?.pathname ?? '/knowledge-bases'
-  const redirectTo = from === '/login' || from === '/register' ? '/knowledge-bases' : from
+  const from = (location.state as LocationState | null)?.from?.pathname ?? '/chat'
+  const redirectTo = from === '/login' || from === '/register' ? '/chat' : from
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      navigate('/knowledge-bases', { replace: true })
+      navigate('/chat', { replace: true })
     }
   }, [isAuthenticated, loading, navigate])
 
