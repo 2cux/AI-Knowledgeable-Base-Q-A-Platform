@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 认证接口控制器，负责处理用户注册和登录请求。
  */
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Tag(name = "认证管理", description = "用户注册、登录等认证接口")
 public class AuthController {

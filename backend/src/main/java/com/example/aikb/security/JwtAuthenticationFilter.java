@@ -1,8 +1,6 @@
 package com.example.aikb.security;
 
 import com.example.aikb.common.JwtUtil;
-import com.example.aikb.common.Result;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -29,7 +27,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtUtil jwtUtil;
-    private final ObjectMapper objectMapper;
 
     /**
      * 解析 Authorization 请求头中的 Bearer Token，认证成功后设置当前登录用户。
@@ -53,17 +50,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (JwtException | IllegalArgumentException ex) {
                 SecurityContextHolder.clearContext();
-                writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, 40100, "登录已过期或无效");
-                return;
             }
         }
         filterChain.doFilter(request, response);
-    }
-
-    private void writeJsonError(HttpServletResponse response, int httpStatus, int code, String message)
-            throws IOException {
-        response.setStatus(httpStatus);
-        response.setContentType("application/json;charset=UTF-8");
-        objectMapper.writeValue(response.getWriter(), Result.fail(code, message));
     }
 }

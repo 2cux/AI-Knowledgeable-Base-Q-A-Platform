@@ -75,7 +75,7 @@ class AuthSecurityCorsTest {
 
     @Test
     void preflightForAllowedOriginShouldReturnCorsHeadersWithoutToken() throws Exception {
-        mockMvc.perform(options("/auth/me")
+        mockMvc.perform(options("/api/auth/me")
                         .header("Origin", ALLOWED_ORIGIN)
                         .header("Access-Control-Request-Method", "GET")
                         .header("Access-Control-Request-Headers", "Authorization, Content-Type"))
@@ -88,7 +88,7 @@ class AuthSecurityCorsTest {
 
     @Test
     void preflightForDisallowedOriginShouldNotReturnCorsAllowOrigin() throws Exception {
-        mockMvc.perform(options("/auth/me")
+        mockMvc.perform(options("/api/auth/me")
                         .header("Origin", "http://evil.example.com")
                         .header("Access-Control-Request-Method", "GET")
                         .header("Access-Control-Request-Headers", "Authorization, Content-Type"))
@@ -98,7 +98,7 @@ class AuthSecurityCorsTest {
 
     @Test
     void protectedEndpointWithoutTokenShouldStillRequireAuthentication() throws Exception {
-        mockMvc.perform(get("/auth/me")
+        mockMvc.perform(get("/api/auth/me")
                         .header("Origin", ALLOWED_ORIGIN))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string("Access-Control-Allow-Origin", ALLOWED_ORIGIN));
@@ -115,7 +115,7 @@ class AuthSecurityCorsTest {
                 .username("alice")
                 .build());
 
-        mockMvc.perform(get("/auth/me")
+        mockMvc.perform(get("/api/auth/me")
                         .header("Origin", ALLOWED_ORIGIN)
                         .header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isOk())
