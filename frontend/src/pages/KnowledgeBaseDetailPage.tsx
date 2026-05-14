@@ -12,7 +12,7 @@ import { getKnowledgeBaseById } from '../api/knowledgeBase'
 import type { DocumentEmbeddingResponse, KnowledgeDocument } from '../types/document'
 import type { KnowledgeBase } from '../types/knowledgeBase'
 
-const SUPPORTED_EXTENSIONS = ['txt', 'md'] as const
+const SUPPORTED_EXTENSIONS = ['txt', 'md', 'pdf', 'docx'] as const
 const EMBEDDING_POLL_INTERVAL_MS = 2000
 const EMBEDDING_POLL_TIMEOUT_MS = 60000
 
@@ -369,10 +369,10 @@ export function KnowledgeBaseDetailPage() {
       return
     }
 
-    // 文件类型校验：当前后端真实只支持 txt / md，前端也只放行这两类后缀。
+    // 文件类型校验：当前后端只支持 txt、md、pdf、docx 文件。
     if (!isSupportedFile(file)) {
       setSelectedFile(null)
-      setUploadErrorMessage('仅支持上传 .txt 或 .md 文件')
+      setUploadErrorMessage('仅支持上传 .txt、.md、.pdf、.docx 文件')
       event.target.value = ''
       return
     }
@@ -391,13 +391,13 @@ export function KnowledgeBaseDetailPage() {
     }
 
     if (!selectedFile) {
-      setUploadErrorMessage('请先选择 .txt 或 .md 文件')
+      setUploadErrorMessage('请先选择 .txt、.md、.pdf 或 .docx 文件')
       return
     }
 
     // 上传逻辑：携带当前 knowledgeBaseId，并在上传期间禁用按钮防止重复提交。
     if (!isSupportedFile(selectedFile)) {
-      setUploadErrorMessage('仅支持上传 .txt 或 .md 文件')
+      setUploadErrorMessage('仅支持上传 .txt、.md、.pdf、.docx 文件')
       return
     }
 
@@ -558,13 +558,13 @@ export function KnowledgeBaseDetailPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-950">上传文档</h2>
-            <p className="mt-1 text-sm text-slate-500">当前仅支持 .txt 和 .md 文件。</p>
+            <p className="mt-1 text-sm text-slate-500">支持 .txt、.md、.pdf、.docx 文件。</p>
           </div>
           <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
             <input
               ref={fileInputRef}
               type="file"
-              accept=".txt,.md"
+              accept=".txt,.md,.pdf,.docx"
               disabled={!canUseKnowledgeBase || isUploading}
               onChange={handleFileChange}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 sm:w-80"
@@ -614,7 +614,7 @@ export function KnowledgeBaseDetailPage() {
           <div className="px-5 py-12 text-center text-sm text-slate-500">文档加载中...</div>
         ) : documents.length === 0 ? (
           <div className="px-5 py-12 text-center text-sm text-slate-500">
-            暂无文档，请先上传 .txt 或 .md 文件。
+            暂无文档，请先上传文件。
           </div>
         ) : (
           <div className="overflow-x-auto">

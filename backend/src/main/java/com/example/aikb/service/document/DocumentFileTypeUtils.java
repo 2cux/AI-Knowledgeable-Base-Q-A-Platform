@@ -10,9 +10,9 @@ import org.springframework.util.StringUtils;
  */
 public final class DocumentFileTypeUtils {
 
-    public static final String SUPPORTED_FILE_MESSAGE = "当前仅支持 txt、md 文件";
-    public static final String SUPPORTED_PARSE_MESSAGE = "当前仅支持 txt/md 文档解析";
-    private static final Set<String> SUPPORTED_TYPES = Set.of("txt", "md");
+    public static final String SUPPORTED_FILE_MESSAGE = "当前仅支持 .txt、.md、.pdf、.docx 文件";
+    public static final String SUPPORTED_PARSE_MESSAGE = "当前仅支持 txt、md、pdf、docx 文档解析";
+    private static final Set<String> SUPPORTED_TYPES = Set.of("txt", "md", "pdf", "docx");
 
     private DocumentFileTypeUtils() {
     }
