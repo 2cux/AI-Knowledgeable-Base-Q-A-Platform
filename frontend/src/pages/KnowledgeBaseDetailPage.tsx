@@ -15,7 +15,6 @@ import type { KnowledgeBase } from '../types/knowledgeBase'
 
 const SUPPORTED_EXTENSIONS = ['txt', 'md', 'pdf', 'docx'] as const
 const EMBEDDING_POLL_INTERVAL_MS = 2000
-const EMBEDDING_POLL_TIMEOUT_MS = 60000
 
 type ResponseError = {
   response?: {
@@ -185,13 +184,15 @@ export function KnowledgeBaseDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDocumentLoading, setIsDocumentLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [processingId, setProcessingId] = useState<number | null>(null)
+  const [parsingDocumentIds, setParsingDocumentIds] = useState<Set<number>>(() => new Set())
   const [embeddingId, setEmbeddingId] = useState<number | null>(null)
   const [embeddingProcessingIds, setEmbeddingProcessingIds] = useState<Set<number>>(() => new Set())
   const [embeddingProgressMap, setEmbeddingProgressMap] = useState<Map<number, DocumentEmbeddingProgress>>(() => new Map())
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [uploadErrorMessage, setUploadErrorMessage] = useState('')
+  const parsingPollTimersRef = useRef<Map<number, number>>(new Map())
+  const parsingPollStartedAtRef = useRef<Map<number, number>>(new Map())
   const embeddingPollTimersRef = useRef<Map<number, number>>(new Map())
   const embeddingPollStartedAtRef = useRef<Map<number, number>>(new Map())
   const embeddingObservedRunningRef = useRef<Set<number>>(new Set())
@@ -269,6 +270,12 @@ export function KnowledgeBaseDetailPage() {
         ) {
           startEmbeddingPolling(docId)
         }
+        if (
+          isBusyStatus(doc.parseStatus) &&
+          !parsingPollStartedAtRef.current.has(docId)
+        ) {
+          startParsingPolling(docId)
+        }
       }
       return response.data
     } catch (error) {
@@ -288,6 +295,9 @@ export function KnowledgeBaseDetailPage() {
 
   useEffect(() => {
     return () => {
+      parsingPollTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+      parsingPollTimersRef.current.clear()
+      parsingPollStartedAtRef.current.clear()
       embeddingPollTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
       embeddingPollTimersRef.current.clear()
       embeddingPollStartedAtRef.current.clear()
@@ -325,6 +335,77 @@ export function KnowledgeBaseDetailPage() {
       next.delete(documentId)
       return next
     })
+  }
+
+  function stopParsingPolling(documentId: number) {
+    const timerId = parsingPollTimersRef.current.get(documentId)
+
+    if (timerId !== undefined) {
+      window.clearTimeout(timerId)
+      parsingPollTimersRef.current.delete(documentId)
+    }
+
+    parsingPollStartedAtRef.current.delete(documentId)
+    setParsingDocumentIds((prev) => {
+      const next = new Set(prev)
+      next.delete(documentId)
+      return next
+    })
+  }
+
+  function startParsingPolling(documentId: number) {
+    stopParsingPolling(documentId)
+    parsingPollStartedAtRef.current.set(documentId, Date.now())
+
+    const pollOnce = async () => {
+      if (!parsingPollStartedAtRef.current.has(documentId)) {
+        return
+      }
+
+      try {
+        const docs = await getDocumentsByKnowledgeBaseId(knowledgeBaseId)
+
+        if (docs.code !== 0 || !docs.data) {
+          scheduleNextPoll()
+          return
+        }
+
+        const currentDocs = docs.data
+        setDocuments(currentDocs)
+        const doc = currentDocs.find((d) => resolveDocumentId(d) === documentId)
+
+        if (!doc || !isBusyStatus(doc.parseStatus)) {
+          stopParsingPolling(documentId)
+          if (doc?.parseStatus === 'SUCCESS') {
+            setSuccessMessage('文档解析完成')
+          } else if (doc?.parseStatus === 'FAILED') {
+            setErrorMessage(doc.latestErrorMessage || '文档解析失败')
+          }
+          return
+        }
+
+        scheduleNextPoll()
+      } catch {
+        scheduleNextPoll()
+      }
+    }
+
+    const scheduleNextPoll = () => {
+      if (!parsingPollStartedAtRef.current.has(documentId)) {
+        return
+      }
+
+      const timerId = window.setTimeout(() => {
+        void pollOnce()
+      }, 2000)
+
+      parsingPollTimersRef.current.set(documentId, timerId)
+    }
+
+    const timerId = window.setTimeout(() => {
+      void pollOnce()
+    }, 2000)
+    parsingPollTimersRef.current.set(documentId, timerId)
   }
 
   function startEmbeddingPolling(documentId: number) {
@@ -469,12 +550,15 @@ export function KnowledgeBaseDetailPage() {
   async function handleProcess(document: KnowledgeDocument) {
     const documentId = resolveDocumentId(document)
 
-    if (processingId !== null || embeddingId !== null || embeddingProcessingIds.size > 0) {
+    if (parsingDocumentIds.has(documentId)) {
       return
     }
 
-    // process 调用逻辑：真实文件已上传到后端，这里不传 textContent，交由后端读取 txt/md 文件并切片。
-    setProcessingId(documentId)
+    setParsingDocumentIds((prev) => {
+      const next = new Set(prev)
+      next.add(documentId)
+      return next
+    })
     setErrorMessage('')
     setSuccessMessage('')
 
@@ -483,22 +567,31 @@ export function KnowledgeBaseDetailPage() {
 
       if (response.code !== 0) {
         setErrorMessage(response.message || '文档解析任务提交失败')
+        setParsingDocumentIds((prev) => {
+          const next = new Set(prev)
+          next.delete(documentId)
+          return next
+        })
         return
       }
 
       setSuccessMessage('文档解析任务已提交')
       await loadDocuments()
+      startParsingPolling(documentId)
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '文档解析任务提交失败，请稍后重试'))
-    } finally {
-      setProcessingId(null)
+      setParsingDocumentIds((prev) => {
+        const next = new Set(prev)
+        next.delete(documentId)
+        return next
+      })
     }
   }
 
   async function handleEmbed(document: KnowledgeDocument) {
     const documentId = resolveDocumentId(document)
 
-    if (processingId !== null || embeddingId !== null || embeddingProcessingIds.has(documentId)) {
+    if (embeddingId !== null || embeddingProcessingIds.has(documentId)) {
       return
     }
 
@@ -629,7 +722,7 @@ export function KnowledgeBaseDetailPage() {
             onClick={() => void loadDocuments()}
             disabled={
               isDocumentLoading ||
-              processingId !== null ||
+              parsingDocumentIds.size > 0 ||
               embeddingId !== null ||
               embeddingProcessingIds.size > 0 ||
               isUploading
@@ -663,7 +756,8 @@ export function KnowledgeBaseDetailPage() {
               <tbody className="divide-y divide-slate-200">
                 {documents.map((document) => {
                   const documentId = resolveDocumentId(document)
-                  const processBusy = processingId === documentId || isBusyStatus(document.parseStatus)
+                  const isParsing = parsingDocumentIds.has(documentId)
+                  const processBusy = isParsing || isBusyStatus(document.parseStatus)
                   const localEmbeddingProcessing = embeddingProcessingIds.has(documentId)
                   const embedBusy =
                     embeddingId === documentId ||
@@ -676,9 +770,13 @@ export function KnowledgeBaseDetailPage() {
                     <tr key={documentId} className="align-top">
                       <td className="max-w-xs px-5 py-4">
                         <div className="break-words font-medium text-slate-900">{document.fileName}</div>
-                        {localEmbeddingProcessing ? (
+                        {isParsing ? (
                           <div className="mt-1 break-words text-xs text-slate-500">
-                            正在生成向量，请稍候
+                            文档解析中...
+                          </div>
+                        ) : localEmbeddingProcessing ? (
+                          <div className="mt-1 break-words text-xs text-slate-500">
+                            文档向量化中...
                           </div>
                         ) : shouldShowDocumentError(document) ? (
                           <div className="mt-1 break-words text-xs text-red-600">
@@ -699,25 +797,14 @@ export function KnowledgeBaseDetailPage() {
                       <td className="px-5 py-4">
                         {(() => {
                           const progress = embeddingProgressMap.get(documentId)
-                          if (progress && progress.status === 'PROCESSING' && progress.totalChunks > 0) {
+                          if (progress && progress.status === 'PROCESSING') {
                             return (
-                              <div className="min-w-[140px] space-y-1.5">
+                              <div className="space-y-1">
                                 <span className="inline-block rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
-                                  向量化中
+                                  文档向量化中...
                                 </span>
-                                <div className="flex items-center gap-2">
-                                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
-                                    <div
-                                      className="h-full rounded-full bg-blue-500 transition-all duration-500"
-                                      style={{ width: `${progress.progress}%` }}
-                                    />
-                                  </div>
-                                  <span className="whitespace-nowrap text-xs font-medium text-slate-600">
-                                    {progress.progress}%
-                                  </span>
-                                </div>
                                 <div className="text-xs text-slate-500">
-                                  {progress.embeddedChunks} / {progress.totalChunks} 切片
+                                  已处理：{progress.embeddedChunks}{progress.totalChunks > 0 ? ` / ${progress.totalChunks}` : ''}
                                 </div>
                               </div>
                             )
@@ -731,7 +818,9 @@ export function KnowledgeBaseDetailPage() {
                                     ? 'bg-emerald-100 text-emerald-700'
                                     : embeddingStatus === 'FAILED'
                                       ? 'bg-red-100 text-red-700'
-                                      : 'bg-slate-100 text-slate-700'
+                                      : embeddingStatus === 'PROCESSING' || embeddingStatus === 'PENDING'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : 'bg-slate-100 text-slate-700'
                                 }`}
                               >
                                 {embeddingStatusLabel(embeddingStatus)}
@@ -756,12 +845,7 @@ export function KnowledgeBaseDetailPage() {
                           <button
                             type="button"
                             onClick={() => void handleProcess(document)}
-                            disabled={
-                              processBusy ||
-                              processingId !== null ||
-                              embeddingId !== null ||
-                              embeddingProcessingIds.size > 0
-                            }
+                            disabled={processBusy}
                             className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                           >
                             {processBusy ? '解析中...' : '解析'}
@@ -769,10 +853,10 @@ export function KnowledgeBaseDetailPage() {
                           <button
                             type="button"
                             onClick={() => void handleEmbed(document)}
-                            disabled={!canEmbed || embedBusy || processingId !== null || embeddingId !== null}
+                            disabled={!canEmbed || embedBusy || embeddingId !== null}
                             title={
                               localEmbeddingProcessing
-                                ? '正在生成向量，请稍候'
+                                ? '文档向量化中...'
                                 : !isParsed(document)
                                   ? '请先解析文档'
                                   : (document.chunkCount ?? 0) <= 0
