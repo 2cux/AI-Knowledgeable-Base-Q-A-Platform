@@ -95,6 +95,26 @@ public class LlmApiClient {
             throw new BusinessException(50000, "LLM API 调用失败: HTTP " + ex.getStatusCode().value());
         } catch (BusinessException ex) {
             throw ex;
+        } catch (org.springframework.web.client.ResourceAccessException ex) {
+            String message = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+            String errorMsg;
+            if (message.contains("tim") || message.contains("read timed out") || message.contains("connect timed out")) {
+                errorMsg = "LLM API 调用超时，可能是模型响应较慢，请稍后重试";
+                log.warn("LLM API call timed out. finalUrl={}, model={}, durationMs={}, error={}",
+                        finalUrl, request.getModel(), System.currentTimeMillis() - start,
+                        LogSanitizer.safeMessage(ex.getMessage()));
+            } else if (message.contains("connect") || message.contains("refused") || message.contains("econn")) {
+                errorMsg = "LLM API 连接失败，请检查网络或 API 服务状态";
+                log.warn("LLM API connection failed. finalUrl={}, model={}, durationMs={}, error={}",
+                        finalUrl, request.getModel(), System.currentTimeMillis() - start,
+                        LogSanitizer.safeMessage(ex.getMessage()));
+            } else {
+                errorMsg = "LLM API 通信异常";
+                log.warn("LLM API communication error. finalUrl={}, model={}, durationMs={}, errorType={}, error={}",
+                        finalUrl, request.getModel(), System.currentTimeMillis() - start,
+                        ex.getClass().getSimpleName(), LogSanitizer.safeMessage(ex.getMessage()));
+            }
+            throw new BusinessException(50000, errorMsg);
         } catch (RestClientException ex) {
             log.warn("LLM API call failed. finalUrl={}, model={}, durationMs={}, errorType={}, error={}",
                     finalUrl,
@@ -102,7 +122,7 @@ public class LlmApiClient {
                     System.currentTimeMillis() - start,
                     ex.getClass().getSimpleName(),
                     LogSanitizer.safeMessage(ex.getMessage()));
-            throw new BusinessException(50000, "LLM API 调用失败");
+            throw new BusinessException(50000, "LLM API 调用失败: " + LogSanitizer.safeMessage(ex.getMessage()));
         }
     }
 

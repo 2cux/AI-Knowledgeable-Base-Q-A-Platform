@@ -49,33 +49,29 @@ public class RetrievalServiceImpl implements RetrievalService {
         KnowledgeBase knowledgeBase = getOwnKnowledgeBase(request.getKnowledgeBaseId(), userId);
         int topK = resolveTopK(request.getTopK());
         String query = resolveQuery(request);
-        long start = System.currentTimeMillis();
 
+        long t0 = System.currentTimeMillis();
         RetrievalQueryEmbedding queryEmbedding = queryEmbeddingService.embed(query);
+        long t1 = System.currentTimeMillis();
+        long embeddingCost = t1 - t0;
 
         List<RetrievalChunkVO> rawChunks = vectorSearchAdapter.search(knowledgeBase.getId(), queryEmbedding, topK)
                 .stream()
                 .map(this::toVO)
                 .toList();
+        long t2 = System.currentTimeMillis();
+        long searchCost = t2 - t1;
+
         double minEffectiveScore = retrievalProperties.getMinEffectiveScore();
         List<RetrievalChunkVO> effectiveChunks = filterEffectiveChunks(rawChunks, minEffectiveScore);
+        long t3 = System.currentTimeMillis();
+        long filterCost = t3 - t2;
+        long totalRetrievalCost = t3 - t0;
 
-        log.info("Retrieval finished, userId={}, knowledgeBaseId={}, queryLength={}, queryPreview={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, highestScore={}, durationMs={}",
-                userId,
-                knowledgeBase.getId(),
-                query.length(),
-                LogSanitizer.preview(query, 80),
-                topK,
-                minEffectiveScore,
-                rawChunks.size(),
-                effectiveChunks.size(),
-                !effectiveChunks.isEmpty(),
-                rawChunks.stream()
-                        .map(RetrievalChunkVO::getScore)
-                        .filter(score -> score != null && Double.isFinite(score))
-                        .findFirst()
-                        .orElse(null),
-                System.currentTimeMillis() - start);
+        log.info("[RAG-TIME] questionEmbeddingCost={}ms, vectorSearchCost={}ms, filterCost={}ms, totalRetrievalCost={}ms, userId={}, knowledgeBaseId={}, queryLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}",
+                embeddingCost, searchCost, filterCost, totalRetrievalCost,
+                userId, knowledgeBase.getId(), query.length(), topK, minEffectiveScore,
+                rawChunks.size(), effectiveChunks.size());
 
         return RetrievalSearchVO.builder()
                 .knowledgeBaseId(knowledgeBase.getId())
@@ -96,9 +92,12 @@ public class RetrievalServiceImpl implements RetrievalService {
     public RetrievalSearchVO searchGlobal(RetrievalSearchRequest request) {
         int topK = resolveTopK(request.getTopK());
         String query = resolveQuery(request);
-        long start = System.currentTimeMillis();
 
+        long t0 = System.currentTimeMillis();
         RetrievalQueryEmbedding queryEmbedding = queryEmbeddingService.embed(query);
+        long t1 = System.currentTimeMillis();
+        long embeddingCost = t1 - t0;
+
         boolean available = hasGlobalAvailableCandidates(queryEmbedding.getEmbeddingModel());
         if (!available) {
             return RetrievalSearchVO.builder()
@@ -119,8 +118,18 @@ public class RetrievalServiceImpl implements RetrievalService {
                 .stream()
                 .map(this::toVO)
                 .toList();
+        long t2 = System.currentTimeMillis();
+        long searchCost = t2 - t1;
+
         double minEffectiveScore = retrievalProperties.getMinEffectiveScore();
         List<RetrievalChunkVO> effectiveChunks = filterEffectiveChunks(rawChunks, minEffectiveScore);
+        long t3 = System.currentTimeMillis();
+        long filterCost = t3 - t2;
+        long totalRetrievalCost = t3 - t0;
+
+        log.info("[RAG-TIME] questionEmbeddingCost={}ms, vectorSearchCost={}ms, filterCost={}ms, totalRetrievalCost={}ms, queryLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}",
+                embeddingCost, searchCost, filterCost, totalRetrievalCost,
+                query.length(), topK, minEffectiveScore, rawChunks.size(), effectiveChunks.size());
 
         log.info("Global retrieval finished, queryLength={}, queryPreview={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, highestScore={}, durationMs={}",
                 query.length(),
@@ -135,7 +144,7 @@ public class RetrievalServiceImpl implements RetrievalService {
                         .filter(score -> score != null && Double.isFinite(score))
                         .findFirst()
                         .orElse(null),
-                System.currentTimeMillis() - start);
+                totalRetrievalCost);
 
         return RetrievalSearchVO.builder()
                 .question(query)

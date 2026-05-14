@@ -27,6 +27,9 @@ public class AppEmbeddingProperties {
 
     private String embeddingType = "float";
 
+    /** 每批处理的 chunk 数量，默认 20。 */
+    private int batchSize = 20;
+
     private Duration connectTimeout = Duration.ofSeconds(10);
 
     private Duration readTimeout = Duration.ofSeconds(120);

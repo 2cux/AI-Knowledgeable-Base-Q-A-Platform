@@ -92,6 +92,7 @@ public class ChatServiceImpl implements ChatService {
         retrievalRequest.setQuery(question);
         retrievalRequest.setTopK(topK);
 
+        long t0 = System.currentTimeMillis();
         RetrievalSearchVO retrievalResult;
         try {
             retrievalResult = retrievalService.search(retrievalRequest);
@@ -103,6 +104,9 @@ public class ChatServiceImpl implements ChatService {
                     userId, knowledgeBase.getId(), conversationId, question.length(), topK,
                     LogSanitizer.safeMessage(ex.getMessage()));
             ChatAskResponse errorResponse = retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
+            long tEnd = System.currentTimeMillis();
+            log.info("[RAG-TIME] conversationId={}, retrievalCost={}ms, totalCost={}ms, result=RETRIEVAL_UNAVAILABLE",
+                    conversationId, tEnd - t0, tEnd - t0);
             if (isNewConversation) {
                 conversationTitleGenerateService.generateTitle(conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER);
             }
@@ -112,11 +116,16 @@ public class ChatServiceImpl implements ChatService {
                     userId, knowledgeBase.getId(), conversationId, question.length(), topK,
                     ex.getClass().getSimpleName());
             ChatAskResponse errorResponse = retrievalUnavailable(userId, knowledgeBase.getId(), conversationId, question, topK);
+            long tEnd = System.currentTimeMillis();
+            log.info("[RAG-TIME] conversationId={}, retrievalCost={}ms, totalCost={}ms, result=RETRIEVAL_FAILED",
+                    conversationId, tEnd - t0, tEnd - t0);
             if (isNewConversation) {
                 conversationTitleGenerateService.generateTitle(conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER);
             }
             return errorResponse;
         }
+        long t1 = System.currentTimeMillis();
+        long retrievalCost = t1 - t0;
         List<RetrievalChunkVO> rawChunks = retrievalResult == null || retrievalResult.getRawChunks() == null
                 ? Collections.emptyList()
                 : retrievalResult.getRawChunks();
@@ -125,6 +134,9 @@ public class ChatServiceImpl implements ChatService {
                 : retrievalResult.getEffectiveChunks();
 
         AnswerResolution resolution = resolveAnswer(question, conversationContext, rawChunks, effectiveChunks);
+        long t2 = System.currentTimeMillis();
+        long generationCost = t2 - t1;
+        long totalCost = t2 - t0;
         Double minEffectiveScore = retrievalResult == null ? null : retrievalResult.getMinEffectiveScore();
         ChatRecord record = persistAskResult(userId, knowledgeBase.getId(), conversationId, question,
                 resolution.answer(), resolution.answerStatus(), resolution.matched(), effectiveChunks.size(),
@@ -133,6 +145,9 @@ public class ChatServiceImpl implements ChatService {
         log.info("Chat RAG retrieval resolved, userId={}, knowledgeBaseId={}, conversationId={}, chatRecordId={}, questionLength={}, topK={}, minEffectiveScore={}, rawRetrievedChunkCount={}, effectiveChunkCount={}, matched={}, answerStatus={}, llmCalled={}",
                 userId, knowledgeBase.getId(), conversationId, record.getId(), question.length(), topK,
                 minEffectiveScore, rawChunks.size(), effectiveChunks.size(), resolution.matched(),
+                resolution.answerStatus(), resolution.llmCalled());
+        log.info("[RAG-TIME] conversationId={}, retrievalCost={}ms, generationCost={}ms, totalCost={}ms, answerStatus={}, llmCalled={}",
+                conversationId, retrievalCost, generationCost, totalCost,
                 resolution.answerStatus(), resolution.llmCalled());
 
         ChatAskResponse response = buildResponse(conversationId, record.getId(), resolution.answer(), resolution.answerStatus(),
@@ -159,6 +174,7 @@ public class ChatServiceImpl implements ChatService {
         retrievalRequest.setQuery(question);
         retrievalRequest.setTopK(topK);
 
+        long t0 = System.currentTimeMillis();
         RetrievalSearchVO retrievalResult;
         try {
             retrievalResult = retrievalService.searchGlobal(retrievalRequest);
@@ -169,6 +185,9 @@ public class ChatServiceImpl implements ChatService {
             log.warn("Global chat RAG retrieval unavailable, userId={}, conversationId={}, questionLength={}, topK={}, error={}",
                     userId, conversationId, question.length(), topK, LogSanitizer.safeMessage(ex.getMessage()));
             ChatAskResponse errorResponse = retrievalUnavailable(userId, null, conversationId, question, topK);
+            long tEnd = System.currentTimeMillis();
+            log.info("[RAG-TIME] conversationId={}, retrievalCost={}ms, totalCost={}ms, result=RETRIEVAL_UNAVAILABLE",
+                    conversationId, tEnd - t0, tEnd - t0);
             if (isNewConversation) {
                 conversationTitleGenerateService.generateTitle(conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER);
             }
@@ -177,11 +196,16 @@ public class ChatServiceImpl implements ChatService {
             log.warn("Global chat RAG retrieval unavailable unexpectedly, userId={}, conversationId={}, questionLength={}, topK={}, errorType={}",
                     userId, conversationId, question.length(), topK, ex.getClass().getSimpleName());
             ChatAskResponse errorResponse = retrievalUnavailable(userId, null, conversationId, question, topK);
+            long tEnd = System.currentTimeMillis();
+            log.info("[RAG-TIME] conversationId={}, retrievalCost={}ms, totalCost={}ms, result=RETRIEVAL_FAILED",
+                    conversationId, tEnd - t0, tEnd - t0);
             if (isNewConversation) {
                 conversationTitleGenerateService.generateTitle(conversationId, question, RETRIEVAL_UNAVAILABLE_ANSWER);
             }
             return errorResponse;
         }
+        long t1 = System.currentTimeMillis();
+        long retrievalCost = t1 - t0;
 
         List<RetrievalChunkVO> rawChunks = retrievalResult == null || retrievalResult.getRawChunks() == null
                 ? Collections.emptyList()
@@ -195,6 +219,9 @@ public class ChatServiceImpl implements ChatService {
                 ? new AnswerResolution(NO_AVAILABLE_KNOWLEDGE_BASE_ANSWER,
                         AnswerStatus.NO_AVAILABLE_KNOWLEDGE_BASE, false, Collections.emptyList(), false)
                 : resolveAnswer(question, conversationContext, rawChunks, effectiveChunks);
+        long t2 = System.currentTimeMillis();
+        long generationCost = t2 - t1;
+        long totalCost = t2 - t0;
         Double minEffectiveScore = retrievalResult == null ? null : retrievalResult.getMinEffectiveScore();
         ChatRecord record = persistAskResult(userId, null, conversationId, question,
                 resolution.answer(), resolution.answerStatus(), resolution.matched(), effectiveChunks.size(),
@@ -204,6 +231,9 @@ public class ChatServiceImpl implements ChatService {
                 userId, conversationId, record.getId(), question.length(), topK, minEffectiveScore,
                 rawChunks.size(), effectiveChunks.size(), resolution.matched(), resolution.answerStatus(),
                 resolution.llmCalled());
+        log.info("[RAG-TIME] conversationId={}, retrievalCost={}ms, generationCost={}ms, totalCost={}ms, answerStatus={}, llmCalled={}",
+                conversationId, retrievalCost, generationCost, totalCost,
+                resolution.answerStatus(), resolution.llmCalled());
 
         ChatAskResponse response = buildResponse(conversationId, record.getId(), resolution.answer(), resolution.answerStatus(),
                 resolution.matched(), effectiveChunks.size(), rawChunks.size(), minEffectiveScore,

@@ -7,6 +7,7 @@ import com.example.aikb.service.chat.AnswerGeneratorService;
 import com.example.aikb.service.llm.AnswerExtractResult;
 import com.example.aikb.service.llm.AnswerExtractor;
 import com.example.aikb.service.llm.LlmClient;
+import com.example.aikb.service.llm.LlmMessage;
 import com.example.aikb.vo.retrieval.RetrievalChunkVO;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -38,31 +39,52 @@ public class RagAnswerGeneratorServiceImpl implements AnswerGeneratorService {
             return unavailable();
         }
 
+        long t0 = System.currentTimeMillis();
         try {
-            String rawResponse = llmClient.chat(ragPromptBuilder.build(question, chunks, conversationContext));
-            log.info("LLM raw response received before extraction, questionLength={}, chunkCount={}, outputLength={}",
+            List<LlmMessage> messages = ragPromptBuilder.build(question, chunks, conversationContext);
+            long t1 = System.currentTimeMillis();
+            long promptBuildCost = t1 - t0;
+
+            String rawResponse = llmClient.chat(messages);
+            long t2 = System.currentTimeMillis();
+            long llmCallCost = t2 - t1;
+
+            log.info("LLM raw response received before extraction, questionLength={}, chunkCount={}, outputLength={}, promptBuildCost={}ms, llmCallCost={}ms",
                     question == null ? 0 : question.length(),
                     chunks.size(),
-                    rawResponse == null ? 0 : rawResponse.length());
+                    rawResponse == null ? 0 : rawResponse.length(),
+                    promptBuildCost, llmCallCost);
+
             AnswerExtractResult extractResult = answerExtractor.extract(rawResponse);
+            long t3 = System.currentTimeMillis();
+            long responseParseCost = t3 - t2;
+
             if (!extractResult.isSuccess()) {
-                log.warn("LLM answer extraction failed: LLM 响应中未找到文本内容, questionLength={}, chunkCount={}, failureReason={}",
-                        question == null ? 0 : question.length(), chunks.size(), extractResult.getFailureReason());
+                log.warn("[RAG-TIME] promptBuildCost={}ms, llmCallCost={}ms, responseParseCost={}ms, totalGenerationCost={}ms, questionLength={}, chunkCount={}, result=EXTRACTION_FAILED, failureReason={}",
+                        promptBuildCost, llmCallCost, responseParseCost, t3 - t0,
+                        question == null ? 0 : question.length(), chunks.size(),
+                        extractResult.getFailureReason());
                 return unavailable();
             }
+
+            log.info("[RAG-TIME] promptBuildCost={}ms, llmCallCost={}ms, responseParseCost={}ms, totalGenerationCost={}ms, questionLength={}, chunkCount={}, result=SUCCESS",
+                    promptBuildCost, llmCallCost, responseParseCost, t3 - t0,
+                    question == null ? 0 : question.length(), chunks.size());
             return AnswerGenerationResult.builder()
                     .answer(extractResult.getAnswer())
                     .llmAvailable(true)
                     .build();
         } catch (BusinessException ex) {
-            log.warn("LLM answer generation failed, questionLength={}, chunkCount={}, error={}",
-                    question == null ? 0 : question.length(),
-                    chunks.size(),
+            log.warn("[RAG-TIME] promptBuildCost={}ms, totalGenerationCost={}ms, questionLength={}, chunkCount={}, result=LLM_FAILED, error={}",
+                    System.currentTimeMillis() - t0, System.currentTimeMillis() - t0,
+                    question == null ? 0 : question.length(), chunks.size(),
                     LogSanitizer.safeMessage(ex.getMessage()));
             return unavailable();
         } catch (RuntimeException ex) {
-            log.warn("LLM answer generation failed unexpectedly, questionLength={}, chunkCount={}, errorType={}",
-                    question == null ? 0 : question.length(), chunks.size(), ex.getClass().getSimpleName());
+            log.warn("[RAG-TIME] promptBuildCost={}ms, totalGenerationCost={}ms, questionLength={}, chunkCount={}, result=LLM_FAILED, errorType={}",
+                    System.currentTimeMillis() - t0, System.currentTimeMillis() - t0,
+                    question == null ? 0 : question.length(), chunks.size(),
+                    ex.getClass().getSimpleName());
             return unavailable();
         }
     }

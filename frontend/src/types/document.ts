@@ -60,3 +60,12 @@ export type DocumentEmbeddingResponse = {
   taskId?: number | string | null
   taskStatus?: string | null
 }
+
+export type DocumentEmbeddingProgress = {
+  documentId: number
+  status: string
+  totalChunks: number
+  embeddedChunks: number
+  progress: number
+  errorMessage?: string | null
+}

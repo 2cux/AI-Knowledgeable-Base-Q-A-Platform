@@ -78,6 +78,10 @@ function getErrorMessage(error: unknown, fallback: string) {
   }
 
   if (error instanceof Error) {
+    // axios timeout error
+    if (error.message?.includes('timeout') || (error as Record<string, unknown>).code === 'ECONNABORTED') {
+      return '回答生成超时，可能是模型响应较慢，请稍后重试或缩短问题后再试。'
+    }
     return error.message || fallback
   }
 
@@ -237,6 +241,7 @@ export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
+  const [sendingText, setSendingText] = useState('正在检索知识库...')
   const [isConversationListLoading, setIsConversationListLoading] = useState(false)
   const [isConversationDetailLoading, setIsConversationDetailLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -528,6 +533,17 @@ export function ChatPage() {
   useEffect(() => {
     listBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, isSending, isConversationDetailLoading])
+
+  useEffect(() => {
+    if (!isSending) {
+      setSendingText('正在检索知识库...')
+      return
+    }
+    const timer = setTimeout(() => {
+      setSendingText('正在生成回答...')
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [isSending])
 
   function handleKnowledgeBaseChange(value: string) {
     setSelectedKnowledgeBaseId(value)
@@ -1213,6 +1229,7 @@ export function ChatPage() {
             <ChatMessageList
               messages={messages}
               sending={isSending}
+              sendingText={sendingText}
               detailLoading={isConversationDetailLoading}
               knowledgeBaseId={isGlobalChat ? undefined : selectedIdNumber ?? undefined}
               conversationId={conversationId}

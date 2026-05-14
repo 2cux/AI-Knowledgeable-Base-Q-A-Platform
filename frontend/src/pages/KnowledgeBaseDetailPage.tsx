@@ -5,11 +5,12 @@ import { Link, useParams } from 'react-router-dom'
 import {
   embedDocument,
   getDocumentsByKnowledgeBaseId,
+  getEmbeddingProgress,
   processDocument,
   uploadDocument,
 } from '../api/document'
 import { getKnowledgeBaseById } from '../api/knowledgeBase'
-import type { DocumentEmbeddingResponse, KnowledgeDocument } from '../types/document'
+import type { DocumentEmbeddingProgress, DocumentEmbeddingResponse, KnowledgeDocument } from '../types/document'
 import type { KnowledgeBase } from '../types/knowledgeBase'
 
 const SUPPORTED_EXTENSIONS = ['txt', 'md', 'pdf', 'docx'] as const
@@ -101,6 +102,24 @@ function statusLabel(status?: string | null) {
   return labels[status] ?? status
 }
 
+function embeddingStatusLabel(status?: string | null) {
+  if (!status) {
+    return '-'
+  }
+
+  const labels: Record<string, string> = {
+    NOT_STARTED: '未开始',
+    PENDING: '排队中',
+    PROCESSING: '向量化中',
+    RUNNING: '向量化中',
+    SUCCESS: '已完成',
+    FAILED: '失败',
+    PARTIAL_SUCCESS: '部分完成',
+  }
+
+  return labels[status] ?? status
+}
+
 function isBusyStatus(status?: string | null) {
   return status === 'PROCESSING' || status === 'RUNNING' || status === 'PENDING'
 }
@@ -169,6 +188,7 @@ export function KnowledgeBaseDetailPage() {
   const [processingId, setProcessingId] = useState<number | null>(null)
   const [embeddingId, setEmbeddingId] = useState<number | null>(null)
   const [embeddingProcessingIds, setEmbeddingProcessingIds] = useState<Set<number>>(() => new Set())
+  const [embeddingProgressMap, setEmbeddingProgressMap] = useState<Map<number, DocumentEmbeddingProgress>>(() => new Map())
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [uploadErrorMessage, setUploadErrorMessage] = useState('')
@@ -240,6 +260,16 @@ export function KnowledgeBaseDetailPage() {
         setErrorMessage('')
       }
       setDocuments(response.data)
+      // 页面刷新后自动恢复对 PROCESSING 状态文档的轮询
+      for (const doc of response.data) {
+        const docId = resolveDocumentId(doc)
+        if (
+          (doc.embeddingStatus === 'PROCESSING' || doc.embeddingStatus === 'PENDING') &&
+          !embeddingPollStartedAtRef.current.has(docId)
+        ) {
+          startEmbeddingPolling(docId)
+        }
+      }
       return response.data
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '文档列表刷新失败，请稍后重试'))
@@ -290,6 +320,11 @@ export function KnowledgeBaseDetailPage() {
     embeddingPollStartedAtRef.current.delete(documentId)
     embeddingObservedRunningRef.current.delete(documentId)
     setDocumentEmbeddingProcessing(documentId, false)
+    setEmbeddingProgressMap((prev) => {
+      const next = new Map(prev)
+      next.delete(documentId)
+      return next
+    })
   }
 
   function startEmbeddingPolling(documentId: number) {
@@ -298,47 +333,51 @@ export function KnowledgeBaseDetailPage() {
     embeddingPollStartedAtRef.current.set(documentId, Date.now())
 
     const pollOnce = async () => {
-      const latestDocuments = await loadDocuments({ silent: true, clearError: false })
-      const targetDocument = latestDocuments?.find((item) => resolveDocumentId(item) === documentId)
+      try {
+        const response = await getEmbeddingProgress(documentId)
 
-      if (!targetDocument) {
+        if (response.code !== 0 || !response.data) {
+          scheduleNextPoll()
+          return
+        }
+
+        const progress = response.data
+        setEmbeddingProgressMap((prev) => {
+          const next = new Map(prev)
+          next.set(documentId, progress)
+          return next
+        })
+
+        const elapsed = Date.now() - (embeddingPollStartedAtRef.current.get(documentId) ?? Date.now())
+
+        if (progress.status === 'SUCCESS') {
+          stopEmbeddingPolling(documentId)
+          setSuccessMessage(
+            progress.totalChunks > 0
+              ? `向量化完成，成功处理 ${progress.embeddedChunks} / ${progress.totalChunks} 个切片`
+              : '向量化完成',
+          )
+          await loadDocuments({ silent: true })
+          return
+        }
+
+        if (progress.status === 'FAILED') {
+          stopEmbeddingPolling(documentId)
+          setErrorMessage(progress.errorMessage || '向量化失败')
+          await loadDocuments({ silent: true })
+          return
+        }
+
+        if (progress.status !== 'PROCESSING' && progress.status !== 'PENDING') {
+          stopEmbeddingPolling(documentId)
+          await loadDocuments({ silent: true })
+          return
+        }
+
         scheduleNextPoll()
-        return
-      }
-
-      const elapsed = Date.now() - (embeddingPollStartedAtRef.current.get(documentId) ?? Date.now())
-      const taskStillRunning =
-        isBusyStatus(targetDocument.embeddingStatus) || isBusyStatus(targetDocument.latestTaskStatus)
-
-      if (taskStillRunning) {
-        embeddingObservedRunningRef.current.add(documentId)
+      } catch {
         scheduleNextPoll()
-        return
       }
-
-      if (targetDocument.embeddingStatus === 'SUCCESS' || targetDocument.latestTaskStatus === 'SUCCESS') {
-        stopEmbeddingPolling(documentId)
-        setSuccessMessage(
-          targetDocument.embeddedChunkCount && targetDocument.embeddedChunkCount > 0
-            ? `向量化完成，成功处理 ${targetDocument.embeddedChunkCount} 个切片。`
-            : 'Embedding 任务执行成功。',
-        )
-        return
-      }
-
-      if (targetDocument.latestTaskStatus === 'FAILED' || targetDocument.embeddingStatus === 'FAILED') {
-        stopEmbeddingPolling(documentId)
-        setErrorMessage(targetDocument.latestErrorMessage || 'Embedding 任务失败')
-        return
-      }
-
-      if (elapsed >= EMBEDDING_POLL_TIMEOUT_MS) {
-        stopEmbeddingPolling(documentId)
-        setSuccessMessage('向量生成仍在处理中，请稍后刷新查看结果。')
-        return
-      }
-
-      scheduleNextPoll()
     }
 
     const scheduleNextPoll = () => {
@@ -348,14 +387,14 @@ export function KnowledgeBaseDetailPage() {
 
       const timerId = window.setTimeout(() => {
         void pollOnce()
-      }, EMBEDDING_POLL_INTERVAL_MS)
+      }, 2500)
 
       embeddingPollTimersRef.current.set(documentId, timerId)
     }
 
     const timerId = window.setTimeout(() => {
       void pollOnce()
-    }, EMBEDDING_POLL_INTERVAL_MS)
+    }, 2500)
     embeddingPollTimersRef.current.set(documentId, timerId)
   }
 
@@ -658,12 +697,58 @@ export function KnowledgeBaseDetailPage() {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                          {localEmbeddingProcessing ? '生成中' : statusLabel(embeddingStatus)}
-                        </span>
-                        <div className="mt-1 text-xs text-slate-500">
-                          已生成：{document.embeddedChunkCount ?? 0}
-                        </div>
+                        {(() => {
+                          const progress = embeddingProgressMap.get(documentId)
+                          if (progress && progress.status === 'PROCESSING' && progress.totalChunks > 0) {
+                            return (
+                              <div className="min-w-[140px] space-y-1.5">
+                                <span className="inline-block rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
+                                  向量化中
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                                    <div
+                                      className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                      style={{ width: `${progress.progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="whitespace-nowrap text-xs font-medium text-slate-600">
+                                    {progress.progress}%
+                                  </span>
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                  {progress.embeddedChunks} / {progress.totalChunks} 切片
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div className="space-y-1">
+                              <span
+                                className={`inline-block rounded px-2 py-1 text-xs font-medium ${
+                                  embeddingStatus === 'SUCCESS'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : embeddingStatus === 'FAILED'
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                {embeddingStatusLabel(embeddingStatus)}
+                              </span>
+                              <div className="text-xs text-slate-500">
+                                {document.embeddedChunkCount != null && document.embeddedChunkCount > 0
+                                  ? `已处理：${document.embeddedChunkCount}${document.chunkCount ? ` / ${document.chunkCount}` : ''}`
+                                  : document.chunkCount
+                                    ? `共 ${document.chunkCount} 个切片`
+                                    : '-'}
+                              </div>
+                              {embeddingStatus === 'FAILED' && document.latestErrorMessage ? (
+                                <div className="break-words text-xs text-red-600">{document.latestErrorMessage}</div>
+                              ) : null}
+                            </div>
+                          )
+                        })()}
                       </td>
                       <td className="px-5 py-4 text-slate-600">{formatDate(document.createdAt)}</td>
                       <td className="px-5 py-4">
@@ -696,7 +781,13 @@ export function KnowledgeBaseDetailPage() {
                             }
                             className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
                           >
-                            {embedBusy ? '生成中...' : isEmbedded(document) ? '重新生成' : '生成向量'}
+                            {embedBusy
+                              ? '向量化中...'
+                              : isEmbedded(document)
+                                ? '重新生成'
+                                : embeddingStatus === 'FAILED'
+                                  ? '重试'
+                                  : '生成向量'}
                           </button>
                         </div>
                       </td>

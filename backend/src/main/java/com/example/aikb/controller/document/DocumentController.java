@@ -14,6 +14,7 @@ import com.example.aikb.service.embedding.DocumentEmbeddingService;
 import com.example.aikb.service.task.TaskRecordService;
 import com.example.aikb.vo.document.DocumentChunkVO;
 import com.example.aikb.vo.document.DocumentDetailVO;
+import com.example.aikb.vo.document.DocumentEmbeddingProgressVO;
 import com.example.aikb.vo.document.DocumentEmbeddingStatusVO;
 import com.example.aikb.vo.document.DocumentEmbeddingVO;
 import com.example.aikb.vo.document.DocumentFileUploadVO;
@@ -147,5 +148,13 @@ public class DocumentController {
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
         adminPermissionService.ensureAdmin();
         return Result.success(documentEmbeddingService.getEmbeddingStatus(documentId));
+    }
+
+    @Operation(summary = "查询向量化进度")
+    @GetMapping("/{documentId}/embedding/progress")
+    public Result<DocumentEmbeddingProgressVO> getEmbeddingProgress(
+            @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
+        adminPermissionService.ensureAdmin();
+        return Result.success(documentEmbeddingService.getEmbeddingProgress(documentId));
     }
 }

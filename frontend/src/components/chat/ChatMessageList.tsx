@@ -8,6 +8,7 @@ import { ThinkingIndicator } from './ThinkingIndicator'
 type ChatMessageListProps = {
   messages: ChatMessage[]
   sending: boolean
+  sendingText?: string
   detailLoading: boolean
   knowledgeBaseId?: number | string
   conversationId?: string
@@ -123,6 +124,7 @@ function ResponseMeta({
 export function ChatMessageList({
   messages,
   sending,
+  sendingText,
   detailLoading,
   knowledgeBaseId,
   conversationId,
@@ -190,7 +192,7 @@ export function ChatMessageList({
 
       {sending ? (
         <div className="flex justify-start">
-          <ThinkingIndicator text="正在生成" />
+          <ThinkingIndicator text={sendingText ?? '正在生成'} />
         </div>
       ) : null}
     </div>

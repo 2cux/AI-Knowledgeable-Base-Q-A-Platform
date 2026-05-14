@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConversationContextLoaderImpl implements ConversationContextLoader {
 
-    private static final int MAX_CONTEXT_MESSAGES = 10;
+    private static final int MAX_CONTEXT_MESSAGES = 5;
     private static final int MAX_CONTEXT_TEXT_LENGTH = 4000;
     private static final int MAX_MESSAGE_TEXT_LENGTH = 600;
 

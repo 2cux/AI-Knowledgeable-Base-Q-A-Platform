@@ -1,6 +1,7 @@
 import request from './request'
 import type { ApiResponse } from '../types/auth'
 import type {
+  DocumentEmbeddingProgress,
   DocumentEmbeddingResponse,
   DocumentProcessResponse,
   DocumentUploadResponse,
@@ -39,5 +40,11 @@ export function embedDocument(documentId: number) {
   return request.post<ApiResponse<DocumentEmbeddingResponse>, ApiResponse<DocumentEmbeddingResponse>>(
     `${DOCUMENT_PATH}/${documentId}/embed`,
     {},
+  )
+}
+
+export function getEmbeddingProgress(documentId: number) {
+  return request.get<ApiResponse<DocumentEmbeddingProgress>, ApiResponse<DocumentEmbeddingProgress>>(
+    `${DOCUMENT_PATH}/${documentId}/embedding/progress`,
   )
 }

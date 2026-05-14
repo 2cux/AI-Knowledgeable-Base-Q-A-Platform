@@ -25,6 +25,7 @@ import com.example.aikb.service.embedding.EmbeddingClient;
 import com.example.aikb.service.embedding.EmbeddingResult;
 import com.example.aikb.service.task.TaskRecordService;
 import com.example.aikb.vo.document.ChunkEmbeddingStatusVO;
+import com.example.aikb.vo.document.DocumentEmbeddingProgressVO;
 import com.example.aikb.vo.document.DocumentEmbeddingStatusVO;
 import com.example.aikb.vo.document.DocumentEmbeddingVO;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -247,6 +248,29 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
                 .build();
     }
 
+    @Override
+    public DocumentEmbeddingProgressVO getEmbeddingProgress(Long documentId) {
+        Long userId = CurrentUser.getUserId();
+        Document document = getOwnDocument(documentId, userId);
+        int totalChunks = document.getChunkCount() != null ? document.getChunkCount() : 0;
+        int embeddedChunks = document.getEmbeddedChunkCount() != null ? document.getEmbeddedChunkCount() : 0;
+        int progress = 0;
+        if (totalChunks > 0) {
+            progress = (int) ((double) embeddedChunks / totalChunks * 100);
+            if (progress > 100) {
+                progress = 100;
+            }
+        }
+        return DocumentEmbeddingProgressVO.builder()
+                .documentId(document.getId())
+                .status(document.getEmbeddingStatus())
+                .totalChunks(totalChunks)
+                .embeddedChunks(embeddedChunks)
+                .progress(progress)
+                .errorMessage(document.getLatestErrorMessage())
+                .build();
+    }
+
     private DocumentEmbeddingVO doEmbedDocumentFromMessage(DocumentEmbeddingMessage message) {
         Document document = documentMapper.selectById(message.getDocumentId());
         if (document == null) {
@@ -286,56 +310,77 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         List<DocumentChunk> chunks = force ? allChunks : filterChunksWithoutSuccessfulEmbedding(allChunks);
         if (chunks.isEmpty()) {
             transactionTemplate.executeWithoutResult(status ->
-                    updateDocumentEmbeddingFinished(document.getId(), allChunks.size(), countSuccessfulEmbeddings(document.getId()), 0));
+                    updateDocumentEmbeddingFinished(document.getId(), allChunks.size()));
             return buildNoopResult(document, message.getTaskId(), embeddingModel);
         }
-        log.info("Async document embedding chunks ready, documentId={}, knowledgeBaseId={}, taskId={}, totalChunkCount={}, embeddableChunkCount={}, model={}",
+        int batchSize = embeddingProperties.getBatchSize();
+        int total = chunks.size();
+        int successCount = 0;
+        int failCount = 0;
+
+        log.info("Async document embedding chunks ready, documentId={}, knowledgeBaseId={}, taskId={}, totalChunkCount={}, embeddableChunkCount={}, model={}, batchSize={}",
                 document.getId(),
                 document.getKnowledgeBaseId(),
                 message.getTaskId(),
                 allChunks.size(),
-                chunks.size(),
-                embeddingModel);
+                total,
+                embeddingModel,
+                batchSize);
 
-        List<EmbeddedChunkResult> results = new ArrayList<>();
-        for (DocumentChunk chunk : chunks) {
-            long chunkStart = System.currentTimeMillis();
-            int contentLength = chunk.getContent() == null ? 0 : chunk.getContent().length();
-            log.info("Embedding chunk started, documentId={}, knowledgeBaseId={}, taskId={}, chunkId={}, contentLength={}",
-                    document.getId(),
-                    document.getKnowledgeBaseId(),
-                    message.getTaskId(),
-                    chunk.getId(),
-                    contentLength);
-            EmbeddingResult result = embeddingClient.embed(chunk.getId(), chunk.getContent(), embeddingModel);
-            if (result.getVector() == null || result.getVector().isEmpty()) {
-                throw new BusinessException("embedding vector is empty");
+        for (int i = 0; i < total; i += batchSize) {
+            int end = Math.min(i + batchSize, total);
+            List<DocumentChunk> batch = chunks.subList(i, end);
+            List<EmbeddedChunkResult> batchResults = new ArrayList<>(batchSize);
+
+            for (DocumentChunk chunk : batch) {
+                try {
+                    long chunkStart = System.currentTimeMillis();
+                    int contentLength = chunk.getContent() == null ? 0 : chunk.getContent().length();
+                    log.debug("Embedding chunk, documentId={}, chunkId={}, contentLength={}",
+                            document.getId(), chunk.getId(), contentLength);
+                    EmbeddingResult result = embeddingClient.embed(chunk.getId(), chunk.getContent(), embeddingModel);
+                    if (result.getVector() == null || result.getVector().isEmpty()) {
+                        throw new BusinessException("embedding vector is empty");
+                    }
+                    log.debug("Embedding chunk finished, documentId={}, chunkId={}, durationMs={}",
+                            document.getId(), chunk.getId(), System.currentTimeMillis() - chunkStart);
+                    batchResults.add(new EmbeddedChunkResult(chunk, result));
+                    successCount++;
+                } catch (Exception ex) {
+                    failCount++;
+                    log.warn("Embedding chunk failed, documentId={}, chunkId={}, error={}",
+                            document.getId(), chunk.getId(), LogSanitizer.safeMessage(ex.getMessage()));
+                    ChunkEmbedding failedRecord = new ChunkEmbedding();
+                    failedRecord.setDocumentId(document.getId());
+                    failedRecord.setKnowledgeBaseId(document.getKnowledgeBaseId());
+                    failedRecord.setChunkId(chunk.getId());
+                    failedRecord.setEmbeddingModel(embeddingModel);
+                    failedRecord.setStatus(STATUS_FAILED);
+                    failedRecord.setEmbeddingError(truncateError(ex.getMessage()));
+                    failedRecord.setEmbeddedAt(LocalDateTime.now());
+                    chunkEmbeddingMapper.insert(failedRecord);
+                }
             }
-            log.info("Embedding chunk finished, documentId={}, knowledgeBaseId={}, taskId={}, chunkId={}, contentLength={}, durationMs={}, vectorDimension={}",
-                    document.getId(),
-                    document.getKnowledgeBaseId(),
-                    message.getTaskId(),
-                    chunk.getId(),
-                    contentLength,
-                    System.currentTimeMillis() - chunkStart,
-                    result.getVector().size());
-            results.add(new EmbeddedChunkResult(chunk, result));
+
+            if (!batchResults.isEmpty()) {
+                transactionTemplate.executeWithoutResult(status ->
+                        persistEmbeddingResults(document, batchResults, force, embeddingModel));
+            }
+
+            updateDocumentEmbeddingInProgress(document.getId());
         }
 
-        transactionTemplate.executeWithoutResult(status -> {
-            persistEmbeddingResults(document, results, force, embeddingModel);
-            updateDocumentEmbeddingFinished(document.getId(), allChunks.size(), allChunks.size(), 0);
-        });
+        updateDocumentEmbeddingFinished(document.getId(), allChunks.size());
 
         return DocumentEmbeddingVO.builder()
                 .documentId(document.getId())
                 .knowledgeBaseId(document.getKnowledgeBaseId())
-                .total(chunks.size())
-                .successCount(chunks.size())
-                .failedCount(0)
+                .total(total)
+                .successCount(successCount)
+                .failedCount(failCount)
                 .embeddingModel(embeddingModel)
                 .taskId(message.getTaskId())
-                .taskStatus(STATUS_SUCCESS)
+                .taskStatus(failCount > 0 && failCount == total ? STATUS_FAILED : STATUS_SUCCESS)
                 .build();
     }
 
@@ -470,9 +515,11 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         }
     }
 
-    private void updateDocumentEmbeddingFinished(Long documentId, int totalChunkCount, int embeddedCount, int failedCount) {
+    private void updateDocumentEmbeddingFinished(Long documentId, int totalChunkCount) {
+        int embeddedCount = countSuccessfulEmbeddings(documentId);
+        int failedCount = countFailedEmbeddings(documentId);
         String status = resolveDocumentEmbeddingStatus(
-                totalChunkCount, embeddedCount, countFailedEmbeddings(documentId), 0, 0);
+                totalChunkCount, embeddedCount, failedCount, 0, 0);
         Document update = new Document();
         update.setId(documentId);
         update.setEmbeddingStatus(status);
@@ -481,6 +528,20 @@ public class DocumentEmbeddingServiceImpl implements DocumentEmbeddingService {
         update.setLatestTaskType(TASK_TYPE_DOCUMENT_EMBEDDING);
         update.setLatestTaskStatus(failedCount > 0 ? STATUS_FAILED : STATUS_SUCCESS);
         update.setLatestErrorMessage(failedCount > 0 ? "Document embedding failed chunks: " + failedCount : null);
+        documentMapper.updateById(update);
+    }
+
+    private void updateDocumentEmbeddingInProgress(Long documentId) {
+        int totalSuccess = countSuccessfulEmbeddings(documentId);
+        int totalFailed = countFailedEmbeddings(documentId);
+        Document update = new Document();
+        update.setId(documentId);
+        update.setEmbeddedChunkCount(totalSuccess);
+        update.setLatestTaskType(TASK_TYPE_DOCUMENT_EMBEDDING);
+        update.setLatestTaskStatus(STATUS_PROCESSING);
+        if (totalFailed > 0) {
+            update.setLatestErrorMessage("Document embedding failed chunks: " + totalFailed);
+        }
         documentMapper.updateById(update);
     }
 
