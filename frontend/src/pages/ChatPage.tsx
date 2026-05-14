@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import axios from 'axios'
 
 import { askChatQuestion, askGlobalChatQuestion } from '../api/chat'
 import {
@@ -79,7 +80,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 
   if (error instanceof Error) {
     // axios timeout error
-    if (error.message?.includes('timeout') || (error as Record<string, unknown>).code === 'ECONNABORTED') {
+    if (error.message?.includes('timeout') || (axios.isAxiosError(error) && error.code === 'ECONNABORTED')) {
       return '回答生成超时，可能是模型响应较慢，请稍后重试或缩短问题后再试。'
     }
     return error.message || fallback
