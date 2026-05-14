@@ -515,24 +515,17 @@ export function KnowledgeBaseListPage() {
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => navigate(`/chat`)}
+                    onClick={() => navigate(`/admin/knowledge-bases/${knowledgeBase.id}`)}
                     className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
                   >
-                    去问答
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/admin/knowledge-bases/${knowledgeBase.id}`)}
-                    className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                  >
-                    进入详情
+                    编辑文件
                   </button>
                   <button
                     type="button"
                     onClick={() => openEditForm(knowledgeBase)}
                     className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
                   >
-                    编辑
+                    重命名
                   </button>
                   <button
                     type="button"
@@ -562,12 +555,12 @@ export function KnowledgeBaseListPage() {
           >
             <div>
               <h2 id="edit-knowledge-base-title" className="text-lg font-semibold text-slate-950">
-                编辑知识库
+                重命名知识库
               </h2>
-              <p className="mt-1 text-sm text-slate-500">名称必填，描述可选。</p>
+              <p className="mt-1 text-sm text-slate-500">修改知识库名称。</p>
             </div>
 
-            <div className="space-y-4">
+            <div>
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">名称</span>
                 <input
@@ -579,19 +572,6 @@ export function KnowledgeBaseListPage() {
                   maxLength={128}
                   placeholder="例如：产品知识库"
                   autoFocus
-                />
-              </label>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">描述</span>
-                <input
-                  value={editForm.description}
-                  onChange={(event) =>
-                    setEditForm((current) => ({ ...current, description: event.target.value }))
-                  }
-                  className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                  maxLength={500}
-                  placeholder="用于管理产品文档和问答资料"
                 />
               </label>
             </div>

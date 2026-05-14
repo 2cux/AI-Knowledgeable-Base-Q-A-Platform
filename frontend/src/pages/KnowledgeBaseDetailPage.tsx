@@ -526,15 +526,6 @@ export function KnowledgeBaseDetailPage() {
             ) : null}
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center lg:justify-end">
-            {canUseKnowledgeBase ? (
-              <Link
-                to="/chat"
-                aria-label="进入知识库问答"
-                className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-slate-950 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 active:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:w-auto"
-              >
-                进入知识库问答
-              </Link>
-            ) : null}
             <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               文档数：<span className="font-semibold text-slate-900">{documents.length}</span>
             </div>
