@@ -493,7 +493,7 @@ export function KnowledgeBaseListPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => navigate(`/knowledge-bases/${knowledgeBase.id}`)}
+                      onClick={() => navigate(`/admin/knowledge-bases/${knowledgeBase.id}`)}
                       className="truncate text-left text-base font-semibold text-slate-900 hover:text-slate-600"
                     >
                       {knowledgeBase.name}
@@ -515,14 +515,14 @@ export function KnowledgeBaseListPage() {
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => navigate(`/knowledge-bases/${knowledgeBase.id}/chat`)}
+                    onClick={() => navigate(`/chat`)}
                     className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
                   >
                     去问答
                   </button>
                   <button
                     type="button"
-                    onClick={() => navigate(`/knowledge-bases/${knowledgeBase.id}`)}
+                    onClick={() => navigate(`/admin/knowledge-bases/${knowledgeBase.id}`)}
                     className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
                   >
                     进入详情

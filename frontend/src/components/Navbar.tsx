@@ -9,7 +9,7 @@ export function Navbar() {
   const { logout, user } = useAuth()
   const navItems =
     user?.role?.toUpperCase() === 'ADMIN'
-      ? [{ to: '/knowledge-bases', label: '知识库' }, ...userNavItems, { to: '/admin', label: '管理' }]
+      ? [{ to: '/admin/knowledge-bases', label: '知识库' }, ...userNavItems, { to: '/admin', label: '管理' }]
       : userNavItems
 
   function handleLogout() {
