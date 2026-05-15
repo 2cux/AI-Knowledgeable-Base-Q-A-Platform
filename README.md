@@ -35,13 +35,17 @@
 
 ## 📸 Screenshots
 
-> 以下为截图占位，后续替换为真实截图。
 
 | | |
 |:---:|:---:|
-| ![Login](docs/images/login.png) | ![Knowledge Base](docs/images/kb-list.png) |
+| <img width="834" height="753" alt="image" src="https://github.com/user-attachments/assets/03809460-a954-491a-9f1c-eefed7274d36" />
+ | <img width="1916" height="548" alt="image" src="https://github.com/user-attachments/assets/2f278058-68c6-4c35-bc08-bf06f57d8c03" />
+ |
 | *登录页面* | *知识库列表* |
-| ![Document Manage](docs/images/document-manage.png) | ![Chat](docs/images/chat.png) |
+| <img width="2318" height="1102" alt="image" src="https://github.com/user-attachments/assets/8d1e4ccd-c89d-429d-9c57-8296d89d71f1" />
+
+ | <img width="2334" height="1391" alt="image" src="https://github.com/user-attachments/assets/fe8904ce-b977-4afc-b6a4-009e6616c759" />
+ |
 | *文档管理* | *问答对话* |
 
 ---
