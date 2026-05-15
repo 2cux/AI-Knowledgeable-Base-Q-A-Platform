@@ -35,28 +35,29 @@
 
 ## 📸 Screenshots
 
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <strong>登录页面</strong><br />
-      <img src="https://github.com/user-attachments/assets/03809460-a954-491a-9f1c-eefed7274d36" alt="登录页面" width="100%" />
-    </td>
-    <td align="center" width="50%">
-      <strong>知识库列表</strong><br />
-      <img src="https://github.com/user-attachments/assets/2f278058-68c6-4c35-bc08-bf06f57d8c03" alt="知识库列表" width="100%" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <strong>文档管理</strong><br />
-      <img src="https://github.com/user-attachments/assets/8d1e4ccd-c89d-429d-9c57-8296d89d71f1" alt="文档管理" width="100%" />
-    </td>
-    <td align="center" width="50%">
-      <strong>问答对话</strong><br />
-      <img src="https://github.com/user-attachments/assets/fe8904ce-b977-4afc-b6a4-009e6616c759" alt="问答对话" width="100%" />
-    </td>
-  </tr>
-</table>
+### 登录页面
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/03809460-a954-491a-9f1c-eefed7274d36" alt="登录页面" width="85%" />
+</p>
+
+### 知识库列表
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/2f278058-68c6-4c35-bc08-bf06f57d8c03" alt="知识库列表" width="85%" />
+</p>
+
+### 文档管理
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/8d1e4ccd-c89d-429d-9c57-8296d89d71f1" alt="文档管理" width="85%" />
+</p>
+
+### 问答对话
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fe8904ce-b977-4afc-b6a4-009e6616c759" alt="问答对话" width="85%" />
+</p>
 
 ---
 
