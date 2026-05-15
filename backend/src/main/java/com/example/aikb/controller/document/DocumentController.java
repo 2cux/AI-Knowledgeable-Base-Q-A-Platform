@@ -87,7 +87,6 @@ public class DocumentController {
     @DeleteMapping("/{documentId}")
     public Result<Void> delete(
             @PathVariable("documentId") @Positive(message = "Document id must be greater than 0") Long documentId) {
-        adminPermissionService.ensureAdmin();
         documentService.delete(documentId);
         return Result.success(null, "Document deleted successfully");
     }

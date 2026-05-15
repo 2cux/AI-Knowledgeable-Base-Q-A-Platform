@@ -43,6 +43,12 @@ export function embedDocument(documentId: number) {
   )
 }
 
+export function deleteDocument(documentId: number) {
+  return request.delete<ApiResponse<void>, ApiResponse<void>>(
+    `${DOCUMENT_PATH}/${documentId}`,
+  )
+}
+
 export function getEmbeddingProgress(documentId: number) {
   return request.get<ApiResponse<DocumentEmbeddingProgress>, ApiResponse<DocumentEmbeddingProgress>>(
     `${DOCUMENT_PATH}/${documentId}/embedding/progress`,

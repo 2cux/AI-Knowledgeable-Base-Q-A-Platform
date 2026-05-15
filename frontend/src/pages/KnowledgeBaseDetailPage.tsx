@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import {
+  deleteDocument,
   embedDocument,
   getDocumentsByKnowledgeBaseId,
   getEmbeddingProgress,
@@ -188,6 +189,7 @@ export function KnowledgeBaseDetailPage() {
   const [embeddingId, setEmbeddingId] = useState<number | null>(null)
   const [embeddingProcessingIds, setEmbeddingProcessingIds] = useState<Set<number>>(() => new Set())
   const [embeddingProgressMap, setEmbeddingProgressMap] = useState<Map<number, DocumentEmbeddingProgress>>(() => new Map())
+  const [deletingDocumentIds, setDeletingDocumentIds] = useState<Set<number>>(() => new Set())
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [uploadErrorMessage, setUploadErrorMessage] = useState('')
@@ -630,6 +632,47 @@ export function KnowledgeBaseDetailPage() {
     }
   }
 
+  async function handleDelete(document: KnowledgeDocument) {
+    const documentId = resolveDocumentId(document)
+
+    if (deletingDocumentIds.has(documentId)) {
+      return
+    }
+
+    const confirmed = window.confirm('确认删除该文档吗？删除后将同时清理该文档相关数据，且不可恢复。')
+    if (!confirmed) {
+      return
+    }
+
+    setDeletingDocumentIds((prev) => {
+      const next = new Set(prev)
+      next.add(documentId)
+      return next
+    })
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    try {
+      const response = await deleteDocument(documentId)
+
+      if (response.code !== 0) {
+        setErrorMessage(response.message || '删除失败，请稍后重试')
+        return
+      }
+
+      setSuccessMessage('删除成功')
+      await loadDocuments()
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, '删除失败，请稍后重试'))
+    } finally {
+      setDeletingDocumentIds((prev) => {
+        const next = new Set(prev)
+        next.delete(documentId)
+        return next
+      })
+    }
+  }
+
   if (isLoading) {
     return <div className="px-1 py-12 text-center text-sm text-slate-500">加载中...</div>
   }
@@ -872,6 +915,14 @@ export function KnowledgeBaseDetailPage() {
                                 : embeddingStatus === 'FAILED'
                                   ? '重试'
                                   : '生成向量'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(document)}
+                            disabled={deletingDocumentIds.has(documentId)}
+                            className="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                          >
+                            {deletingDocumentIds.has(documentId) ? '删除中...' : '删除'}
                           </button>
                         </div>
                       </td>

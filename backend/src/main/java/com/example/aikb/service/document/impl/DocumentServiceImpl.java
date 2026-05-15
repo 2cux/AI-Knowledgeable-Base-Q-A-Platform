@@ -252,6 +252,15 @@ public class DocumentServiceImpl implements DocumentService {
     public void delete(Long id) {
         Long userId = CurrentUser.getUserId();
         Document document = getOwnDocument(id, userId);
+
+        // 正在解析或向量化中的文档不允许删除
+        if (isBusyStatus(document.getParseStatus())) {
+            throw new BusinessException("文档正在解析中，请稍后再删除");
+        }
+        if (isBusyStatus(document.getEmbeddingStatus())) {
+            throw new BusinessException("文档正在向量化中，请稍后再删除");
+        }
+
         String storagePath = document.getStoragePath();
 
         chunkEmbeddingMapper.delete(new LambdaQueryWrapper<ChunkEmbedding>()
@@ -458,6 +467,11 @@ public class DocumentServiceImpl implements DocumentService {
         return PARSE_STATUS_SUCCESS.equals(parseStatus)
                 || "CHUNKED".equals(parseStatus)
                 || "DONE".equals(parseStatus);
+    }
+
+    private boolean isBusyStatus(String status) {
+        return PARSE_STATUS_PROCESSING.equals(status) || PARSE_STATUS_PENDING.equals(status)
+                || "RUNNING".equals(status);
     }
 
     private record DocumentLifecycleStats(
