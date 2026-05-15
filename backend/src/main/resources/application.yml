@@ -1,4 +1,7 @@
 spring:
+  config:
+    # Load .env from project root (supports both "cd backend" and project-root launch)
+    import: "optional:file:../.env,optional:file:./.env"
   application:
     name: enterprise-ai-knowledge-base-qna-backend
   servlet:
