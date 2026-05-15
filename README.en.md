@@ -178,14 +178,22 @@ cd AI-knowledge-base-QA-platform
 cp .env.example .env
 ```
 
-Open `.env` and set your **LLM API Key** and **Embedding API Key**:
+Open `.env` and configure the following **AI-related environment variables** (at minimum, the complete LLM and Embedding configuration is required):
 
 ```
+# ---- LLM Configuration ----
+APP_LLM_BASE_URL=https://api.example.com/v1/messages
 APP_LLM_API_KEY=your_llm_api_key_here
+APP_LLM_MODEL=your-chat-model
+
+# ---- Embedding Configuration ----
+APP_EMBEDDING_BASE_URL=https://api.example.com/v1/embeddings
 APP_EMBEDDING_API_KEY=your_embedding_api_key_here
+APP_EMBEDDING_MODEL=text-embedding-3-large
+APP_EMBEDDING_VECTOR_SIZE=3072
 ```
 
-> ⚠️ Without valid LLM / Embedding API keys, the basic pages will load, but **document vectorization and RAG Q&A will not work**.
+> ⚠️ Without valid LLM / Embedding configuration, the basic pages will load, but **document vectorization and RAG Q&A will not work**.
 
 ### 3. Start middleware (MySQL + Redis + RabbitMQ)
 

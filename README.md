@@ -179,14 +179,22 @@ cd AI-knowledge-base-QA-platform
 cp .env.example .env
 ```
 
-打开 `.env`，配置 **LLM API Key** 和 **Embedding API Key**：
+打开 `.env`，配置以下 **AI 相关环境变量**（至少需要配置 LLM 和 Embedding 的完整信息）：
 
 ```
+# ---- LLM Configuration ----
+APP_LLM_BASE_URL=https://api.example.com/v1/messages
 APP_LLM_API_KEY=your_llm_api_key_here
+APP_LLM_MODEL=your-chat-model
+
+# ---- Embedding Configuration ----
+APP_EMBEDDING_BASE_URL=https://api.example.com/v1/embeddings
 APP_EMBEDDING_API_KEY=your_embedding_api_key_here
+APP_EMBEDDING_MODEL=text-embedding-3-large
+APP_EMBEDDING_VECTOR_SIZE=3072
 ```
 
-> ⚠️ 如果不配置 LLM / Embedding API Key，系统基础页面可以启动，但**文档向量化、RAG 问答等 AI 能力无法正常使用**。
+> ⚠️ 如果不配置 LLM / Embedding 相关环境变量，系统基础页面可以启动，但**文档向量化、RAG 问答等 AI 能力无法正常使用**。
 
 ### 3. 启动中间件（MySQL + Redis + RabbitMQ）
 
