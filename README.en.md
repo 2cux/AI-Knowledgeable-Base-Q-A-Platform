@@ -395,4 +395,4 @@ You can modify the `DB_PORT`, `REDIS_PORT`, `RABBITMQ_PORT` and other variables 
 
 ## License
 
-This project is for learning and portfolio demonstration purposes. Please add a LICENSE file before public distribution.
+This project is open-sourced under the MIT License. See [LICENSE](LICENSE) for details.

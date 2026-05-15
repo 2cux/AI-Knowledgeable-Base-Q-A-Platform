@@ -395,4 +395,4 @@ npm run build
 
 ## 📄 License
 
-This project is for learning and portfolio demonstration purposes. Please add a LICENSE file before public distribution.
+本项目基于 MIT License 开源，详情请查看 [LICENSE](LICENSE)。
